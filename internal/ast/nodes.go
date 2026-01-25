@@ -1,0 +1,29 @@
+package ast
+
+// Node is a template AST node.
+type Node interface {
+	node()
+}
+
+// Text is a raw text node.
+type Text struct {
+	Value string
+}
+
+func (*Text) node() {}
+
+// Mustache is a simple mustache expression.
+type Mustache struct {
+	Expr string
+	Raw  bool
+}
+
+func (*Mustache) node() {}
+
+// Partial is a partial invocation.
+type Partial struct {
+	Name        string
+	ContextExpr string
+}
+
+func (*Partial) node() {}
