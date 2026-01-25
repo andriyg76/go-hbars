@@ -36,7 +36,7 @@ Or use the string wrapper:
 out, err := templates.RenderMainString(data)
 ```
 
-Register helpers by mapping names to functions at compile time:
+Register helpers by mapping names to functions at compile time (no runtime registry):
 
 ```go
 //go:generate hbc -in ./templates -out ./templates_gen.go -pkg templates -helper upper=Upper
@@ -54,6 +54,19 @@ To import helpers from another package:
 ```go
 //go:generate hbc -in ./templates -out ./templates_gen.go -pkg templates -helper upper=github.com/you/helpers:Upper
 ```
+
+Multiple helpers can be passed by repeating the flag:
+
+```go
+//go:generate hbc -in ./templates -out ./templates_gen.go -pkg templates \
+//  -helper upper=Upper -helper lower=github.com/you/helpers:Lower
+```
+
+## Partials
+
+Partials are compiled from the same input set. The partial name is the template
+file base name (without extension). A missing partial or helper is a compile-time
+error.
 
 ## Template support (current)
 
