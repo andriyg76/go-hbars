@@ -477,9 +477,6 @@ func (w *codeWriter) indentDec() {
 }
 
 func (w *codeWriter) line(format string, args ...any) {
-	for i := 0; i < w.indent; i++ {
-		w.buf.WriteByte('\t')
-	}
 	fmt.Fprintf(&w.buf, format, args...)
 	w.buf.WriteByte('\n')
 }
