@@ -68,11 +68,90 @@ Partials are compiled from the same input set. The partial name is the template
 file base name (without extension). A missing partial or helper is a compile-time
 error.
 
-## Template support (current)
+## Template syntax (supported)
+
+### Values and helpers
 
 - `{{var}}` (HTML-escaped)
 - `{{{var}}}` and `{{& var}}` (raw)
 - Inline helpers: `{{helper arg1 arg2}}`
-- Partials: `{{> partialName}}`
+- Comments: `{{! comment}}` and `{{!-- block --}}`
 
-Blocks (`{{#if}}`, `{{#each}}`) and hash arguments are not implemented yet.
+### Partials
+
+- `{{> partialName}}`
+- `{{> partialName contextExpr}}` (render with a different context)
+
+### Block helpers
+
+- `{{#if expr}}...{{else}}...{{/if}}`
+- `{{#unless expr}}...{{/unless}}`
+- `{{#with expr}}...{{else}}...{{/with}}`
+- `{{#each expr}}...{{else}}...{{/each}}`
+
+`expr` is a single argument (path or literal). The current context is updated
+inside `each` and `with`, so `{{this}}` / `{{.}}` refer to the item/object.
+
+### Truthiness and iteration
+
+`if`, `unless`, and `with` treat values as false when they are `nil`, `false`,
+`0`, `""`, or empty arrays/slices/maps. Everything else is truthy.
+
+`each` iterates over slices, arrays, and maps with string keys (keys are sorted
+for deterministic output). Empty or non-iterable values render the `{{else}}`
+branch when present.
+
+## Template examples
+
+Simple values and helpers:
+
+```
+Hello {{user.name}}!
+{{upper user.role}}
+```
+
+Conditional rendering:
+
+```
+{{#if user.active}}
+  Welcome back, {{user.name}}!
+{{else}}
+  Please activate your account.
+{{/if}}
+```
+
+Iteration with an else fallback:
+
+```
+{{#each users}}
+  <li>{{name}}</li>
+{{else}}
+  <li>No users yet.</li>
+{{/each}}
+```
+
+Nested context with `with` and partials:
+
+```
+{{#with user}}
+  {{> userCard this}}
+{{/with}}
+```
+
+## Suggested custom helpers
+
+You can implement common helpers as regular Go functions and map them with
+`-helper name=Ident`. Examples:
+
+- `eq`, `ne`, `and`, `or`, `not`
+- `default` (fallback when value is empty)
+- `join`, `split`
+- `json` (serialize a value)
+- `formatDate`, `formatNumber`, `pluralize`
+
+## Not implemented yet
+
+- Hash arguments: `{{helper arg key=value}}`
+- Subexpressions: `{{helper (other arg)}}`
+- Block parameters and `@index` / `@key`
+- Whitespace control (`~`)

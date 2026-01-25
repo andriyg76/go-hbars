@@ -243,11 +243,30 @@ func (g *generator) emitNodes(nodes []ast.Node) error {
 			if err := g.emitPartial(n); err != nil {
 				return err
 			}
+		case *ast.Block:
+			if err := g.emitBlock(n); err != nil {
+				return err
+			}
 		default:
 			return fmt.Errorf("compiler: unsupported node %T", node)
 		}
 	}
 	return nil
+}
+
+func (g *generator) emitBlock(n *ast.Block) error {
+	switch n.Name {
+	case "if":
+		return g.emitIfBlock(n, false)
+	case "unless":
+		return g.emitIfBlock(n, true)
+	case "with":
+		return g.emitWithBlock(n)
+	case "each":
+		return g.emitEachBlock(n)
+	default:
+		return fmt.Errorf("block helper %q is not implemented", n.Name)
+	}
 }
 
 func (g *generator) emitMustache(n *ast.Mustache) error {
@@ -319,6 +338,108 @@ func (g *generator) emitPartial(n *ast.Partial) error {
 	g.w.indentDec()
 	g.w.line("}")
 	return nil
+}
+
+func (g *generator) emitIfBlock(n *ast.Block, inverted bool) error {
+	arg, err := g.singleBlockArg(n)
+	if err != nil {
+		return err
+	}
+	valVar := g.nextTemp("val")
+	condVar := g.nextTemp("cond")
+	g.w.line("%s := %s", valVar, argExpr(arg))
+	g.w.line("%s := runtime.IsTruthy(%s)", condVar, valVar)
+	condExpr := condVar
+	if inverted {
+		condExpr = "!" + condVar
+	}
+	g.w.line("if %s {", condExpr)
+	g.w.indentInc()
+	if err := g.emitNodes(n.Body); err != nil {
+		return err
+	}
+	g.w.indentDec()
+	if len(n.Else) > 0 {
+		g.w.line("} else {")
+		g.w.indentInc()
+		if err := g.emitNodes(n.Else); err != nil {
+			return err
+		}
+		g.w.indentDec()
+	}
+	g.w.line("}")
+	return nil
+}
+
+func (g *generator) emitWithBlock(n *ast.Block) error {
+	arg, err := g.singleBlockArg(n)
+	if err != nil {
+		return err
+	}
+	valVar := g.nextTemp("val")
+	condVar := g.nextTemp("cond")
+	g.w.line("%s := %s", valVar, argExpr(arg))
+	g.w.line("%s := runtime.IsTruthy(%s)", condVar, valVar)
+	g.w.line("if %s {", condVar)
+	g.w.indentInc()
+	g.w.line("ctx := ctx.WithData(%s)", valVar)
+	if err := g.emitNodes(n.Body); err != nil {
+		return err
+	}
+	g.w.indentDec()
+	if len(n.Else) > 0 {
+		g.w.line("} else {")
+		g.w.indentInc()
+		if err := g.emitNodes(n.Else); err != nil {
+			return err
+		}
+		g.w.indentDec()
+	}
+	g.w.line("}")
+	return nil
+}
+
+func (g *generator) emitEachBlock(n *ast.Block) error {
+	arg, err := g.singleBlockArg(n)
+	if err != nil {
+		return err
+	}
+	valVar := g.nextTemp("val")
+	itemsVar := g.nextTemp("items")
+	g.w.line("%s := %s", valVar, argExpr(arg))
+	g.w.line("%s := runtime.Iterate(%s)", itemsVar, valVar)
+	g.w.line("if len(%s) > 0 {", itemsVar)
+	g.w.indentInc()
+	g.w.line("for _, item := range %s {", itemsVar)
+	g.w.indentInc()
+	g.w.line("ctx := ctx.WithData(item)")
+	if err := g.emitNodes(n.Body); err != nil {
+		return err
+	}
+	g.w.indentDec()
+	g.w.line("}")
+	g.w.indentDec()
+	if len(n.Else) > 0 {
+		g.w.line("} else {")
+		g.w.indentInc()
+		if err := g.emitNodes(n.Else); err != nil {
+			return err
+		}
+		g.w.indentDec()
+	}
+	g.w.line("}")
+	return nil
+}
+
+func (g *generator) singleBlockArg(n *ast.Block) (arg, error) {
+	tokens, err := splitArgs(n.Args)
+	if err != nil {
+		return arg{}, err
+	}
+	if len(tokens) != 1 {
+		return arg{}, fmt.Errorf("block %q requires a single expression", n.Name)
+	}
+	return classifyToken(tokens[0])
 }
 
 func (g *generator) emitValue(arg arg, raw bool) {

@@ -27,3 +27,13 @@ type Partial struct {
 }
 
 func (*Partial) node() {}
+
+// Block is a block helper invocation with an optional else branch.
+type Block struct {
+	Name string
+	Args string
+	Body []Node
+	Else []Node
+}
+
+func (*Block) node() {}

@@ -26,6 +26,43 @@ func TestParseMixed(t *testing.T) {
 	assertText(t, nodes[7], ".")
 }
 
+func TestParseBlockIfElse(t *testing.T) {
+	input := "{{#if ok}}Yes{{else}}No{{/if}}"
+	nodes, err := Parse(input)
+	if err != nil {
+		t.Fatalf("Parse error: %v", err)
+	}
+	if len(nodes) != 1 {
+		t.Fatalf("expected 1 node, got %d", len(nodes))
+	}
+	block := assertBlock(t, nodes[0], "if", "ok")
+	if len(block.Body) != 1 || len(block.Else) != 1 {
+		t.Fatalf("expected body/else length 1, got %d/%d", len(block.Body), len(block.Else))
+	}
+	assertText(t, block.Body[0], "Yes")
+	assertText(t, block.Else[0], "No")
+}
+
+func TestParseNestedBlocks(t *testing.T) {
+	input := "{{#each items}}{{#with user}}{{name}}{{/with}}{{/each}}"
+	nodes, err := Parse(input)
+	if err != nil {
+		t.Fatalf("Parse error: %v", err)
+	}
+	if len(nodes) != 1 {
+		t.Fatalf("expected 1 node, got %d", len(nodes))
+	}
+	each := assertBlock(t, nodes[0], "each", "items")
+	if len(each.Body) != 1 {
+		t.Fatalf("expected each body length 1, got %d", len(each.Body))
+	}
+	with := assertBlock(t, each.Body[0], "with", "user")
+	if len(with.Body) != 1 {
+		t.Fatalf("expected with body length 1, got %d", len(with.Body))
+	}
+	assertMustache(t, with.Body[0], "name", false)
+}
+
 func TestParseErrors(t *testing.T) {
 	if _, err := Parse("{{!--"); err == nil {
 		t.Fatalf("expected unclosed comment error")
@@ -35,6 +72,18 @@ func TestParseErrors(t *testing.T) {
 	}
 	if _, err := Parse("{{> }}"); err == nil {
 		t.Fatalf("expected empty partial name error")
+	}
+	if _, err := Parse("{{else}}"); err == nil {
+		t.Fatalf("expected unexpected else error")
+	}
+	if _, err := Parse("{{/if}}"); err == nil {
+		t.Fatalf("expected unexpected closing block error")
+	}
+	if _, err := Parse("{{#if ok}}"); err == nil {
+		t.Fatalf("expected unclosed block error")
+	}
+	if _, err := Parse("{{#if ok}}{{/each}}"); err == nil {
+		t.Fatalf("expected mismatched block error")
 	}
 }
 
@@ -69,4 +118,16 @@ func assertPartial(t *testing.T, node ast.Node, name string, ctx string) {
 	if p.Name != name || p.ContextExpr != ctx {
 		t.Fatalf("Partial = (%q, %q)", p.Name, p.ContextExpr)
 	}
+}
+
+func assertBlock(t *testing.T, node ast.Node, name string, args string) *ast.Block {
+	t.Helper()
+	b, ok := node.(*ast.Block)
+	if !ok {
+		t.Fatalf("expected Block node, got %T", node)
+	}
+	if b.Name != name || b.Args != args {
+		t.Fatalf("Block = (%q, %q)", b.Name, b.Args)
+	}
+	return b
 }
