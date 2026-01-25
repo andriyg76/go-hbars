@@ -3,7 +3,7 @@ package runtime
 import (
 	"fmt"
 	"html"
-	"strings"
+	"io"
 )
 
 // SafeString marks a value as pre-escaped HTML.
@@ -29,23 +29,26 @@ func Stringify(v any) string {
 	}
 }
 
-// WriteEscaped writes an escaped value into the builder.
-func WriteEscaped(b *strings.Builder, v any) {
-	if b == nil || v == nil {
-		return
+// WriteEscaped writes an escaped value into the writer.
+func WriteEscaped(w io.Writer, v any) error {
+	if w == nil || v == nil {
+		return nil
 	}
 	switch t := v.(type) {
 	case SafeString:
-		b.WriteString(string(t))
+		_, err := io.WriteString(w, string(t))
+		return err
 	default:
-		b.WriteString(html.EscapeString(Stringify(v)))
+		_, err := io.WriteString(w, html.EscapeString(Stringify(v)))
+		return err
 	}
 }
 
-// WriteRaw writes a raw value into the builder.
-func WriteRaw(b *strings.Builder, v any) {
-	if b == nil || v == nil {
-		return
+// WriteRaw writes a raw value into the writer.
+func WriteRaw(w io.Writer, v any) error {
+	if w == nil || v == nil {
+		return nil
 	}
-	b.WriteString(Stringify(v))
+	_, err := io.WriteString(w, Stringify(v))
+	return err
 }

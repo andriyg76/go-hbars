@@ -20,21 +20,39 @@ Generate Go code from templates (example):
 //go:generate hbc -in ./templates -out ./templates_gen.go -pkg templates
 ```
 
-Render a template:
+Render a template to a writer:
 
 ```go
-out, err := templates.RenderMain(data)
+var b strings.Builder
+if err := templates.RenderMain(&b, data); err != nil {
+	// handle error
+}
+out := b.String()
 ```
 
-Register helpers:
+Or use the string wrapper:
 
 ```go
-templates.RegisterHelper("upper", func(ctx *runtime.Context, args []any) (any, error) {
+out, err := templates.RenderMainString(data)
+```
+
+Register helpers by mapping names to functions at compile time:
+
+```go
+//go:generate hbc -in ./templates -out ./templates_gen.go -pkg templates -helper upper=Upper
+
+func Upper(ctx *runtime.Context, args []any) (any, error) {
 	if len(args) == 0 {
 		return "", nil
 	}
 	return strings.ToUpper(runtime.Stringify(args[0])), nil
-})
+}
+```
+
+To import helpers from another package:
+
+```go
+//go:generate hbc -in ./templates -out ./templates_gen.go -pkg templates -helper upper=github.com/you/helpers:Upper
 ```
 
 ## Template support (current)

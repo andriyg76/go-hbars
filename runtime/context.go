@@ -10,12 +10,11 @@ import (
 type Context struct {
 	Data   any
 	parent *Context
-	engine *Engine
 }
 
 // NewContext creates a new rendering context.
-func NewContext(data any, engine *Engine) *Context {
-	return &Context{Data: data, engine: engine}
+func NewContext(data any) *Context {
+	return &Context{Data: data}
 }
 
 // WithData creates a child context with new data.
@@ -23,15 +22,7 @@ func (c *Context) WithData(data any) *Context {
 	if c == nil {
 		return &Context{Data: data}
 	}
-	return &Context{Data: data, parent: c, engine: c.engine}
-}
-
-// Engine returns the associated engine.
-func (c *Context) Engine() *Engine {
-	if c == nil {
-		return nil
-	}
-	return c.engine
+	return &Context{Data: data, parent: c}
 }
 
 // ResolvePath looks up a dotted path in the current context.
@@ -47,18 +38,23 @@ func ResolvePath(ctx *Context, path string) (any, bool) {
 		return nil, false
 	}
 	parts := strings.Split(path, ".")
-	var ok bool
-	val := ctx.Data
-	for _, part := range parts {
-		if part == "" {
-			continue
+	for cur := ctx; cur != nil; cur = cur.parent {
+		val := cur.Data
+		ok := true
+		for _, part := range parts {
+			if part == "" {
+				continue
+			}
+			val, ok = lookupValue(val, part)
+			if !ok {
+				break
+			}
 		}
-		val, ok = lookupValue(val, part)
-		if !ok {
-			return nil, false
+		if ok {
+			return val, true
 		}
 	}
-	return val, true
+	return nil, false
 }
 
 func lookupValue(val any, key string) (any, bool) {

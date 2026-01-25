@@ -18,12 +18,14 @@ func main() {
 	var pkgName string
 	var runtimeImport string
 	var extList string
+	var helperFlags helperFlag
 
 	flag.StringVar(&inPath, "in", "", "input template file or directory")
 	flag.StringVar(&outPath, "out", "templates_gen.go", "output Go file path")
 	flag.StringVar(&pkgName, "pkg", "", "package name for generated code")
 	flag.StringVar(&runtimeImport, "runtime-import", "", "override runtime import path")
 	flag.StringVar(&extList, "ext", ".hbs,.handlebars", "comma-separated template extensions")
+	flag.Var(&helperFlags, "helper", "helper mapping name=Ident or name=import/path:Ident")
 	flag.Parse()
 
 	if inPath == "" {
@@ -41,10 +43,15 @@ func main() {
 	if len(templates) == 0 {
 		fatal(fmt.Errorf("no templates found under %q", inPath))
 	}
+	helpers, err := parseHelpers(helperFlags)
+	if err != nil {
+		fatal(err)
+	}
 
 	code, err := compiler.CompileTemplates(templates, compiler.Options{
 		PackageName:   pkgName,
 		RuntimeImport: runtimeImport,
+		Helpers:       helpers,
 	})
 	if err != nil {
 		fatal(err)
@@ -73,6 +80,54 @@ func parseExts(input string) map[string]bool {
 		exts[ext] = true
 	}
 	return exts
+}
+
+type helperFlag []string
+
+func (h *helperFlag) String() string {
+	if h == nil {
+		return ""
+	}
+	return strings.Join(*h, ",")
+}
+
+func (h *helperFlag) Set(value string) error {
+	if h == nil {
+		return nil
+	}
+	*h = append(*h, value)
+	return nil
+}
+
+func parseHelpers(values []string) (map[string]compiler.HelperRef, error) {
+	helpers := make(map[string]compiler.HelperRef)
+	for _, raw := range values {
+		parts := strings.SplitN(raw, "=", 2)
+		if len(parts) != 2 {
+			return nil, fmt.Errorf("invalid helper mapping %q", raw)
+		}
+		name := strings.TrimSpace(parts[0])
+		ref := strings.TrimSpace(parts[1])
+		if name == "" || ref == "" {
+			return nil, fmt.Errorf("invalid helper mapping %q", raw)
+		}
+		var importPath, ident string
+		if strings.Contains(ref, ":") {
+			refParts := strings.SplitN(ref, ":", 2)
+			importPath = strings.TrimSpace(refParts[0])
+			ident = strings.TrimSpace(refParts[1])
+			if importPath == "" || ident == "" {
+				return nil, fmt.Errorf("invalid helper mapping %q", raw)
+			}
+		} else {
+			ident = ref
+		}
+		if _, exists := helpers[name]; exists {
+			return nil, fmt.Errorf("duplicate helper mapping for %q", name)
+		}
+		helpers[name] = compiler.HelperRef{ImportPath: importPath, Ident: ident}
+	}
+	return helpers, nil
 }
 
 func loadTemplates(path string, exts map[string]bool) (map[string]string, error) {
