@@ -59,6 +59,31 @@ func TestCompileTemplates_MissingPartial(t *testing.T) {
 	}
 }
 
+func TestCompileTemplates_BlockHelpers(t *testing.T) {
+	code, err := CompileTemplates(map[string]string{
+		"main": "{{#if ok}}Yes{{else}}{{#with user}}{{name}}{{/with}}{{/if}}{{#each items}}{{name}}{{/each}}",
+	}, Options{PackageName: "templates"})
+	if err != nil {
+		t.Fatalf("CompileTemplates error: %v", err)
+	}
+	src := string(code)
+	if !strings.Contains(src, "runtime.IsTruthy") {
+		t.Fatalf("expected runtime.IsTruthy in generated code")
+	}
+	if !strings.Contains(src, "runtime.Iterate") {
+		t.Fatalf("expected runtime.Iterate in generated code")
+	}
+}
+
+func TestCompileTemplates_UnknownBlock(t *testing.T) {
+	_, err := CompileTemplates(map[string]string{
+		"main": "{{#noop}}ignored{{/noop}}",
+	}, Options{PackageName: "templates"})
+	if err == nil || !strings.Contains(err.Error(), "block helper") {
+		t.Fatalf("expected missing block helper error, got %v", err)
+	}
+}
+
 func TestCompileTemplates_DuplicateIdentifiers(t *testing.T) {
 	_, err := CompileTemplates(map[string]string{
 		"a-b": "one",
