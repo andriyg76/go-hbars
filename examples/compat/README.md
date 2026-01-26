@@ -25,10 +25,19 @@ Hash arguments are passed as the last `runtime.Hash` in the helper args.
 
 ## Compile example
 
+Core helpers are included by default, so you can simply run:
+```
+hbc -in ./examples/compat/templates \
+  -out ./examples/compat/templates_gen.go \
+  -pkg compat
+```
+
+Or if you need local helpers (without import path):
 ```
 hbc -in ./examples/compat/templates \
   -out ./examples/compat/templates_gen.go \
   -pkg compat \
+  -no-core-helpers \
   -helper upper=Upper \
   -helper lower=Lower \
   -helper lookup=Lookup \

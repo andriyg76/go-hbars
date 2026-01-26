@@ -36,8 +36,11 @@ Or use the string wrapper:
 out, err := templates.RenderMainString(data)
 ```
 
-Register helpers by mapping names to functions at compile time (no runtime registry):
+Register helpers by mapping names to functions at compile time (no runtime registry).
 
+**Core helpers are included by default** from `github.com/andriyg76/go-hbars/helpers/handlebars`. You can disable them with `-no-core-helpers`.
+
+**Simple helper (local function):**
 ```go
 //go:generate hbc -in ./templates -out ./templates_gen.go -pkg templates -helper upper=Upper
 
@@ -49,15 +52,31 @@ func Upper(ctx *runtime.Context, args []any) (any, error) {
 }
 ```
 
-To import helpers from another package:
-
+**Using the new shorthand syntax (recommended):**
 ```go
-//go:generate hbc -in ./templates -out ./templates_gen.go -pkg templates -helper upper=github.com/you/helpers:Upper
+// Import a package and register multiple helpers
+//go:generate hbc -in ./templates -out ./templates_gen.go -pkg templates \
+//  -import github.com/andriyg76/go-hbars/helpers/handlebars \
+//  -helpers Upper,Lower,FormatDate
+
+// With aliased imports
+//go:generate hbc -in ./templates -out ./templates_gen.go -pkg templates \
+//  -import github.com/andriyg76/go-hbars/helpers/handlebars \
+//  -import extra:github.com/you/extra-helpers \
+//  -helpers Upper,Lower \
+//  -helpers extra:CustomHelper,extra:AnotherHelper
+
+// Override helper names
+//go:generate hbc -in ./templates -out ./templates_gen.go -pkg templates \
+//  -import github.com/andriyg76/go-hbars/helpers/handlebars \
+//  -helpers myUpper=Upper,myLower=Lower
 ```
 
-Multiple helpers can be passed by repeating the flag:
-
+**Legacy syntax (still supported):**
 ```go
+//go:generate hbc -in ./templates -out ./templates_gen.go -pkg templates -helper upper=github.com/you/helpers:Upper
+
+// Multiple helpers
 //go:generate hbc -in ./templates -out ./templates_gen.go -pkg templates \
 //  -helper upper=Upper -helper lower=github.com/you/helpers:Lower
 ```
@@ -367,20 +386,31 @@ Dynamic partials:
 
 ## Built-in Helpers Library
 
-go-hbars includes a comprehensive helpers library matching Handlebars.js core and handlebars-helpers 7.4. Import the helpers package and use the registry:
+go-hbars includes a comprehensive helpers library matching Handlebars.js core and handlebars-helpers 7.4. **Core helpers are automatically included by default** - no need to specify them unless you want to override or disable them.
 
+**Using default core helpers (simplest):**
 ```go
-import "github.com/andriyg76/go-hbars/helpers"
-
-// In your go:generate command
-//go:generate hbc -in ./templates -out ./templates_gen.go -pkg templates \
-//  -helper upper=github.com/andriyg76/go-hbars/helpers/handlebars:Upper \
-//  -helper lower=github.com/andriyg76/go-hbars/helpers/handlebars:Lower \
-//  -helper formatDate=github.com/andriyg76/go-hbars/helpers/handlebars:FormatDate
+//go:generate hbc -in ./templates -out ./templates_gen.go -pkg templates
+// All core helpers are available automatically
 ```
 
-Or use the registry helper to get all helpers at once:
+**Selecting specific core helpers:**
+```go
+//go:generate hbc -in ./templates -out ./templates_gen.go -pkg templates \
+//  -no-core-helpers \
+//  -import github.com/andriyg76/go-hbars/helpers/handlebars \
+//  -helpers Upper,Lower,FormatDate
+```
 
+**Disabling core helpers and using custom ones:**
+```go
+//go:generate hbc -in ./templates -out ./templates_gen.go -pkg templates \
+//  -no-core-helpers \
+//  -import github.com/you/custom-helpers \
+//  -helpers MyHelper,AnotherHelper
+```
+
+**Programmatic access (for advanced use cases):**
 ```go
 import (
 	"github.com/andriyg76/go-hbars/helpers"
