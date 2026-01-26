@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"reflect"
 	"testing"
 )
 
@@ -34,10 +35,10 @@ func TestResolvePath(t *testing.T) {
 	if got, ok := ResolvePath(ctx, "items.1"); !ok || got != "b" {
 		t.Fatalf("ResolvePath items.1 = (%v, %v)", got, ok)
 	}
-	if got, ok := ResolvePath(ctx, "."); !ok || got != data {
+	if got, ok := ResolvePath(ctx, "."); !ok || !reflect.DeepEqual(got, data) {
 		t.Fatalf("ResolvePath . = (%v, %v)", got, ok)
 	}
-	if got, ok := ResolvePath(ctx, "this"); !ok || got != data {
+	if got, ok := ResolvePath(ctx, "this"); !ok || !reflect.DeepEqual(got, data) {
 		t.Fatalf("ResolvePath this = (%v, %v)", got, ok)
 	}
 	if _, ok := ResolvePath(ctx, "missing.path"); ok {

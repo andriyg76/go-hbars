@@ -1,0 +1,23 @@
+Title: Handlebars Compat
+
+Upper/Lower: HANDLEBARS COMPAT
+
+User: Ada (admin)
+Created: 2026-01-25
+Nickname: (none)
+
+Users:
+  0/0 Ada (active) - Handlebars Compat
+  1/1 Bob  - Handlebars Compat
+
+Settings:
+  lang=en
+  theme=dark
+
+UserCard: Ada (admin)
+Root: Handlebars Compat
+
+Footer: thanks
+
+{{should_not_parse}}
+

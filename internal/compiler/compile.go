@@ -377,6 +377,7 @@ func (g *generator) emitPartial(n *ast.Partial) error {
 			g.w.line("}")
 			return nil
 		}
+		return fmt.Errorf("partial %q is not defined", nameExpr.value)
 	}
 
 	nameValue, err := g.emitExprValue(nameExpr)
