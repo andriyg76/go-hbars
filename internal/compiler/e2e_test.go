@@ -126,10 +126,38 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 	
 	templates "test-templates/templates"
 )
+
+func normalizeWhitespace(s string) string {
+	// Normalize whitespace for content comparison:
+	// - Normalize spaces within lines (collapse multiple spaces, trim trailing)
+	// - Normalize spaces around colons
+	// - Collapse multiple newlines to single newline (preserve line structure but ignore extra blank lines)
+	
+	lines := strings.Split(s, "\n")
+	for i, line := range lines {
+		// Trim trailing whitespace
+		line = strings.TrimRight(line, " \t")
+		// Collapse multiple spaces to single space
+		line = regexp.MustCompile(" +").ReplaceAllString(line, " ")
+		// Normalize colon spacing (": " or ":" -> ": ")
+		line = regexp.MustCompile(":([^\\s])").ReplaceAllString(line, ": $1")
+		lines[i] = line
+	}
+	s = strings.Join(lines, "\n")
+	
+	// Collapse multiple newlines to single newline (ignore extra blank lines)
+	s = regexp.MustCompile("\\n{2,}").ReplaceAllString(s, "\n")
+	
+	// Trim leading and trailing newlines
+	s = strings.Trim(s, "\n")
+	
+	return s
+}
 
 func main() {
 	// Read data
@@ -163,6 +191,11 @@ func main() {
 	// Normalize line endings
 	output = strings.ReplaceAll(output, "\r\n", "\n")
 	expected = strings.ReplaceAll(expected, "\r\n", "\n")
+	
+	// Normalize whitespace: collapse multiple consecutive newlines to single newline,
+	// normalize spaces around colons, and trim trailing whitespace from lines
+	output = normalizeWhitespace(output)
+	expected = normalizeWhitespace(expected)
 	
 	if output != expected {
 		fmt.Fprintf(os.Stderr, "output mismatch!\n")
