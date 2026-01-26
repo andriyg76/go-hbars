@@ -59,3 +59,31 @@ func TestResolvePathParentFallback(t *testing.T) {
 		t.Fatalf("ResolvePath value = (%v, %v)", got, ok)
 	}
 }
+
+func TestResolvePathDataVarsAndLocals(t *testing.T) {
+	root := NewContext(map[string]any{
+		"rootName": "root",
+	})
+	child := root.WithScope(
+		map[string]any{"name": "child"},
+		map[string]any{"local": "value"},
+		map[string]any{"index": 3, "key": "k"},
+	)
+	grand := child.WithScope(map[string]any{"name": "grand"}, nil, nil)
+
+	if got, ok := ResolvePath(grand, "../name"); !ok || got != "child" {
+		t.Fatalf("ResolvePath ../name = (%v, %v)", got, ok)
+	}
+	if got, ok := ResolvePath(grand, "local"); !ok || got != "value" {
+		t.Fatalf("ResolvePath local = (%v, %v)", got, ok)
+	}
+	if got, ok := ResolvePath(grand, "@index"); !ok || got != 3 {
+		t.Fatalf("ResolvePath @index = (%v, %v)", got, ok)
+	}
+	if got, ok := ResolvePath(grand, "@key"); !ok || got != "k" {
+		t.Fatalf("ResolvePath @key = (%v, %v)", got, ok)
+	}
+	if got, ok := ResolvePath(grand, "@root.rootName"); !ok || got != "root" {
+		t.Fatalf("ResolvePath @root.rootName = (%v, %v)", got, ok)
+	}
+}

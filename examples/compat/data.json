@@ -1,0 +1,24 @@
+{
+  "title": "Handlebars Compat",
+  "user": {
+    "name": "Ada",
+    "role": "admin",
+    "created": "2026-01-25",
+    "nickname": ""
+  },
+  "users": [
+    {
+      "name": "Ada",
+      "active": true
+    },
+    {
+      "name": "Bob",
+      "active": false
+    }
+  ],
+  "settings": {
+    "lang": "en",
+    "theme": "dark"
+  },
+  "cardPartial": "userCard"
+}

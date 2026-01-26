@@ -10,19 +10,27 @@ import (
 type Context struct {
 	Data   any
 	parent *Context
+	locals map[string]any
+	data   map[string]any
+	root   any
 }
 
 // NewContext creates a new rendering context.
 func NewContext(data any) *Context {
-	return &Context{Data: data}
+	return &Context{Data: data, root: data}
 }
 
 // WithData creates a child context with new data.
 func (c *Context) WithData(data any) *Context {
+	return c.WithScope(data, nil, nil)
+}
+
+// WithScope creates a child context with new data and optional locals/data vars.
+func (c *Context) WithScope(data any, locals map[string]any, dataVars map[string]any) *Context {
 	if c == nil {
-		return &Context{Data: data}
+		return &Context{Data: data, locals: locals, data: dataVars, root: data}
 	}
-	return &Context{Data: data, parent: c}
+	return &Context{Data: data, parent: c, locals: locals, data: dataVars, root: c.root}
 }
 
 // ResolvePath looks up a dotted path in the current context.
@@ -34,25 +42,98 @@ func ResolvePath(ctx *Context, path string) (any, bool) {
 	if path == "" || path == "." || path == "this" {
 		return ctx.Data, true
 	}
+	for path == ".." || strings.HasPrefix(path, "../") {
+		if ctx.parent == nil {
+			return nil, false
+		}
+		ctx = ctx.parent
+		if path == ".." {
+			path = ""
+			break
+		}
+		path = strings.TrimPrefix(path, "../")
+	}
+	for strings.HasPrefix(path, "./") {
+		path = strings.TrimPrefix(path, "./")
+	}
+	if path == "" || path == "." || path == "this" {
+		return ctx.Data, true
+	}
 	if strings.HasPrefix(path, "@") {
-		return nil, false
+		return resolveDataVar(ctx, path)
 	}
 	parts := strings.Split(path, ".")
+	if val, ok := resolveLocals(ctx, parts); ok {
+		return val, true
+	}
+	return resolveData(ctx, parts)
+}
+
+func resolveLocals(ctx *Context, parts []string) (any, bool) {
+	if len(parts) == 0 {
+		return nil, false
+	}
+	name := parts[0]
 	for cur := ctx; cur != nil; cur = cur.parent {
-		val := cur.Data
-		ok := true
-		for _, part := range parts {
-			if part == "" {
-				continue
-			}
-			val, ok = lookupValue(val, part)
-			if !ok {
-				break
-			}
+		if cur.locals == nil {
+			continue
 		}
+		val, ok := cur.locals[name]
+		if !ok {
+			continue
+		}
+		return resolveParts(val, parts[1:])
+	}
+	return nil, false
+}
+
+func resolveData(ctx *Context, parts []string) (any, bool) {
+	for cur := ctx; cur != nil; cur = cur.parent {
+		val, ok := resolveParts(cur.Data, parts)
 		if ok {
 			return val, true
 		}
+	}
+	return nil, false
+}
+
+func resolveParts(value any, parts []string) (any, bool) {
+	if len(parts) == 0 {
+		return value, true
+	}
+	val := value
+	ok := true
+	for _, part := range parts {
+		if part == "" {
+			continue
+		}
+		val, ok = lookupValue(val, part)
+		if !ok {
+			return nil, false
+		}
+	}
+	return val, true
+}
+
+func resolveDataVar(ctx *Context, path string) (any, bool) {
+	path = strings.TrimPrefix(path, "@")
+	if path == "" {
+		return nil, false
+	}
+	parts := strings.Split(path, ".")
+	name := parts[0]
+	if name == "root" {
+		return resolveParts(ctx.root, parts[1:])
+	}
+	for cur := ctx; cur != nil; cur = cur.parent {
+		if cur.data == nil {
+			continue
+		}
+		val, ok := cur.data[name]
+		if !ok {
+			continue
+		}
+		return resolveParts(val, parts[1:])
 	}
 	return nil, false
 }

@@ -41,6 +41,49 @@ func TestCompileTemplates_HelperDirectCall(t *testing.T) {
 	}
 }
 
+func TestCompileTemplates_HelperHashArgs(t *testing.T) {
+	code, err := CompileTemplates(map[string]string{
+		"main": "{{upper name foo=\"bar\" count=2}}",
+	}, Options{
+		PackageName: "templates",
+		Helpers: map[string]HelperRef{
+			"upper": {Ident: "Upper"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CompileTemplates error: %v", err)
+	}
+	src := string(code)
+	if !strings.Contains(src, "runtime.Hash") {
+		t.Fatalf("expected runtime.Hash in generated code")
+	}
+	if !strings.Contains(src, "\"foo\"") || !strings.Contains(src, "\"count\"") {
+		t.Fatalf("expected hash keys in generated code")
+	}
+}
+
+func TestCompileTemplates_Subexpressions(t *testing.T) {
+	code, err := CompileTemplates(map[string]string{
+		"main": "{{upper (lower name)}}",
+	}, Options{
+		PackageName: "templates",
+		Helpers: map[string]HelperRef{
+			"upper": {Ident: "Upper"},
+			"lower": {Ident: "Lower"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CompileTemplates error: %v", err)
+	}
+	src := string(code)
+	if !strings.Contains(src, "Lower(ctx") {
+		t.Fatalf("expected Lower helper call in generated code")
+	}
+	if !strings.Contains(src, "Upper(ctx") {
+		t.Fatalf("expected Upper helper call in generated code")
+	}
+}
+
 func TestCompileTemplates_MissingHelper(t *testing.T) {
 	_, err := CompileTemplates(map[string]string{
 		"main": "{{upper name}}",
@@ -75,6 +118,46 @@ func TestCompileTemplates_BlockHelpers(t *testing.T) {
 	}
 }
 
+func TestCompileTemplates_BlockParams(t *testing.T) {
+	code, err := CompileTemplates(map[string]string{
+		"main": "{{#each items as |item idx|}}{{item}}:{{idx}}{{/each}}",
+	}, Options{PackageName: "templates"})
+	if err != nil {
+		t.Fatalf("CompileTemplates error: %v", err)
+	}
+	src := string(code)
+	if !strings.Contains(src, "ctx.WithScope(item.Value") {
+		t.Fatalf("expected WithScope for each block params")
+	}
+	if !strings.Contains(src, "\"item\"") {
+		t.Fatalf("expected item block param in generated code")
+	}
+	if !strings.Contains(src, "\"idx\"") {
+		t.Fatalf("expected idx block param in generated code")
+	}
+}
+
+func TestCompileTemplates_DynamicPartial(t *testing.T) {
+	code, err := CompileTemplates(map[string]string{
+		"main":   "{{> (lookup . \"partial\")}}",
+		"header": "<h1>{{title}}</h1>",
+	}, Options{
+		PackageName: "templates",
+		Helpers: map[string]HelperRef{
+			"lookup": {Ident: "Lookup"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CompileTemplates error: %v", err)
+	}
+	src := string(code)
+	if !strings.Contains(src, "partials[") {
+		t.Fatalf("expected dynamic partial lookup")
+	}
+	if !strings.Contains(src, "MissingPartial") {
+		t.Fatalf("expected MissingPartial error handling")
+	}
+}
 func TestCompileTemplates_UnknownBlock(t *testing.T) {
 	_, err := CompileTemplates(map[string]string{
 		"main": "{{#noop}}ignored{{/noop}}",

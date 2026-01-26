@@ -72,8 +72,15 @@ func IsTruthy(value any) bool {
 	}
 }
 
+// IterItem represents a single {{#each}} iteration value.
+type IterItem struct {
+	Value any
+	Key   string
+	Index int
+}
+
 // Iterate returns items for {{#each}} blocks, or nil when not iterable.
-func Iterate(value any) []any {
+func Iterate(value any) []IterItem {
 	if value == nil {
 		return nil
 	}
@@ -89,9 +96,9 @@ func Iterate(value any) []any {
 		if v.Len() == 0 {
 			return nil
 		}
-		items := make([]any, v.Len())
+		items := make([]IterItem, v.Len())
 		for i := 0; i < v.Len(); i++ {
-			items[i] = v.Index(i).Interface()
+			items[i] = IterItem{Value: v.Index(i).Interface(), Index: i}
 		}
 		return items
 	case reflect.Map:
@@ -107,9 +114,13 @@ func Iterate(value any) []any {
 			names[i] = key.String()
 		}
 		sort.Strings(names)
-		items := make([]any, len(names))
+		items := make([]IterItem, len(names))
 		for i, key := range names {
-			items[i] = v.MapIndex(reflect.ValueOf(key)).Interface()
+			items[i] = IterItem{
+				Value: v.MapIndex(reflect.ValueOf(key)).Interface(),
+				Key:   key,
+				Index: i,
+			}
 		}
 		return items
 	default:

@@ -22,7 +22,7 @@ func TestParseMixed(t *testing.T) {
 	assertMustache(t, nodes[3], "raw", true)
 	assertText(t, nodes[4], " ")
 	assertMustache(t, nodes[5], "title", true)
-	assertPartial(t, nodes[6], "head", "user")
+	assertPartial(t, nodes[6], "\"head\" user")
 	assertText(t, nodes[7], ".")
 }
 
@@ -35,7 +35,7 @@ func TestParseBlockIfElse(t *testing.T) {
 	if len(nodes) != 1 {
 		t.Fatalf("expected 1 node, got %d", len(nodes))
 	}
-	block := assertBlock(t, nodes[0], "if", "ok")
+	block := assertBlock(t, nodes[0], "if", "ok", nil)
 	if len(block.Body) != 1 || len(block.Else) != 1 {
 		t.Fatalf("expected body/else length 1, got %d/%d", len(block.Body), len(block.Else))
 	}
@@ -52,15 +52,61 @@ func TestParseNestedBlocks(t *testing.T) {
 	if len(nodes) != 1 {
 		t.Fatalf("expected 1 node, got %d", len(nodes))
 	}
-	each := assertBlock(t, nodes[0], "each", "items")
+	each := assertBlock(t, nodes[0], "each", "items", nil)
 	if len(each.Body) != 1 {
 		t.Fatalf("expected each body length 1, got %d", len(each.Body))
 	}
-	with := assertBlock(t, each.Body[0], "with", "user")
+	with := assertBlock(t, each.Body[0], "with", "user", nil)
 	if len(with.Body) != 1 {
 		t.Fatalf("expected with body length 1, got %d", len(with.Body))
 	}
 	assertMustache(t, with.Body[0], "name", false)
+}
+
+func TestParseBlockParams(t *testing.T) {
+	input := "{{#each items as |item idx|}}{{item}}{{/each}}"
+	nodes, err := Parse(input)
+	if err != nil {
+		t.Fatalf("Parse error: %v", err)
+	}
+	if len(nodes) != 1 {
+		t.Fatalf("expected 1 node, got %d", len(nodes))
+	}
+	block := assertBlock(t, nodes[0], "each", "items", []string{"item", "idx"})
+	if len(block.Body) != 1 {
+		t.Fatalf("expected body length 1, got %d", len(block.Body))
+	}
+	assertMustache(t, block.Body[0], "item", false)
+}
+
+func TestParseWhitespaceTrim(t *testing.T) {
+	input := "a {{~name}} b {{name~}} c"
+	nodes, err := Parse(input)
+	if err != nil {
+		t.Fatalf("Parse error: %v", err)
+	}
+	if len(nodes) != 5 {
+		t.Fatalf("expected 5 nodes, got %d", len(nodes))
+	}
+	assertText(t, nodes[0], "a")
+	assertMustache(t, nodes[1], "name", false)
+	assertText(t, nodes[2], " b ")
+	assertMustache(t, nodes[3], "name", false)
+	assertText(t, nodes[4], "c")
+}
+
+func TestParseRawBlock(t *testing.T) {
+	input := "Hi {{{{raw}}}} {{name}} {{{{/raw}}}}!"
+	nodes, err := Parse(input)
+	if err != nil {
+		t.Fatalf("Parse error: %v", err)
+	}
+	if len(nodes) != 3 {
+		t.Fatalf("expected 3 nodes, got %d", len(nodes))
+	}
+	assertText(t, nodes[0], "Hi ")
+	assertText(t, nodes[1], " {{name}} ")
+	assertText(t, nodes[2], "!")
 }
 
 func TestParseErrors(t *testing.T) {
@@ -84,6 +130,12 @@ func TestParseErrors(t *testing.T) {
 	}
 	if _, err := Parse("{{#if ok}}{{/each}}"); err == nil {
 		t.Fatalf("expected mismatched block error")
+	}
+	if _, err := Parse("{{{{raw}}}}"); err == nil {
+		t.Fatalf("expected unclosed raw block error")
+	}
+	if _, err := Parse("{{#each items as ||}}{{/each}}"); err == nil {
+		t.Fatalf("expected invalid block params error")
 	}
 }
 
@@ -109,18 +161,18 @@ func assertMustache(t *testing.T, node ast.Node, expr string, raw bool) {
 	}
 }
 
-func assertPartial(t *testing.T, node ast.Node, name string, ctx string) {
+func assertPartial(t *testing.T, node ast.Node, expr string) {
 	t.Helper()
 	p, ok := node.(*ast.Partial)
 	if !ok {
 		t.Fatalf("expected Partial node, got %T", node)
 	}
-	if p.Name != name || p.ContextExpr != ctx {
-		t.Fatalf("Partial = (%q, %q)", p.Name, p.ContextExpr)
+	if p.Expr != expr {
+		t.Fatalf("Partial = %q", p.Expr)
 	}
 }
 
-func assertBlock(t *testing.T, node ast.Node, name string, args string) *ast.Block {
+func assertBlock(t *testing.T, node ast.Node, name string, args string, params []string) *ast.Block {
 	t.Helper()
 	b, ok := node.(*ast.Block)
 	if !ok {
@@ -128,6 +180,14 @@ func assertBlock(t *testing.T, node ast.Node, name string, args string) *ast.Blo
 	}
 	if b.Name != name || b.Args != args {
 		t.Fatalf("Block = (%q, %q)", b.Name, b.Args)
+	}
+	if len(b.Params) != len(params) {
+		t.Fatalf("Block params = %v", b.Params)
+	}
+	for i, param := range params {
+		if b.Params[i] != param {
+			t.Fatalf("Block params = %v", b.Params)
+		}
 	}
 	return b
 }

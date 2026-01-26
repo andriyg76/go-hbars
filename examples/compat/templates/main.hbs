@@ -1,0 +1,29 @@
+Title: {{~title}}
+
+Upper/Lower: {{upper (lower title)}}
+
+{{#with user as |u|}}
+User: {{u.name}} ({{u.role}})
+Created: {{formatDate u.created format="2006-01-02"}}
+Nickname: {{default u.nickname value="(none)"}}
+{{/with}}
+
+Users:
+{{#each users as |person idx|}}
+  {{@index}}/{{idx}} {{person.name}} {{#if person.active}}(active){{/if}} - {{../title}}
+{{else}}
+  (none)
+{{/each}}
+
+Settings:
+{{#each settings as |val key|}}
+  {{@key}}={{val}}
+{{/each}}
+
+{{> (lookup . "cardPartial") user}}
+
+{{> footer note="thanks"}}
+
+{{{{raw}}}}
+{{should_not_parse}}
+{{{{/raw}}}}

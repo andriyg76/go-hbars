@@ -84,6 +84,15 @@ func CompileTemplates(templates map[string]string, opts Options) ([]byte, error)
 	w.line(")")
 	w.line("")
 
+	w.line("var partials = map[string]func(*runtime.Context, io.Writer) error{")
+	w.indentInc()
+	for _, name := range names {
+		w.line("%q: render%s,", name, funcNames[name])
+	}
+	w.indentDec()
+	w.line("}")
+	w.line("")
+
 	for _, name := range names {
 		goName := funcNames[name]
 		nodes := parsed[name]
@@ -270,69 +279,119 @@ func (g *generator) emitBlock(n *ast.Block) error {
 }
 
 func (g *generator) emitMustache(n *ast.Mustache) error {
-	tokens, err := splitArgs(n.Expr)
+	parts, hash, err := parseParts(n.Expr)
 	if err != nil {
 		return err
 	}
-	if len(tokens) == 0 {
+	if len(parts) == 0 {
+		if len(hash) > 0 {
+			return fmt.Errorf("unexpected hash arguments")
+		}
 		return nil
 	}
-	if len(tokens) == 1 {
-		arg, err := classifyToken(tokens[0])
+	if len(parts) == 1 {
+		if parts[0].kind == exprPath {
+			if helperExpr, ok := g.helpers[parts[0].value]; ok {
+				return g.emitHelperOutput(helperExpr, nil, hash, n.Raw)
+			}
+		}
+		if len(hash) > 0 {
+			return fmt.Errorf("hash arguments require a helper")
+		}
+		valueExpr, err := g.emitExprValue(parts[0])
 		if err != nil {
 			return err
 		}
-		if arg.kind != "runtime.ArgPath" {
-			g.emitValue(arg, n.Raw)
-			return nil
-		}
-		name := tokens[0].value
-		if helperExpr, ok := g.helpers[name]; ok {
-			g.emitHelperCall(helperExpr, nil, n.Raw)
-			return nil
-		}
-		g.emitValue(arg, n.Raw)
+		g.emitValueExpr(valueExpr, n.Raw)
 		return nil
 	}
-	name := tokens[0].value
-	helperExpr, ok := g.helpers[name]
+	if parts[0].kind != exprPath {
+		return fmt.Errorf("helper name must be a path")
+	}
+	helperExpr, ok := g.helpers[parts[0].value]
 	if !ok {
-		return fmt.Errorf("helper %q is not defined", name)
+		return fmt.Errorf("helper %q is not defined", parts[0].value)
 	}
-	args := make([]arg, 0, len(tokens)-1)
-	for _, tok := range tokens[1:] {
-		arg, err := classifyToken(tok)
-		if err != nil {
-			return err
-		}
-		args = append(args, arg)
-	}
-	g.emitHelperCall(helperExpr, args, n.Raw)
-	return nil
+	return g.emitHelperOutput(helperExpr, parts[1:], hash, n.Raw)
 }
 
 func (g *generator) emitPartial(n *ast.Partial) error {
-	goName, ok := g.partials[n.Name]
-	if !ok {
-		return fmt.Errorf("partial %q is not defined", n.Name)
+	parts, hash, err := parseParts(n.Expr)
+	if err != nil {
+		return err
+	}
+	if len(parts) == 0 {
+		return fmt.Errorf("partial invocation is empty")
+	}
+	if len(parts) > 2 {
+		return fmt.Errorf("partial: context must be a single expression")
+	}
+	nameExpr := parts[0]
+	var ctxExpr expr
+	hasCtx := false
+	if len(parts) == 2 {
+		ctxExpr = parts[1]
+		hasCtx = true
+	}
+	localsVar := "nil"
+	if len(hash) > 0 {
+		localsVar, err = g.emitHashMap(hash)
+		if err != nil {
+			return err
+		}
 	}
 	ctxVar := "ctx"
-	if n.ContextExpr != "" {
-		tokens, err := splitArgs(n.ContextExpr)
+	if hasCtx {
+		valueExpr, err := g.emitExprValue(ctxExpr)
 		if err != nil {
 			return err
 		}
-		if len(tokens) != 1 {
-			return fmt.Errorf("partial %q: context must be a single expression", n.Name)
-		}
-		arg, err := classifyToken(tokens[0])
-		if err != nil {
-			return err
-		}
+		valVar := g.nextTemp("val")
+		g.w.line("%s := %s", valVar, valueExpr)
 		ctxVar = g.nextTemp("ctx")
-		g.w.line("%s := ctx.WithData(%s)", ctxVar, argExpr(arg))
+		g.w.line("%s := ctx.WithScope(%s, %s, nil)", ctxVar, valVar, localsVar)
+	} else if localsVar != "nil" {
+		ctxVar = g.nextTemp("ctx")
+		g.w.line("%s := ctx.WithScope(ctx.Data, %s, nil)", ctxVar, localsVar)
 	}
-	g.w.line("if err := render%s(%s, w); err != nil {", goName, ctxVar)
+
+	if nameExpr.kind == exprString {
+		name := nameExpr.value
+		goName, ok := g.partials[name]
+		if !ok {
+			return fmt.Errorf("partial %q is not defined", name)
+		}
+		g.w.line("if err := render%s(%s, w); err != nil {", goName, ctxVar)
+		g.w.indentInc()
+		g.w.line("return err")
+		g.w.indentDec()
+		g.w.line("}")
+		return nil
+	}
+	if nameExpr.kind == exprPath {
+		if goName, ok := g.partials[nameExpr.value]; ok {
+			g.w.line("if err := render%s(%s, w); err != nil {", goName, ctxVar)
+			g.w.indentInc()
+			g.w.line("return err")
+			g.w.indentDec()
+			g.w.line("}")
+			return nil
+		}
+	}
+
+	nameValue, err := g.emitExprValue(nameExpr)
+	if err != nil {
+		return err
+	}
+	nameVar := g.nextTemp("partial")
+	g.w.line("%s := runtime.Stringify(%s)", nameVar, nameValue)
+	g.w.line("partialFn, ok := partials[%s]", nameVar)
+	g.w.line("if !ok {")
+	g.w.indentInc()
+	g.w.line("return runtime.MissingPartial(%s)", nameVar)
+	g.w.indentDec()
+	g.w.line("}")
+	g.w.line("if err := partialFn(%s, w); err != nil {", ctxVar)
 	g.w.indentInc()
 	g.w.line("return err")
 	g.w.indentDec()
@@ -341,13 +400,20 @@ func (g *generator) emitPartial(n *ast.Partial) error {
 }
 
 func (g *generator) emitIfBlock(n *ast.Block, inverted bool) error {
-	arg, err := g.singleBlockArg(n)
+	if len(n.Params) > 0 {
+		return fmt.Errorf("block %q does not support block params", n.Name)
+	}
+	blockExpr, _, err := g.singleBlockExpr(n)
+	if err != nil {
+		return err
+	}
+	valueExpr, err := g.emitExprValue(blockExpr)
 	if err != nil {
 		return err
 	}
 	valVar := g.nextTemp("val")
 	condVar := g.nextTemp("cond")
-	g.w.line("%s := %s", valVar, argExpr(arg))
+	g.w.line("%s := %s", valVar, valueExpr)
 	g.w.line("%s := runtime.IsTruthy(%s)", condVar, valVar)
 	condExpr := condVar
 	if inverted {
@@ -372,17 +438,33 @@ func (g *generator) emitIfBlock(n *ast.Block, inverted bool) error {
 }
 
 func (g *generator) emitWithBlock(n *ast.Block) error {
-	arg, err := g.singleBlockArg(n)
+	if len(n.Params) > 1 {
+		return fmt.Errorf("block %q supports a single param", n.Name)
+	}
+	blockExpr, _, err := g.singleBlockExpr(n)
+	if err != nil {
+		return err
+	}
+	valueExpr, err := g.emitExprValue(blockExpr)
 	if err != nil {
 		return err
 	}
 	valVar := g.nextTemp("val")
 	condVar := g.nextTemp("cond")
-	g.w.line("%s := %s", valVar, argExpr(arg))
+	g.w.line("%s := %s", valVar, valueExpr)
 	g.w.line("%s := runtime.IsTruthy(%s)", condVar, valVar)
 	g.w.line("if %s {", condVar)
 	g.w.indentInc()
-	g.w.line("ctx := ctx.WithData(%s)", valVar)
+	localsVar := "nil"
+	if len(n.Params) == 1 {
+		localsVar = g.nextTemp("locals")
+		g.w.line("%s := map[string]any{", localsVar)
+		g.w.indentInc()
+		g.w.line("%q: %s,", n.Params[0], valVar)
+		g.w.indentDec()
+		g.w.line("}")
+	}
+	g.w.line("ctx := ctx.WithScope(%s, %s, nil)", valVar, localsVar)
 	if err := g.emitNodes(n.Body); err != nil {
 		return err
 	}
@@ -400,19 +482,64 @@ func (g *generator) emitWithBlock(n *ast.Block) error {
 }
 
 func (g *generator) emitEachBlock(n *ast.Block) error {
-	arg, err := g.singleBlockArg(n)
+	if len(n.Params) > 2 {
+		return fmt.Errorf("block %q supports up to 2 params", n.Name)
+	}
+	blockExpr, _, err := g.singleBlockExpr(n)
+	if err != nil {
+		return err
+	}
+	valueExpr, err := g.emitExprValue(blockExpr)
 	if err != nil {
 		return err
 	}
 	valVar := g.nextTemp("val")
 	itemsVar := g.nextTemp("items")
-	g.w.line("%s := %s", valVar, argExpr(arg))
+	g.w.line("%s := %s", valVar, valueExpr)
 	g.w.line("%s := runtime.Iterate(%s)", itemsVar, valVar)
 	g.w.line("if len(%s) > 0 {", itemsVar)
 	g.w.indentInc()
-	g.w.line("for _, item := range %s {", itemsVar)
+	g.w.line("for i, item := range %s {", itemsVar)
 	g.w.indentInc()
-	g.w.line("ctx := ctx.WithData(item)")
+	dataVar := g.nextTemp("data")
+	g.w.line("%s := map[string]any{", dataVar)
+	g.w.indentInc()
+	g.w.line("%q: item.Index,", "index")
+	g.w.line("%q: i == 0,", "first")
+	g.w.line("%q: i == len(%s)-1,", "last", itemsVar)
+	g.w.indentDec()
+	g.w.line("}")
+	g.w.line("if item.Key != \"\" {")
+	g.w.indentInc()
+	g.w.line("%s[%q] = item.Key", dataVar, "key")
+	g.w.indentDec()
+	g.w.line("}")
+	localsVar := "nil"
+	if len(n.Params) > 0 {
+		localsVar = g.nextTemp("locals")
+		if len(n.Params) > 1 {
+			keyVar := g.nextTemp("key")
+			g.w.line("%s := any(item.Index)", keyVar)
+			g.w.line("if item.Key != \"\" {")
+			g.w.indentInc()
+			g.w.line("%s = item.Key", keyVar)
+			g.w.indentDec()
+			g.w.line("}")
+			g.w.line("%s := map[string]any{", localsVar)
+			g.w.indentInc()
+			g.w.line("%q: item.Value,", n.Params[0])
+			g.w.line("%q: %s,", n.Params[1], keyVar)
+			g.w.indentDec()
+			g.w.line("}")
+		} else {
+			g.w.line("%s := map[string]any{", localsVar)
+			g.w.indentInc()
+			g.w.line("%q: item.Value,", n.Params[0])
+			g.w.indentDec()
+			g.w.line("}")
+		}
+	}
+	g.w.line("ctx := ctx.WithScope(item.Value, %s, %s)", localsVar, dataVar)
 	if err := g.emitNodes(n.Body); err != nil {
 		return err
 	}
@@ -431,37 +558,38 @@ func (g *generator) emitEachBlock(n *ast.Block) error {
 	return nil
 }
 
-func (g *generator) singleBlockArg(n *ast.Block) (arg, error) {
-	tokens, err := splitArgs(n.Args)
+func (g *generator) singleBlockExpr(n *ast.Block) (expr, []hashArg, error) {
+	parts, hash, err := parseParts(n.Args)
 	if err != nil {
-		return arg{}, err
+		return expr{}, nil, err
 	}
-	if len(tokens) != 1 {
-		return arg{}, fmt.Errorf("block %q requires a single expression", n.Name)
+	if len(parts) != 1 {
+		return expr{}, nil, fmt.Errorf("block %q requires a single expression", n.Name)
 	}
-	return classifyToken(tokens[0])
+	return parts[0], hash, nil
 }
 
-func (g *generator) emitValue(arg arg, raw bool) {
+func (g *generator) emitValueExpr(expr string, raw bool) {
 	if raw {
-		g.writeValue("runtime.WriteRaw", argExpr(arg))
+		g.writeValue("runtime.WriteRaw", expr)
 		return
 	}
-	g.writeValue("runtime.WriteEscaped", argExpr(arg))
+	g.writeValue("runtime.WriteEscaped", expr)
 }
 
-func (g *generator) emitHelperCall(helperExpr string, args []arg, raw bool) {
-	argsExpr := "nil"
-	if len(args) > 0 {
-		argsVar := g.nextTemp("args")
-		g.w.line("%s := []any{", argsVar)
-		g.w.indentInc()
-		for _, arg := range args {
-			g.w.line("%s,", argExpr(arg))
-		}
-		g.w.indentDec()
-		g.w.line("}")
-		argsExpr = argsVar
+func (g *generator) emitHelperOutput(helperExpr string, args []expr, hash []hashArg, raw bool) error {
+	resultVar, err := g.emitHelperValue(helperExpr, args, hash)
+	if err != nil {
+		return err
+	}
+	g.emitValueExpr(resultVar, raw)
+	return nil
+}
+
+func (g *generator) emitHelperValue(helperExpr string, args []expr, hash []hashArg) (string, error) {
+	argsExpr, err := g.emitArgs(args, hash)
+	if err != nil {
+		return "", err
 	}
 	resultVar := g.nextTemp("result")
 	g.w.line("%s, err := %s(ctx, %s)", resultVar, helperExpr, argsExpr)
@@ -470,11 +598,79 @@ func (g *generator) emitHelperCall(helperExpr string, args []arg, raw bool) {
 	g.w.line("return err")
 	g.w.indentDec()
 	g.w.line("}")
-	if raw {
-		g.writeValue("runtime.WriteRaw", resultVar)
-		return
+	return resultVar, nil
+}
+
+func (g *generator) emitArgs(args []expr, hash []hashArg) (string, error) {
+	argExprs := make([]string, len(args))
+	for i, arg := range args {
+		exprValue, err := g.emitExprValue(arg)
+		if err != nil {
+			return "", err
+		}
+		argExprs[i] = exprValue
 	}
-	g.writeValue("runtime.WriteEscaped", resultVar)
+	if len(hash) > 0 {
+		hashVar, err := g.emitHashMap(hash)
+		if err != nil {
+			return "", err
+		}
+		argExprs = append(argExprs, hashVar)
+	}
+	if len(argExprs) == 0 {
+		return "nil", nil
+	}
+	argsVar := g.nextTemp("args")
+	g.w.line("%s := []any{", argsVar)
+	g.w.indentInc()
+	for _, arg := range argExprs {
+		g.w.line("%s,", arg)
+	}
+	g.w.indentDec()
+	g.w.line("}")
+	return argsVar, nil
+}
+
+func (g *generator) emitHashMap(hash []hashArg) (string, error) {
+	if len(hash) == 0 {
+		return "nil", nil
+	}
+	type entry struct {
+		key   string
+		value string
+	}
+	entries := make([]entry, 0, len(hash))
+	for _, h := range hash {
+		valueExpr, err := g.emitExprValue(h.value)
+		if err != nil {
+			return "", err
+		}
+		entries = append(entries, entry{key: h.key, value: valueExpr})
+	}
+	hashVar := g.nextTemp("hash")
+	g.w.line("%s := runtime.Hash{", hashVar)
+	g.w.indentInc()
+	for _, entry := range entries {
+		g.w.line("%s: %s,", strconv.Quote(entry.key), entry.value)
+	}
+	g.w.indentDec()
+	g.w.line("}")
+	return hashVar, nil
+}
+
+func (g *generator) emitExprValue(value expr) (string, error) {
+	if value.kind == exprCall {
+		helperExpr, ok := g.helpers[value.name]
+		if !ok {
+			return "", fmt.Errorf("helper %q is not defined", value.name)
+		}
+		return g.emitHelperValue(helperExpr, value.args, value.hash)
+	}
+	arg, err := argFromExpr(value)
+	if err != nil {
+		return "", err
+	}
+	return argExpr(arg), nil
 }
 
 func (g *generator) writeValue(fn string, expr string) {
@@ -495,21 +691,20 @@ type arg struct {
 	value string
 }
 
-func classifyToken(tok token) (arg, error) {
-	if tok.quoted {
-		return arg{kind: "runtime.ArgString", value: tok.value}, nil
-	}
-	lower := strings.ToLower(tok.value)
-	switch lower {
-	case "true", "false":
-		return arg{kind: "runtime.ArgBool", value: lower}, nil
-	case "null", "nil":
+func argFromExpr(value expr) (arg, error) {
+	switch value.kind {
+	case exprPath:
+		return arg{kind: "runtime.ArgPath", value: value.value}, nil
+	case exprString:
+		return arg{kind: "runtime.ArgString", value: value.value}, nil
+	case exprNumber:
+		return arg{kind: "runtime.ArgNumber", value: value.value}, nil
+	case exprBool:
+		return arg{kind: "runtime.ArgBool", value: value.value}, nil
+	case exprNull:
 		return arg{kind: "runtime.ArgNull", value: ""}, nil
 	default:
-		if isNumber(tok.value) {
-			return arg{kind: "runtime.ArgNumber", value: tok.value}, nil
-		}
-		return arg{kind: "runtime.ArgPath", value: tok.value}, nil
+		return arg{}, fmt.Errorf("invalid expression")
 	}
 }
 
@@ -523,59 +718,6 @@ func isNumber(value string) bool {
 	}
 	_, err := strconv.ParseFloat(value, 64)
 	return err == nil
-}
-
-type token struct {
-	value  string
-	quoted bool
-}
-
-func splitArgs(input string) ([]token, error) {
-	var tokens []token
-	for i := 0; i < len(input); {
-		for i < len(input) && isSpace(input[i]) {
-			i++
-		}
-		if i >= len(input) {
-			break
-		}
-		switch input[i] {
-		case '"', '\'':
-			quote := input[i]
-			i++
-			var sb strings.Builder
-			closed := false
-			for i < len(input) {
-				ch := input[i]
-				if ch == '\\' && i+1 < len(input) {
-					next := input[i+1]
-					if next == quote || next == '\\' {
-						sb.WriteByte(next)
-						i += 2
-						continue
-					}
-				}
-				if ch == quote {
-					i++
-					closed = true
-					break
-				}
-				sb.WriteByte(ch)
-				i++
-			}
-			if !closed {
-				return nil, fmt.Errorf("unclosed string literal")
-			}
-			tokens = append(tokens, token{value: sb.String(), quoted: true})
-		default:
-			start := i
-			for i < len(input) && !isSpace(input[i]) {
-				i++
-			}
-			tokens = append(tokens, token{value: input[start:i]})
-		}
-	}
-	return tokens, nil
 }
 
 func isSpace(b byte) bool {
