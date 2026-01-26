@@ -1,0 +1,72 @@
+package sitegen
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+
+	"github.com/andriyg76/go-hbars/internal/processor"
+)
+
+// Processor processes data files and generates static HTML files.
+type Processor struct {
+	config   *Config
+	proc     *processor.Processor
+	renderer processor.TemplateRenderer
+}
+
+// NewProcessor creates a new processor with the given configuration and renderer.
+func NewProcessor(config *Config, renderer processor.TemplateRenderer) (*Processor, error) {
+	if config == nil {
+		config = DefaultConfig()
+	}
+
+	// Determine root path
+	root := config.RootPath
+	if root == "" {
+		var err error
+		root, err = os.Getwd()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get working directory: %w", err)
+		}
+	}
+
+	procConfig := &processor.Config{
+		RootPath:      root,
+		DataPath:      config.DataPath,
+		SharedPath:    config.SharedPath,
+		TemplatesPath: config.TemplatesPath,
+		OutputPath:    config.OutputPath,
+	}
+
+	proc := processor.NewProcessor(procConfig, renderer)
+
+	return &Processor{
+		config:   config,
+		proc:     proc,
+		renderer: renderer,
+	}, nil
+}
+
+// Process processes all data files and generates output files.
+func (p *Processor) Process() error {
+	return p.proc.Process()
+}
+
+// ProcessFile processes a single data file and returns the output path and content.
+func (p *Processor) ProcessFile(dataFilePath string) (string, []byte, error) {
+	// Load shared data
+	sharedPath := filepath.Join(p.config.RootPath, p.config.SharedPath)
+	sharedData, err := processor.LoadSharedData(sharedPath)
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to load shared data: %w", err)
+	}
+
+	return p.proc.ProcessFile(dataFilePath, sharedData)
+}
+
+// Config returns the processor configuration.
+func (p *Processor) Config() *Config {
+	return p.config
+}
+

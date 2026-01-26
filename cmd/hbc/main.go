@@ -23,6 +23,7 @@ func main() {
 	var importFlags importFlag
 	var helpersFlags helpersFlag
 	var noCoreHelpers bool
+	var generateBootstrap bool
 
 	flag.StringVar(&inPath, "in", "", "input template file or directory")
 	flag.StringVar(&outPath, "out", "templates_gen.go", "output Go file path")
@@ -33,6 +34,7 @@ func main() {
 	flag.Var(&importFlags, "import", "import path for helpers: path or path:alias")
 	flag.Var(&helpersFlags, "helpers", "comma-separated helper list: [alias:]Name or [alias:]name=Ident")
 	flag.BoolVar(&noCoreHelpers, "no-core-helpers", false, "disable default core helpers registry")
+	flag.BoolVar(&generateBootstrap, "bootstrap", false, "generate bootstrap code for quick server/processor setup")
 	flag.Parse()
 
 	if inPath == "" {
@@ -56,9 +58,10 @@ func main() {
 	}
 
 	code, err := compiler.CompileTemplates(templates, compiler.Options{
-		PackageName:   pkgName,
-		RuntimeImport: runtimeImport,
-		Helpers:       helpers,
+		PackageName:      pkgName,
+		RuntimeImport:    runtimeImport,
+		Helpers:           helpers,
+		GenerateBootstrap: generateBootstrap,
 	})
 	if err != nil {
 		fatal(err)
