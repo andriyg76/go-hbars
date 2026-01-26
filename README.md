@@ -192,6 +192,15 @@ See `examples/compat` for a small template set that exercises hash arguments,
 subexpressions, data variables, parent paths, block params, dynamic partials,
 whitespace control, and raw blocks.
 
+## Compile-time optimization plan (todo)
+
+- Constant-fold `if`/`unless`/`with` when the condition is a literal.
+- Inline literal arguments directly (avoid `EvalArg`).
+- Prebuild hash maps when all values are literals.
+- Detect duplicate hash keys at compile time.
+- Pre-resolve static partial names from string literals.
+- Pre-parse path segments for faster runtime lookup.
+
 ## Not implemented yet
 
 - Custom block helpers (only `if`, `unless`, `with`, `each`)
