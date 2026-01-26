@@ -158,7 +158,6 @@ func TestCompileTemplates_DynamicPartial(t *testing.T) {
 		t.Fatalf("expected MissingPartial error handling")
 	}
 }
-
 func TestCompileTemplates_UnknownBlock(t *testing.T) {
 	_, err := CompileTemplates(map[string]string{
 		"main": "{{#noop}}ignored{{/noop}}",
