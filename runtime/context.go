@@ -15,6 +15,14 @@ type Context struct {
 	root   any
 }
 
+// ParsedPath represents a pre-parsed path expression.
+type ParsedPath struct {
+	Parts   []string
+	Up      int
+	Data    bool
+	Current bool
+}
+
 // NewContext creates a new rendering context.
 func NewContext(data any) *Context {
 	return &Context{Data: data, root: data}
@@ -69,6 +77,35 @@ func ResolvePath(ctx *Context, path string) (any, bool) {
 	return resolveData(ctx, parts)
 }
 
+// ResolvePathParsed resolves a pre-parsed path expression.
+func ResolvePathParsed(ctx *Context, path ParsedPath) (any, bool) {
+	if ctx == nil {
+		return nil, false
+	}
+	for i := 0; i < path.Up; i++ {
+		if ctx.parent == nil {
+			return nil, false
+		}
+		ctx = ctx.parent
+	}
+	if path.Current {
+		return ctx.Data, true
+	}
+	if path.Data {
+		return resolveDataVarParts(ctx, path.Parts)
+	}
+	if val, ok := resolveLocals(ctx, path.Parts); ok {
+		return val, true
+	}
+	return resolveData(ctx, path.Parts)
+}
+
+// ResolvePathValueParsed resolves a pre-parsed path and returns the value only.
+func ResolvePathValueParsed(ctx *Context, path ParsedPath) any {
+	val, _ := ResolvePathParsed(ctx, path)
+	return val
+}
+
 func resolveLocals(ctx *Context, parts []string) (any, bool) {
 	if len(parts) == 0 {
 		return nil, false
@@ -121,7 +158,17 @@ func resolveDataVar(ctx *Context, path string) (any, bool) {
 		return nil, false
 	}
 	parts := strings.Split(path, ".")
+	return resolveDataVarParts(ctx, parts)
+}
+
+func resolveDataVarParts(ctx *Context, parts []string) (any, bool) {
+	if len(parts) == 0 {
+		return nil, false
+	}
 	name := parts[0]
+	if name == "" {
+		return nil, false
+	}
 	if name == "root" {
 		return resolveParts(ctx.root, parts[1:])
 	}

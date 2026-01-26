@@ -88,3 +88,87 @@ func TestResolvePathDataVarsAndLocals(t *testing.T) {
 		t.Fatalf("ResolvePath @root.rootName = (%v, %v)", got, ok)
 	}
 }
+
+func TestResolvePathParsed(t *testing.T) {
+	rootData := map[string]any{
+		"rootName": "root",
+		"user": map[string]any{
+			"name": "Ada",
+		},
+	}
+	root := NewContext(rootData)
+	child := root.WithScope(
+		map[string]any{"name": "child"},
+		map[string]any{"local": "value"},
+		map[string]any{"index": 3, "key": "k"},
+	)
+	grand := child.WithScope(map[string]any{"name": "grand"}, nil, nil)
+
+	tests := []struct {
+		name string
+		ctx  *Context
+		path ParsedPath
+		want any
+		ok   bool
+	}{
+		{
+			name: "simple path",
+			ctx:  root,
+			path: ParsedPath{Parts: []string{"user", "name"}},
+			want: "Ada",
+			ok:   true,
+		},
+		{
+			name: "current",
+			ctx:  root,
+			path: ParsedPath{Current: true},
+			want: rootData,
+			ok:   true,
+		},
+		{
+			name: "parent current",
+			ctx:  grand,
+			path: ParsedPath{Up: 1, Current: true},
+			want: map[string]any{"name": "child"},
+			ok:   true,
+		},
+		{
+			name: "locals",
+			ctx:  grand,
+			path: ParsedPath{Parts: []string{"local"}},
+			want: "value",
+			ok:   true,
+		},
+		{
+			name: "data var",
+			ctx:  grand,
+			path: ParsedPath{Data: true, Parts: []string{"index"}},
+			want: 3,
+			ok:   true,
+		},
+		{
+			name: "root data var",
+			ctx:  grand,
+			path: ParsedPath{Data: true, Parts: []string{"root", "rootName"}},
+			want: "root",
+			ok:   true,
+		},
+		{
+			name: "missing",
+			ctx:  root,
+			path: ParsedPath{Parts: []string{"missing", "path"}},
+			want: nil,
+			ok:   false,
+		},
+	}
+
+	for _, tc := range tests {
+		got, ok := ResolvePathParsed(tc.ctx, tc.path)
+		if ok != tc.ok {
+			t.Fatalf("ResolvePathParsed %s ok=%v, want %v", tc.name, ok, tc.ok)
+		}
+		if ok && !reflect.DeepEqual(got, tc.want) {
+			t.Fatalf("ResolvePathParsed %s = %v, want %v", tc.name, got, tc.want)
+		}
+	}
+}

@@ -176,3 +176,107 @@ func TestCompileTemplates_DuplicateIdentifiers(t *testing.T) {
 		t.Fatalf("expected duplicate identifier error, got %v", err)
 	}
 }
+
+func TestCompileTemplates_InlineLiteralArgs(t *testing.T) {
+	code, err := CompileTemplates(map[string]string{
+		"main": "{{upper \"Ada\" 3 true null}}",
+	}, Options{
+		PackageName: "templates",
+		Helpers: map[string]HelperRef{
+			"upper": {Ident: "Upper"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CompileTemplates error: %v", err)
+	}
+	src := string(code)
+	if strings.Contains(src, "EvalArg") {
+		t.Fatalf("expected literals to be inlined without EvalArg")
+	}
+	if !strings.Contains(src, "int64(3)") {
+		t.Fatalf("expected int64 literal for numeric arg")
+	}
+}
+
+func TestCompileTemplates_PrebuildLiteralHash(t *testing.T) {
+	code, err := CompileTemplates(map[string]string{
+		"main": "{{upper name foo=\"bar\" count=2}}",
+	}, Options{
+		PackageName: "templates",
+		Helpers: map[string]HelperRef{
+			"upper": {Ident: "Upper"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CompileTemplates error: %v", err)
+	}
+	src := string(code)
+	if !strings.Contains(src, "staticHash") {
+		t.Fatalf("expected static hash map for literal values")
+	}
+	if strings.Contains(src, ":= runtime.Hash") {
+		t.Fatalf("expected no per-call hash allocation for literal hash")
+	}
+}
+
+func TestCompileTemplates_DuplicateHashKeys(t *testing.T) {
+	_, err := CompileTemplates(map[string]string{
+		"main": "{{upper foo=1 foo=2}}",
+	}, Options{
+		PackageName: "templates",
+		Helpers: map[string]HelperRef{
+			"upper": {Ident: "Upper"},
+		},
+	})
+	if err == nil || !strings.Contains(err.Error(), "duplicate hash key") {
+		t.Fatalf("expected duplicate hash key error, got %v", err)
+	}
+}
+
+func TestCompileTemplates_ConstantFoldIf(t *testing.T) {
+	code, err := CompileTemplates(map[string]string{
+		"main": "{{#if true}}Yes{{else}}No{{/if}}",
+	}, Options{PackageName: "templates"})
+	if err != nil {
+		t.Fatalf("CompileTemplates error: %v", err)
+	}
+	src := string(code)
+	if strings.Contains(src, "IsTruthy") {
+		t.Fatalf("expected constant-folded if to avoid IsTruthy")
+	}
+	if strings.Contains(src, "\"No\"") {
+		t.Fatalf("expected else branch to be removed for constant true")
+	}
+}
+
+func TestCompileTemplates_ConstantFoldWith(t *testing.T) {
+	code, err := CompileTemplates(map[string]string{
+		"main": "{{#with \"Ada\"}}{{this}}{{/with}}",
+	}, Options{PackageName: "templates"})
+	if err != nil {
+		t.Fatalf("CompileTemplates error: %v", err)
+	}
+	src := string(code)
+	if strings.Contains(src, "IsTruthy") {
+		t.Fatalf("expected constant-folded with to avoid IsTruthy")
+	}
+	if !strings.Contains(src, "WithScope(\"Ada\"") {
+		t.Fatalf("expected with block to use literal scope value")
+	}
+}
+
+func TestCompileTemplates_PreparsedPaths(t *testing.T) {
+	code, err := CompileTemplates(map[string]string{
+		"main": "Hello {{user.name}}",
+	}, Options{PackageName: "templates"})
+	if err != nil {
+		t.Fatalf("CompileTemplates error: %v", err)
+	}
+	src := string(code)
+	if !strings.Contains(src, "ResolvePathValueParsed") {
+		t.Fatalf("expected pre-parsed path resolution")
+	}
+	if !strings.Contains(src, "staticPath") {
+		t.Fatalf("expected static parsed path declaration")
+	}
+}
