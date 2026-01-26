@@ -1,0 +1,79 @@
+{
+  "site": {
+    "title": "Go Hbars Showcase",
+    "url": "https://example.com/docs?utm=showcase",
+    "year": 2026
+  },
+  "user": {
+    "name": "Ada Lovelace",
+    "email": "ada@example.com",
+    "role": "admin",
+    "active": true,
+    "score": 92.4,
+    "tags": ["math", "science", "compiler"],
+    "joined": "2024-04-01T12:00:00Z",
+    "bio": "Mathematician and writer. Known for work on the Analytical Engine and early computing ideas.",
+    "profile": {
+      "title": "Principal Engineer",
+      "note": "On leave"
+    }
+  },
+  "users": [
+    {
+      "name": "Ada Lovelace",
+      "email": "ada@example.com",
+      "role": "admin",
+      "active": true,
+      "score": 92.4
+    },
+    {
+      "name": "Grace Hopper",
+      "email": "grace@example.com",
+      "role": "editor",
+      "active": false,
+      "score": 78.1
+    },
+    {
+      "name": "Alan Turing",
+      "email": "alan@example.com",
+      "role": "viewer",
+      "active": true,
+      "score": 88.9
+    }
+  ],
+  "orders": [
+    {
+      "id": "A100",
+      "items": ["laptop", "mouse", "dock"],
+      "subtotal": 1200.50,
+      "tax": 96.04
+    },
+    {
+      "id": "B200",
+      "items": ["keyboard", "cable"],
+      "subtotal": 220.00,
+      "tax": 17.60
+    },
+    {
+      "id": "C300",
+      "items": ["monitor"],
+      "subtotal": 399.99,
+      "tax": 32.00
+    }
+  ],
+  "stats": {
+    "count": 3,
+    "total": 1834.13,
+    "avg": 611.38
+  },
+  "settings": {
+    "featureFlags": {
+      "beta": true,
+      "darkMode": false,
+      "newUI": true
+    }
+  },
+  "rawHtml": "<p>Hello <strong>world</strong>!</p>",
+  "cardPartial": "userCard"
+}
+

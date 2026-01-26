@@ -1,0 +1,9 @@
+<div class="user-card">
+  <h2>{{capitalize name}}</h2>
+  <p>{{lower email}}</p>
+  <p>Role: {{upper role}}</p>
+  {{#if (eq role "admin")}}<strong>Admin</strong>{{/if}}
+  {{#unless active}}<em>Inactive</em>{{/unless}}
+  <p>Score: {{toFixed score 1}}</p>
+</div>
+

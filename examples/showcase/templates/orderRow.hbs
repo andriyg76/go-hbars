@@ -1,0 +1,10 @@
+<div class="order">
+  <span>Order #{{id}}</span>
+  <span>Items: {{length items}}</span>
+  <span>Subtotal: {{formatNumber subtotal precision=2}}</span>
+  <span>Tax: {{formatNumber tax precision=2}}</span>
+  <span>Total: {{formatNumber (add subtotal tax) precision=2}}</span>
+  <span>First: {{default (first items) "n/a"}}</span>
+  <span>Last: {{default (last items) "n/a"}}</span>
+</div>
+

@@ -1,0 +1,12 @@
+{{> header}}
+
+{{#each users as |user uidx|}}
+{{> userCard user}}
+{{#each user.orders as |order oidx|}}
+{{> orderRow order}}
+Order idx {{@index}} of user {{../name}} (user idx {{../@index}})
+{{/each}}
+{{/each}}
+
+{{> footer}}
+

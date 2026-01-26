@@ -1,0 +1,34 @@
+{{> header}}
+
+Site: {{replace (upper site.title) " " "-"}}
+URL: {{stripProtocol site.url}} (clean: {{stripQuerystring site.url}})
+Flags ({{size settings.featureFlags}}): {{join (keys settings.featureFlags) separator=", "}}
+Flag values: {{join (values settings.featureFlags) separator=", "}}
+
+{{#with user}}
+Name: {{capitalize name}}
+Email: {{lower email}}
+Role: {{upper role}}
+Joined: {{formatDate joined format="2006-01-02"}}
+Bio: {{{truncate bio length=60 suffix="..."}}}
+Status: {{#if (and active (gt score 80))}}VIP{{else}}Standard{{/if}}
+Tags: {{join tags separator=", "}}
+Profile: {{default profile.title "n/a"}} / {{default profile.note "n/a"}}
+Email parts: {{join (split email "@") separator="@"}}
+{{/with}}
+
+Orders:
+{{#each orders as |order idx|}}
+{{> orderRow order}}
+Order index {{@index}} first={{@first}} last={{@last}}
+Parent site: {{../site.title}}
+Root year: {{@root.site.year}}
+{{/each}}
+
+Raw HTML stripped: {{stripTags rawHtml}}
+
+Dynamic card:
+{{> (lookup . "cardPartial")}}
+
+{{> footer}}
+

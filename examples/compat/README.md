@@ -32,17 +32,6 @@ hbc -in ./examples/compat/templates \
   -pkg compat
 ```
 
-Or if you need local helpers (without import path):
-```
-hbc -in ./examples/compat/templates \
-  -out ./examples/compat/templates_gen.go \
-  -pkg compat \
-  -no-core-helpers \
-  -helper upper=Upper \
-  -helper lower=Lower \
-  -helper lookup=Lookup \
-  -helper formatDate=FormatDate \
-  -helper default=Default
-```
+For custom helpers or overrides, use `-import` + `-helpers` (see README).
 
 Use `data.json` as input data when rendering `main.hbs`.

@@ -1,0 +1,9 @@
+<div class="order">
+  <span>Order #{{id}}</span>
+  <span>Created: {{formatDate createdAt format="2006-01-02"}}</span>
+  <span>Items: {{length items}}</span>
+  <span>Total: {{formatNumber (add subtotal tax) precision=2}}</span>
+  <span>First: {{default (first items) "n/a"}}</span>
+  <span>Last: {{default (last items) "n/a"}}</span>
+</div>
+
