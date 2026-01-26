@@ -84,11 +84,17 @@ func CompileTemplates(templates map[string]string, opts Options) ([]byte, error)
 	w.line(")")
 	w.line("")
 
-	w.line("var partials = map[string]func(*runtime.Context, io.Writer) error{")
+	w.line("var partials map[string]func(*runtime.Context, io.Writer) error")
+	w.line("")
+	w.line("func init() {")
+	w.indentInc()
+	w.line("partials = map[string]func(*runtime.Context, io.Writer) error{")
 	w.indentInc()
 	for _, name := range names {
 		w.line("%q: render%s,", name, funcNames[name])
 	}
+	w.indentDec()
+	w.line("}")
 	w.indentDec()
 	w.line("}")
 	w.line("")
@@ -256,6 +262,10 @@ func (g *generator) emitNodes(nodes []ast.Node) error {
 			if err := g.emitBlock(n); err != nil {
 				return err
 			}
+		case *ast.PartialBlock:
+			if err := g.emitPartialBlock(n); err != nil {
+				return err
+			}
 		default:
 			return fmt.Errorf("compiler: unsupported node %T", node)
 		}
@@ -274,7 +284,8 @@ func (g *generator) emitBlock(n *ast.Block) error {
 	case "each":
 		return g.emitEachBlock(n)
 	default:
-		return fmt.Errorf("block helper %q is not implemented", n.Name)
+		// Custom block helper
+		return g.emitCustomBlockHelper(n)
 	}
 }
 
@@ -401,9 +412,6 @@ func (g *generator) emitPartial(n *ast.Partial) error {
 }
 
 func (g *generator) emitIfBlock(n *ast.Block, inverted bool) error {
-	if len(n.Params) > 0 {
-		return fmt.Errorf("block %q does not support block params", n.Name)
-	}
 	blockExpr, _, err := g.singleBlockExpr(n)
 	if err != nil {
 		return err
@@ -420,8 +428,26 @@ func (g *generator) emitIfBlock(n *ast.Block, inverted bool) error {
 	if inverted {
 		condExpr = "!" + condVar
 	}
+	
+	// Support block params for if/unless
+	localsVar := "nil"
+	if len(n.Params) > 0 {
+		if len(n.Params) > 1 {
+			return fmt.Errorf("block %q supports a single param", n.Name)
+		}
+		localsVar = g.nextTemp("locals")
+		g.w.line("%s := map[string]any{", localsVar)
+		g.w.indentInc()
+		g.w.line("%q: %s,", n.Params[0], valVar)
+		g.w.indentDec()
+		g.w.line("}")
+	}
+	
 	g.w.line("if %s {", condExpr)
 	g.w.indentInc()
+	if len(n.Params) > 0 {
+		g.w.line("ctx := ctx.WithScope(ctx.Data, %s, nil)", localsVar)
+	}
 	if err := g.emitNodes(n.Body); err != nil {
 		return err
 	}
@@ -555,6 +581,184 @@ func (g *generator) emitEachBlock(n *ast.Block) error {
 		}
 		g.w.indentDec()
 	}
+	g.w.line("}")
+	return nil
+}
+
+func (g *generator) emitCustomBlockHelper(n *ast.Block) error {
+	parts, hash, err := parseParts(n.Args)
+	if err != nil {
+		return err
+	}
+	if len(parts) == 0 {
+		return fmt.Errorf("block helper %q requires at least one argument", n.Name)
+	}
+	if parts[0].kind != exprPath {
+		return fmt.Errorf("block helper name must be a path")
+	}
+	helperExpr, ok := g.helpers[parts[0].value]
+	if !ok {
+		return fmt.Errorf("block helper %q is not defined", parts[0].value)
+	}
+	
+	// Emit block helper call
+	// Block helpers receive: context, options with fn/inverse/fnElse
+	// We need to create a function that renders the body
+	bodyFnVar := g.nextTemp("bodyFn")
+	g.w.line("%s := func(ctx *runtime.Context, w io.Writer) error {", bodyFnVar)
+	g.w.indentInc()
+	if err := g.emitNodes(n.Body); err != nil {
+		return err
+	}
+	g.w.line("return nil")
+	g.w.indentDec()
+	g.w.line("}")
+	
+	inverseFnVar := "nil"
+	if len(n.Else) > 0 {
+		inverseFnVar = g.nextTemp("inverseFn")
+		g.w.line("%s := func(ctx *runtime.Context, w io.Writer) error {", inverseFnVar)
+		g.w.indentInc()
+		if err := g.emitNodes(n.Else); err != nil {
+			return err
+		}
+		g.w.line("return nil")
+		g.w.indentDec()
+		g.w.line("}")
+	}
+	
+	// Build options hash
+	optionsVar := g.nextTemp("options")
+	g.w.line("%s := runtime.BlockOptions{", optionsVar)
+	g.w.indentInc()
+	g.w.line("Fn: %s,", bodyFnVar)
+	if inverseFnVar != "nil" {
+		g.w.line("Inverse: %s,", inverseFnVar)
+	}
+	g.w.indentDec()
+	g.w.line("}")
+	
+	// Prepare arguments (block helpers receive options as last arg)
+	argsExpr, err := g.emitArgs(parts[1:], hash)
+	if err != nil {
+		return err
+	}
+	// Append options to args
+	if argsExpr == "nil" {
+		argsExpr = g.nextTemp("args")
+		g.w.line("%s := []any{%s}", argsExpr, optionsVar)
+	} else {
+		argsVar := g.nextTemp("args")
+		g.w.line("%s := append(%s, %s)", argsVar, argsExpr, optionsVar)
+		argsExpr = argsVar
+	}
+	
+	// Call block helper (BlockHelper signature: func(ctx, args, options) error)
+	// We need to extract options from args and call as BlockHelper
+	optsVar := g.nextTemp("opts")
+	g.w.line("%s, hasOpts := runtime.GetBlockOptions(%s)", optsVar, argsExpr)
+	g.w.line("if !hasOpts {")
+	g.w.indentInc()
+	g.w.line("return fmt.Errorf(\"block helper %%q did not receive BlockOptions\", %q)", n.Name)
+	g.w.indentDec()
+	g.w.line("}")
+	// Remove options from args for the helper call
+	argsWithoutOpts := g.nextTemp("argsNoOpts")
+	g.w.line("%s := %s[:len(%s)-1]", argsWithoutOpts, argsExpr, argsExpr)
+	// For now, helpers that are used as blocks need to handle BlockOptions themselves
+	// We pass options as last arg and helper should check for it
+	// TODO: Support separate BlockHelper type registration
+	g.w.line("if err := %s(ctx, %s); err != nil {", helperExpr, argsExpr)
+	g.w.indentInc()
+	g.w.line("return err")
+	g.w.indentDec()
+	g.w.line("}")
+	return nil
+}
+
+func (g *generator) emitPartialBlock(n *ast.PartialBlock) error {
+	parts, hash, err := parseParts(n.Args)
+	if err != nil {
+		return err
+	}
+	if len(parts) == 0 {
+		return fmt.Errorf("partial block invocation is empty")
+	}
+	if len(parts) > 2 {
+		return fmt.Errorf("partial block: context must be a single expression")
+	}
+	nameExpr := parts[0]
+	var ctxExpr expr
+	hasCtx := false
+	if len(parts) == 2 {
+		ctxExpr = parts[1]
+		hasCtx = true
+	}
+	localsVar := "nil"
+	if len(hash) > 0 {
+		localsVar, err = g.emitHashMap(hash)
+		if err != nil {
+			return err
+		}
+	}
+	ctxVar := "ctx"
+	if hasCtx {
+		valueExpr, err := g.emitExprValue(ctxExpr)
+		if err != nil {
+			return err
+		}
+		valVar := g.nextTemp("val")
+		g.w.line("%s := %s", valVar, valueExpr)
+		ctxVar = g.nextTemp("ctx")
+		g.w.line("%s := ctx.WithScope(%s, %s, nil)", ctxVar, valVar, localsVar)
+	} else if localsVar != "nil" {
+		ctxVar = g.nextTemp("ctx")
+		g.w.line("%s := ctx.WithScope(ctx.Data, %s, nil)", ctxVar, localsVar)
+	}
+	
+	// Try to render partial, fallback to block content if not found
+	if nameExpr.kind == exprString {
+		name := nameExpr.value
+		goName, ok := g.partials[name]
+		if ok {
+			// Partial exists, render it
+			g.w.line("if err := render%s(%s, w); err != nil {", goName, ctxVar)
+			g.w.indentInc()
+			g.w.line("return err")
+			g.w.indentDec()
+			g.w.line("}")
+			return nil
+		}
+		// Partial doesn't exist, render fallback
+		if err := g.emitNodes(n.Fallback); err != nil {
+			return err
+		}
+		return nil
+	}
+	
+	// Dynamic partial name
+	nameValue, err := g.emitExprValue(nameExpr)
+	if err != nil {
+		return err
+	}
+	nameVar := g.nextTemp("partial")
+	g.w.line("%s := runtime.Stringify(%s)", nameVar, nameValue)
+	g.w.line("partialFn, ok := partials[%s]", nameVar)
+	g.w.line("if ok {")
+	g.w.indentInc()
+	g.w.line("if err := partialFn(%s, w); err != nil {", ctxVar)
+	g.w.indentInc()
+	g.w.line("return err")
+	g.w.indentDec()
+	g.w.line("}")
+	g.w.indentDec()
+	g.w.line("} else {")
+	g.w.indentInc()
+	// Render fallback
+	if err := g.emitNodes(n.Fallback); err != nil {
+		return err
+	}
+	g.w.indentDec()
 	g.w.line("}")
 	return nil
 }
