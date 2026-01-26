@@ -150,6 +150,14 @@ Renders `footer` partial with `note` available as a local variable.
 ```
 Uses a helper to determine the partial name at runtime.
 
+**Partial blocks (fallback content):**
+```handlebars
+{{#> header}}
+  <h1>Default Header</h1>
+{{/header}}
+```
+Partial blocks render the partial if it exists, otherwise render the fallback block content. Useful for providing default content when a partial is missing.
+
 ### Block Helpers
 
 **Conditional rendering (`if`):**
@@ -162,13 +170,33 @@ Uses a helper to determine the partial name at runtime.
 ```
 Renders the block if the expression is truthy, otherwise renders the `{{else}}` block if present.
 
+**Block parameters for `if`/`unless`:**
+```handlebars
+{{#if user.active as |active|}}
+  Status: {{active}}
+{{/if}}
+```
+Block parameters create a local variable with the condition value. Useful for avoiding repeated evaluation.
+
+**else if shorthand:**
+```handlebars
+{{#if user.role == "admin"}}
+  Admin panel
+{{else if user.role == "moderator"}}
+  Moderator panel
+{{else}}
+  User panel
+{{/if}}
+```
+The `{{else if condition}}` syntax creates nested if blocks. You can also use `{{elseif condition}}` as an alternative.
+
 **Inverted condition (`unless`):**
 ```handlebars
 {{#unless user.active}}
   Please activate your account.
 {{/unless}}
 ```
-Renders the block if the expression is falsy.
+Renders the block if the expression is falsy. Also supports block parameters and else if.
 
 **Context switching (`with`):**
 ```handlebars
@@ -206,6 +234,16 @@ Block parameters create local variables inside the block. The first parameter (`
 {{/each}}
 ```
 For maps, the first parameter is the value, the second is the key.
+
+**Custom block helpers:**
+```handlebars
+{{#myHelper arg1 arg2 key=value}}
+  Block content
+{{else}}
+  Inverse content
+{{/myHelper}}
+```
+Any registered helper can be used as a block helper. The helper receives `BlockOptions` with `Fn` and `Inverse` callbacks to render the block content. Block helpers should check for `BlockOptions` in their arguments and call the appropriate callback.
 
 ### Paths and Data Variables
 
@@ -437,6 +475,58 @@ func FormatCurrency(ctx *runtime.Context, args []any) (any, error) {
 }
 ```
 
+### Block Helpers
+
+Any helper can be used as a block helper. When used as a block, the helper receives `runtime.BlockOptions` as the last argument. Use `runtime.GetBlockOptions(args)` to retrieve it:
+
+```go
+func MyBlockHelper(ctx *runtime.Context, args []any) (any, error) {
+	opts, ok := runtime.GetBlockOptions(args)
+	if !ok {
+		// Not used as a block, handle as regular helper
+		return "default", nil
+	}
+	
+	// Render the block content
+	var b strings.Builder
+	if err := opts.Fn(ctx, &b); err != nil {
+		return nil, err
+	}
+	return b.String(), nil
+}
+```
+
+Block helpers can conditionally render the main block (`opts.Fn`) or the inverse/else block (`opts.Inverse`):
+
+```go
+func IfHelper(ctx *runtime.Context, args []any) (any, error) {
+	opts, ok := runtime.GetBlockOptions(args)
+	if !ok {
+		return nil, fmt.Errorf("if helper must be used as a block")
+	}
+	
+	condition := args[0]
+	if runtime.IsTruthy(condition) {
+		if opts.Fn != nil {
+			var b strings.Builder
+			if err := opts.Fn(ctx, &b); err != nil {
+				return nil, err
+			}
+			return b.String(), nil
+		}
+	} else {
+		if opts.Inverse != nil {
+			var b strings.Builder
+			if err := opts.Inverse(ctx, &b); err != nil {
+				return nil, err
+			}
+			return b.String(), nil
+		}
+	}
+	return "", nil
+}
+```
+
 ## Compatibility fixtures
 
 See `examples/compat` for a small template set that exercises hash arguments,
@@ -452,9 +542,10 @@ whitespace control, and raw blocks.
 - Pre-resolve static partial names from string literals.
 - Pre-parse path segments for faster runtime lookup.
 
-## Not implemented yet
+## Implementation status
 
-- Custom block helpers (only `if`, `unless`, `with`, `each`)
-- Block params for `if`/`unless`
-- `else if` shorthand
-- Partial blocks (`{{#> partial}}...{{/partial}}`)
+All core Handlebars syntax features are now implemented:
+- ✅ Custom block helpers
+- ✅ Block params for `if`/`unless`
+- ✅ `else if` shorthand
+- ✅ Partial blocks (`{{#> partial}}...{{/partial}}`)
