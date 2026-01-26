@@ -38,8 +38,11 @@ func TestIterate(t *testing.T) {
 	if len(items) != 2 {
 		t.Fatalf("expected 2 items, got %d", len(items))
 	}
-	if items[0].(int) != 1 || items[1].(int) != 2 {
+	if items[0].Value.(int) != 1 || items[1].Value.(int) != 2 {
 		t.Fatalf("unexpected items: %v", items)
+	}
+	if items[0].Index != 0 || items[1].Index != 1 {
+		t.Fatalf("unexpected indexes: %v", items)
 	}
 
 	items = Iterate([]int{})
@@ -51,8 +54,11 @@ func TestIterate(t *testing.T) {
 	if len(items) != 2 {
 		t.Fatalf("expected 2 items from map, got %d", len(items))
 	}
-	if items[0].(int) != 1 || items[1].(int) != 2 {
+	if items[0].Value.(int) != 1 || items[1].Value.(int) != 2 {
 		t.Fatalf("unexpected map items order: %v", items)
+	}
+	if items[0].Key != "a" || items[1].Key != "b" {
+		t.Fatalf("unexpected map keys: %v", items)
 	}
 
 	items = Iterate(map[int]int{1: 1})

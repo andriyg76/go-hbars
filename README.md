@@ -75,12 +75,19 @@ error.
 - `{{var}}` (HTML-escaped)
 - `{{{var}}}` and `{{& var}}` (raw)
 - Inline helpers: `{{helper arg1 arg2}}`
+- Hash arguments: `{{helper arg key=value}}`
+- Subexpressions: `{{helper (other arg)}}`
 - Comments: `{{! comment}}` and `{{!-- block --}}`
+
+Hash arguments are appended to the helper args as a `runtime.Hash` value. Use
+`runtime.HashArg(args)` to retrieve the hash in helper implementations.
 
 ### Partials
 
 - `{{> partialName}}`
 - `{{> partialName contextExpr}}` (render with a different context)
+- `{{> partialName key=value}}` (locals passed to the partial)
+- Dynamic names: `{{> (lookup . "partialName")}}`
 
 ### Block helpers
 
@@ -88,9 +95,15 @@ error.
 - `{{#unless expr}}...{{/unless}}`
 - `{{#with expr}}...{{else}}...{{/with}}`
 - `{{#each expr}}...{{else}}...{{/each}}`
+- Block params: `{{#each items as |item idx|}}...{{/each}}`
 
 `expr` is a single argument (path or literal). The current context is updated
 inside `each` and `with`, so `{{this}}` / `{{.}}` refer to the item/object.
+
+### Paths and data variables
+
+- Parent paths: `{{../title}}`
+- Data vars: `@index`, `@key`, `@first`, `@last`, `@root`
 
 ### Truthiness and iteration
 
@@ -99,7 +112,25 @@ inside `each` and `with`, so `{{this}}` / `{{.}}` refer to the item/object.
 
 `each` iterates over slices, arrays, and maps with string keys (keys are sorted
 for deterministic output). Empty or non-iterable values render the `{{else}}`
-branch when present.
+branch when present. Inside `each`, `@index`, `@first`, `@last`, and `@key` are
+available (for maps, `@key` is the map key).
+
+### Whitespace control
+
+Use `~` to trim surrounding whitespace:
+
+- `{{~name}}` trims whitespace to the left
+- `{{name~}}` trims whitespace to the right
+
+### Raw blocks
+
+Raw blocks skip parsing the inner content:
+
+```
+{{{{raw}}}}
+  {{this is not parsed}}
+{{{{/raw}}}}
+```
 
 ## Template examples
 
@@ -138,6 +169,12 @@ Nested context with `with` and partials:
 {{/with}}
 ```
 
+Dynamic partials:
+
+```
+{{> (lookup . "cardPartial") user}}
+```
+
 ## Suggested custom helpers
 
 You can implement common helpers as regular Go functions and map them with
@@ -149,9 +186,15 @@ You can implement common helpers as regular Go functions and map them with
 - `json` (serialize a value)
 - `formatDate`, `formatNumber`, `pluralize`
 
+## Compatibility fixtures
+
+See `examples/compat` for a small template set that exercises hash arguments,
+subexpressions, data variables, parent paths, block params, dynamic partials,
+whitespace control, and raw blocks.
+
 ## Not implemented yet
 
-- Hash arguments: `{{helper arg key=value}}`
-- Subexpressions: `{{helper (other arg)}}`
-- Block parameters and `@index` / `@key`
-- Whitespace control (`~`)
+- Custom block helpers (only `if`, `unless`, `with`, `each`)
+- Block params for `if`/`unless`
+- `else if` shorthand
+- Partial blocks (`{{#> partial}}...{{/partial}}`)

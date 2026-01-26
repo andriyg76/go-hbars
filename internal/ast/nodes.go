@@ -22,18 +22,18 @@ func (*Mustache) node() {}
 
 // Partial is a partial invocation.
 type Partial struct {
-	Name        string
-	ContextExpr string
+	Expr string
 }
 
 func (*Partial) node() {}
 
 // Block is a block helper invocation with an optional else branch.
 type Block struct {
-	Name string
-	Args string
-	Body []Node
-	Else []Node
+	Name   string
+	Args   string
+	Params []string
+	Body   []Node
+	Else   []Node
 }
 
 func (*Block) node() {}
