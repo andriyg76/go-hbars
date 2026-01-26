@@ -68,69 +68,221 @@ Partials are compiled from the same input set. The partial name is the template
 file base name (without extension). A missing partial or helper is a compile-time
 error.
 
-## Template syntax (supported)
+## Template Syntax Guide
 
-### Values and helpers
+### Values and Expressions
 
-- `{{var}}` (HTML-escaped)
-- `{{{var}}}` and `{{& var}}` (raw)
-- Inline helpers: `{{helper arg1 arg2}}`
-- Hash arguments: `{{helper arg key=value}}`
-- Subexpressions: `{{helper (other arg)}}`
-- Comments: `{{! comment}}` and `{{!-- block --}}`
+**Simple variables:**
+```handlebars
+{{user.name}}
+{{title}}
+```
+Outputs the value of `user.name` or `title` from the current context, HTML-escaped.
 
-Hash arguments are appended to the helper args as a `runtime.Hash` value. Use
-`runtime.HashArg(args)` to retrieve the hash in helper implementations.
+**Raw output (no escaping):**
+```handlebars
+{{{htmlContent}}}
+{{& htmlContent}}
+```
+Both forms output the value without HTML escaping. Use with caution.
+
+**Current context:**
+```handlebars
+{{.}}
+{{this}}
+```
+Both refer to the current context object.
+
+**Comments:**
+```handlebars
+{{! This is a comment}}
+{{!-- This is a block comment --}}
+```
+Comments are removed from output.
+
+### Helpers
+
+**Inline helpers:**
+```handlebars
+{{upper user.name}}
+{{formatDate user.created format="2006-01-02"}}
+{{default user.nickname value="(none)"}}
+```
+Helpers are functions that transform values. They can take positional arguments and hash arguments (key=value pairs).
+
+**Hash arguments:**
+```handlebars
+{{truncate description length=50 suffix="..."}}
+{{formatNumber price precision=2 separator=","}}
+```
+Hash arguments are passed as the last argument to helpers as a `runtime.Hash` map.
+
+**Subexpressions:**
+```handlebars
+{{upper (lower title)}}
+{{formatDate (lookup user "created") format="2006-01-02"}}
+```
+Nested helper calls where the result of one helper is passed as an argument to another.
 
 ### Partials
 
-- `{{> partialName}}`
-- `{{> partialName contextExpr}}` (render with a different context)
-- `{{> partialName key=value}}` (locals passed to the partial)
-- Dynamic names: `{{> (lookup . "partialName")}}`
-
-### Block helpers
-
-- `{{#if expr}}...{{else}}...{{/if}}`
-- `{{#unless expr}}...{{/unless}}`
-- `{{#with expr}}...{{else}}...{{/with}}`
-- `{{#each expr}}...{{else}}...{{/each}}`
-- Block params: `{{#each items as |item idx|}}...{{/each}}`
-
-`expr` is a single argument (path or literal). The current context is updated
-inside `each` and `with`, so `{{this}}` / `{{.}}` refer to the item/object.
-
-### Paths and data variables
-
-- Parent paths: `{{../title}}`
-- Data vars: `@index`, `@key`, `@first`, `@last`, `@root`
-
-### Truthiness and iteration
-
-`if`, `unless`, and `with` treat values as false when they are `nil`, `false`,
-`0`, `""`, or empty arrays/slices/maps. Everything else is truthy.
-
-`each` iterates over slices, arrays, and maps with string keys (keys are sorted
-for deterministic output). Empty or non-iterable values render the `{{else}}`
-branch when present. Inside `each`, `@index`, `@first`, `@last`, and `@key` are
-available (for maps, `@key` is the map key).
-
-### Whitespace control
-
-Use `~` to trim surrounding whitespace:
-
-- `{{~name}}` trims whitespace to the left
-- `{{name~}}` trims whitespace to the right
-
-### Raw blocks
-
-Raw blocks skip parsing the inner content:
-
+**Basic partial:**
+```handlebars
+{{> header}}
 ```
+Renders the `header` partial template with the current context.
+
+**Partial with different context:**
+```handlebars
+{{> userCard user}}
+```
+Renders `userCard` partial with `user` as the context instead of the current context.
+
+**Partial with locals:**
+```handlebars
+{{> footer note="thanks"}}
+```
+Renders `footer` partial with `note` available as a local variable.
+
+**Dynamic partial names:**
+```handlebars
+{{> (lookup . "cardPartial") user}}
+```
+Uses a helper to determine the partial name at runtime.
+
+### Block Helpers
+
+**Conditional rendering (`if`):**
+```handlebars
+{{#if user.active}}
+  Welcome back, {{user.name}}!
+{{else}}
+  Please activate your account.
+{{/if}}
+```
+Renders the block if the expression is truthy, otherwise renders the `{{else}}` block if present.
+
+**Inverted condition (`unless`):**
+```handlebars
+{{#unless user.active}}
+  Please activate your account.
+{{/unless}}
+```
+Renders the block if the expression is falsy.
+
+**Context switching (`with`):**
+```handlebars
+{{#with user}}
+  <h1>{{name}}</h1>
+  <p>{{role}}</p>
+{{else}}
+  <p>No user data</p>
+{{/with}}
+```
+Changes the context to the specified value inside the block. If the value is falsy, renders the `{{else}}` block.
+
+**Iteration (`each`):**
+```handlebars
+{{#each users}}
+  <li>{{name}}</li>
+{{else}}
+  <li>No users yet.</li>
+{{/each}}
+```
+Iterates over arrays, slices, or maps. Inside the block, `{{this}}` or `{{.}}` refers to the current item. If the collection is empty, renders the `{{else}}` block.
+
+**Block parameters:**
+```handlebars
+{{#each users as |person idx|}}
+  {{idx}}: {{person.name}}
+{{/each}}
+```
+Block parameters create local variables inside the block. The first parameter (`person`) is the item, the second (`idx`) is the index.
+
+**Block parameters with maps:**
+```handlebars
+{{#each settings as |val key|}}
+  {{key}} = {{val}}
+{{/each}}
+```
+For maps, the first parameter is the value, the second is the key.
+
+### Paths and Data Variables
+
+**Parent paths:**
+```handlebars
+{{#each users}}
+  {{name}} - {{../title}}
+{{/each}}
+```
+`../` accesses the parent context. Useful inside nested blocks.
+
+**Data variables:**
+```handlebars
+{{#each items}}
+  {{@index}} - {{name}} ({{@first}}/{{@last}})
+{{/each}}
+```
+Special variables available in certain contexts:
+- `@index` - Current index in `each` loops (0-based)
+- `@key` - Current key in `each` loops over maps
+- `@first` - `true` if this is the first item
+- `@last` - `true` if this is the last item
+- `@root` - The root context (top-level data)
+
+**Root access:**
+```handlebars
+{{#with user}}
+  {{name}} - {{@root.title}}
+{{/with}}
+```
+Access the root context from anywhere using `@root`.
+
+### Truthiness
+
+Values are considered **falsy** when they are:
+- `nil`
+- `false`
+- `0` (any numeric zero)
+- `""` (empty string)
+- Empty arrays, slices, or maps
+
+Everything else is **truthy**, including:
+- Non-zero numbers
+- Non-empty strings
+- Non-empty arrays/slices/maps
+- Objects/structs
+
+### Whitespace Control
+
+**Trim left whitespace:**
+```handlebars
+Title: {{~title}}
+```
+The `~` before the expression trims whitespace to the left.
+
+**Trim right whitespace:**
+```handlebars
+{{name~}}, {{role}}
+```
+The `~` after the expression trims whitespace to the right.
+
+**Combined:**
+```handlebars
+{{~name~}}
+```
+Trims whitespace on both sides.
+
+### Raw Blocks
+
+Raw blocks prevent parsing of inner content:
+```handlebars
 {{{{raw}}}}
-  {{this is not parsed}}
+  {{this will be output literally}}
+  {{#if something}} not parsed {{/if}}
 {{{{/raw}}}}
 ```
+Useful for outputting Handlebars syntax or other template-like content that should not be processed.
 
 ## Template examples
 
@@ -175,16 +327,115 @@ Dynamic partials:
 {{> (lookup . "cardPartial") user}}
 ```
 
-## Suggested custom helpers
+## Built-in Helpers Library
 
-You can implement common helpers as regular Go functions and map them with
-`-helper name=Ident`. Examples:
+go-hbars includes a comprehensive helpers library matching Handlebars.js core and handlebars-helpers 7.4. Import the helpers package and use the registry:
 
-- `eq`, `ne`, `and`, `or`, `not`
-- `default` (fallback when value is empty)
-- `join`, `split`
-- `json` (serialize a value)
-- `formatDate`, `formatNumber`, `pluralize`
+```go
+import "github.com/andriyg76/go-hbars/helpers"
+
+// In your go:generate command
+//go:generate hbc -in ./templates -out ./templates_gen.go -pkg templates \
+//  -helper upper=github.com/andriyg76/go-hbars/helpers/handlebars:Upper \
+//  -helper lower=github.com/andriyg76/go-hbars/helpers/handlebars:Lower \
+//  -helper formatDate=github.com/andriyg76/go-hbars/helpers/handlebars:FormatDate
+```
+
+Or use the registry helper to get all helpers at once:
+
+```go
+import (
+	"github.com/andriyg76/go-hbars/helpers"
+	"github.com/andriyg76/go-hbars/internal/compiler"
+)
+
+registry := helpers.Registry()
+compilerHelpers := make(map[string]compiler.HelperRef)
+for name, ref := range registry {
+	compilerHelpers[name] = compiler.HelperRef{
+		ImportPath: ref.ImportPath,
+		Ident:      ref.Ident,
+	}
+}
+opts := compiler.Options{
+	PackageName: "templates",
+	Helpers:     compilerHelpers,
+}
+```
+
+### Available Helpers
+
+**String helpers:**
+- `upper`, `lower` - Convert case
+- `capitalize`, `capitalizeAll` - Capitalize words
+- `truncate` - Truncate strings with optional suffix
+- `reverse` - Reverse a string
+- `replace` - Replace substrings
+- `stripTags`, `stripQuotes` - Remove HTML tags or quotes
+- `join`, `split` - Join/split arrays with separator
+
+**Comparison helpers:**
+- `eq`, `ne` - Equality checks
+- `lt`, `lte`, `gt`, `gte` - Numeric comparisons
+- `and`, `or`, `not` - Logical operations
+
+**Date helpers:**
+- `formatDate` - Format dates with custom format (Go time format)
+- `now` - Current time
+- `ago` - Human-readable time ago
+
+**Collection helpers:**
+- `lookup` - Look up values by key
+- `default` - Fallback for empty values
+- `length` - Get length of strings/arrays/objects
+- `first`, `last` - Get first/last array element
+- `inArray` - Check if value is in array
+
+**Math helpers:**
+- `add`, `subtract`, `multiply`, `divide`, `modulo` - Arithmetic
+- `floor`, `ceil`, `round`, `abs` - Rounding and absolute value
+- `min`, `max` - Min/max of two numbers
+
+**Number helpers:**
+- `formatNumber` - Format with precision and separator
+- `toInt`, `toFloat`, `toNumber` - Type conversions
+- `toFixed` - Fixed decimal places
+- `toString` - Convert to string
+
+**Object helpers:**
+- `has` - Check if object has property
+- `keys`, `values` - Get object keys/values
+- `size` - Get object/array size
+- `isEmpty`, `isNotEmpty` - Empty checks
+
+**URL helpers:**
+- `encodeURI`, `decodeURI` - URI encoding/decoding
+- `stripProtocol`, `stripQuerystring` - URL manipulation
+
+## Custom Helpers
+
+You can implement custom helpers as regular Go functions and map them with
+`-helper name=Ident`. Helper functions must match this signature:
+
+```go
+func MyHelper(ctx *runtime.Context, args []any) (any, error)
+```
+
+Hash arguments are passed as the last element in `args`. Use `runtime.HashArg(args)` to retrieve them:
+
+```go
+func FormatCurrency(ctx *runtime.Context, args []any) (any, error) {
+	amount := args[0]
+	hash, _ := runtime.HashArg(args)
+	symbol := "$"
+	if hash != nil {
+		if s, ok := hash["symbol"].(string); ok {
+			symbol = s
+		}
+	}
+	return fmt.Sprintf("%s%.2f", symbol, amount), nil
+}
+```
 
 ## Compatibility fixtures
 
