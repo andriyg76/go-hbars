@@ -2,7 +2,7 @@
 
 This document describes the Handlebars template syntax supported by go-hbars.
 
-**Custom extensions** (includeZero for `{{#if}}`/`{{#unless}}`, layout blocks via `{{#partial}}`/`{{#block}}`) are covered in [Custom Extensions](extensions.md).
+**Custom extensions** (includeZero for `{{#if}}`/`{{#unless}}`) are covered in [Custom Extensions](extensions.md).
 
 ## Values and Expressions
 
@@ -83,17 +83,6 @@ Renders `footer` partial with `note` available as a local variable.
 {{> (lookup . "cardPartial") user}}
 ```
 Uses a helper to determine the partial name at runtime.
-
-**Partial blocks (fallback content):**
-```handlebars
-{{#> header}}
-  <h1>Default Header</h1>
-{{/header}}
-```
-Partial blocks render the partial if it exists, otherwise render the fallback block content. Useful for providing default content when a partial is missing.
-
-**Layout blocks (`{{#partial}}` / `{{#block}}`):**  
-Pages can define slot content with `{{#partial "name"}}...{{/partial}}`; layouts render it with `{{#block "name"}}default{{/block}}`. Supports **Direction A** (page calls layout; one pass) and **Direction B** (layout calls content; lazy slots, use `RenderWithLayout`). See [Custom Extensions — Layout blocks](extensions.md#layout-blocks-partial--block).
 
 ## Block Helpers
 
@@ -306,4 +295,4 @@ Dynamic partials:
 
 ## See also
 
-- **[Custom Extensions](extensions.md)** — includeZero for `{{#if}}`/`{{#unless}}`, layout blocks (`{{#partial}}`/`{{#block}}`), Direction A (page→layout) and Direction B (layout→page, lazy slots)
+- **[Custom Extensions](extensions.md)** — includeZero for `{{#if}}`/`{{#unless}}`

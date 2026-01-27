@@ -149,28 +149,7 @@ func parseUntilStop(input string, start int, endBlock string) ([]ast.Node, int, 
 			return nodes, i, stopEnd, nil
 		}
 		if strings.HasPrefix(content, "#>") {
-			// Partial block: {{#> partial}}...{{/partial}}
-			name, args, params, err := splitBlockStart(content[2:])
-			if err != nil {
-				return nil, 0, stopNone, err
-			}
-			if name == "" {
-				return nil, 0, stopNone, fmt.Errorf("parser: empty partial block name")
-			}
-			body, elseBody, next, err := parseBlock(input, i, name)
-			if err != nil {
-				return nil, 0, stopNone, err
-			}
-			// Partial blocks use the else body for the fallback content
-			nodes = append(nodes, &ast.PartialBlock{
-				Name:     name,
-				Args:     args,
-				Params:   params,
-				Body:     body,
-				Fallback: elseBody,
-			})
-			i = next
-			continue
+			return nil, 0, stopNone, fmt.Errorf("parser: partial blocks ({{#>}}) are not supported")
 		}
 		if strings.HasPrefix(content, "#") {
 			name, args, params, err := splitBlockStart(content[1:])

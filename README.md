@@ -41,7 +41,7 @@ out, err := templates.RenderMainString(data)
 ## Documentation
 
 - **[Template Syntax](docs/syntax.md)** - Complete Handlebars syntax reference
-- **[Custom Extensions](docs/extensions.md)** - includeZero, layout blocks (partial/block), Direction A & B
+- **[Custom Extensions](docs/extensions.md)** - includeZero
 - **[Built-in Helpers](docs/helpers.md)** - Available helpers and how to use them
 - **[Processor & Server](docs/processor-server.md)** - CLI tools for static site generation
 - **[Embedded API](docs/embedded.md)** - Embedding processor and server in your applications
@@ -118,16 +118,6 @@ All core Handlebars syntax features are now implemented:
 - ✅ Custom block helpers
 - ✅ Block params for `if`/`unless`
 - ✅ `else if` shorthand
-- ✅ Partial blocks (`{{#> partial}}...{{/partial}}`)
-
-## Compile-time Optimization Plan
-
-- Constant-fold `if`/`unless`/`with` when the condition is a literal
-- Inline literal arguments directly (avoid `EvalArg`)
-- Prebuild hash maps when all values are literals
-- Detect duplicate hash keys at compile time
-- Pre-resolve static partial names from string literals
-- Pre-parse path segments for faster runtime lookup
 
 ## Compatibility
 

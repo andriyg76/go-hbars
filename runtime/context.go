@@ -16,18 +16,8 @@ type Context struct {
 	root   any
 
 	// Output is the current writer for this render frame. Set at render start,
-	// preserved through WithScope. Used by block helpers (e.g. block) to write.
+	// preserved through WithScope.
 	Output io.Writer
-
-	// Blocks is the shared layout-blocks map when using partial/block. Passed
-	// down through WithScope so layout and content see the same map. Nil when
-	// not using layout blocks.
-	Blocks map[string]string
-
-	// LazySlots enables layout-first (Direction B) lazy slots: when set, Block()
-	// writes a placeholder and records the slot instead of resolving now.
-	// Preserved through WithScope. Call ResolveLazySlots after layout + content.
-	LazySlots *LazySlotsRecorder
 }
 
 // ParsedPath represents a pre-parsed path expression.
@@ -49,12 +39,12 @@ func (c *Context) WithData(data any) *Context {
 }
 
 // WithScope creates a child context with new data and optional locals/data vars.
-// Output and Blocks are preserved from the parent so layout partial/block share state.
+// Output is preserved from the parent.
 func (c *Context) WithScope(data any, locals map[string]any, dataVars map[string]any) *Context {
 	if c == nil {
 		return &Context{Data: data, locals: locals, data: dataVars, root: data}
 	}
-	return &Context{Data: data, parent: c, locals: locals, data: dataVars, root: c.root, Output: c.Output, Blocks: c.Blocks, LazySlots: c.LazySlots}
+	return &Context{Data: data, parent: c, locals: locals, data: dataVars, root: c.root, Output: c.Output}
 }
 
 // ResolvePath looks up a dotted path in the current context.
@@ -91,6 +81,12 @@ func ResolvePath(ctx *Context, path string) (any, bool) {
 		return val, true
 	}
 	return resolveData(ctx, parts)
+}
+
+// ResolvePathValue looks up a dotted path in the current context and returns the value only.
+func ResolvePathValue(ctx *Context, path string) any {
+	val, _ := ResolvePath(ctx, path)
+	return val
 }
 
 // ResolvePathParsed resolves a pre-parsed path expression.

@@ -80,7 +80,6 @@ func (p *exprParser) next() token {
 func (p *exprParser) parseParts(stopAtRParen bool) ([]expr, []hashArg, error) {
 	var parts []expr
 	var hash []hashArg
-	seenHash := make(map[string]struct{})
 	for p.hasNext() {
 		if p.peek().typ == tokRParen {
 			if stopAtRParen {
@@ -97,10 +96,6 @@ func (p *exprParser) parseParts(stopAtRParen bool) ([]expr, []hashArg, error) {
 			if key == "" {
 				return nil, nil, fmt.Errorf("empty hash key")
 			}
-			if _, exists := seenHash[key]; exists {
-				return nil, nil, fmt.Errorf("duplicate hash key %q", key)
-			}
-			seenHash[key] = struct{}{}
 			value, err := p.parseExpr()
 			if err != nil {
 				return nil, nil, err

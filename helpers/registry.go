@@ -11,11 +11,7 @@ type HelperRef struct {
 // All helpers are in the github.com/andriyg76/go-hbars/helpers/handlebars package.
 func Registry() map[string]HelperRef {
 	importPath := "github.com/andriyg76/go-hbars/helpers/handlebars"
-	runtimePath := "github.com/andriyg76/go-hbars/runtime"
 	return map[string]HelperRef{
-		// Layout block helpers (partial/block) — use runtime.Blocks / ctx.Output
-		"block":   {ImportPath: runtimePath, Ident: "Block"},
-		"partial": {ImportPath: runtimePath, Ident: "Partial"},
 		// String helpers
 		"upper":        {ImportPath: importPath, Ident: "Upper"},
 		"lower":        {ImportPath: importPath, Ident: "Lower"},

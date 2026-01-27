@@ -37,14 +37,3 @@ type Block struct {
 }
 
 func (*Block) node() {}
-
-// PartialBlock is a partial with a fallback block ({{#> partial}}...{{/partial}}).
-type PartialBlock struct {
-	Name     string
-	Args     string
-	Params   []string
-	Body     []Node
-	Fallback []Node
-}
-
-func (*PartialBlock) node() {}

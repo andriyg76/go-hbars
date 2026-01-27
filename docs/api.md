@@ -221,8 +221,7 @@ if err != nil {
 - Templates are compiled to Go code, so execution is fast
 - No runtime template parsing
 - Context creation is lightweight
-- Path resolution is optimized
-- Use `ResolvePathParsed` for frequently accessed paths
+- Path resolution uses runtime string lookup (`ResolvePath` / `ResolvePathValue`)
 
 ## Examples
 
