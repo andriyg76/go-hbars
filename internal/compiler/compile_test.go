@@ -3,6 +3,8 @@ package compiler
 import (
 	"strings"
 	"testing"
+
+	"github.com/andriyg76/go-hbars/helpers"
 )
 
 func TestCompileTemplates_GeneratesFunctions(t *testing.T) {
@@ -187,6 +189,28 @@ func TestCompileTemplates_UnknownBlock(t *testing.T) {
 	}, Options{PackageName: "templates"})
 	if err == nil || !strings.Contains(err.Error(), "block helper") {
 		t.Fatalf("expected missing block helper error, got %v", err)
+	}
+}
+
+func TestCompileTemplates_BlockPartialHelpers(t *testing.T) {
+	// Layout block helpers: {{#block "name"}}default{{/block}} and {{#partial "name"}}body{{/partial}}
+	reg := helpers.Registry()
+	compilerHelpers := make(map[string]HelperRef, len(reg))
+	for name, ref := range reg {
+		compilerHelpers[name] = HelperRef{ImportPath: ref.ImportPath, Ident: ref.Ident}
+	}
+	code, err := CompileTemplates(map[string]string{
+		"main": `{{#partial "header"}}<title>X</title>{{/partial}}{{#block "header"}}default{{/block}}`,
+	}, Options{PackageName: "templates", Helpers: compilerHelpers})
+	if err != nil {
+		t.Fatalf("CompileTemplates error: %v", err)
+	}
+	src := string(code)
+	if !strings.Contains(src, "runtime.Block") {
+		t.Fatalf("expected runtime.Block in generated code for {{#block}}, got:\n%s", src)
+	}
+	if !strings.Contains(src, "runtime.Partial") {
+		t.Fatalf("expected runtime.Partial in generated code for {{#partial}}, got:\n%s", src)
 	}
 }
 

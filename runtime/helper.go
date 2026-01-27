@@ -13,3 +13,15 @@ type BlockOptions struct {
 	Fn      func(ctx *Context, w io.Writer) error
 	Inverse func(ctx *Context, w io.Writer) error
 }
+
+// GetBlockOptions extracts BlockOptions from the last element of args.
+// Returns (nil, false) if args is empty or the last element is not BlockOptions.
+func GetBlockOptions(args []any) (BlockOptions, bool) {
+	if len(args) == 0 {
+		return BlockOptions{}, false
+	}
+	if opts, ok := args[len(args)-1].(BlockOptions); ok {
+		return opts, true
+	}
+	return BlockOptions{}, false
+}

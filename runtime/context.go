@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"io"
 	"reflect"
 	"strconv"
 	"strings"
@@ -13,6 +14,15 @@ type Context struct {
 	locals map[string]any
 	data   map[string]any
 	root   any
+
+	// Output is the current writer for this render frame. Set at render start,
+	// preserved through WithScope. Used by block helpers (e.g. block) to write.
+	Output io.Writer
+
+	// Blocks is the shared layout-blocks map when using partial/block. Passed
+	// down through WithScope so layout and content see the same map. Nil when
+	// not using layout blocks.
+	Blocks map[string]string
 }
 
 // ParsedPath represents a pre-parsed path expression.
@@ -34,11 +44,12 @@ func (c *Context) WithData(data any) *Context {
 }
 
 // WithScope creates a child context with new data and optional locals/data vars.
+// Output and Blocks are preserved from the parent so layout partial/block share state.
 func (c *Context) WithScope(data any, locals map[string]any, dataVars map[string]any) *Context {
 	if c == nil {
 		return &Context{Data: data, locals: locals, data: dataVars, root: data}
 	}
-	return &Context{Data: data, parent: c, locals: locals, data: dataVars, root: c.root}
+	return &Context{Data: data, parent: c, locals: locals, data: dataVars, root: c.root, Output: c.Output, Blocks: c.Blocks}
 }
 
 // ResolvePath looks up a dotted path in the current context.
