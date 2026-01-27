@@ -2,6 +2,8 @@
 
 This document describes the Handlebars template syntax supported by go-hbars.
 
+**Custom extensions** (includeZero for `{{#if}}`/`{{#unless}}`, layout blocks via `{{#partial}}`/`{{#block}}`) are covered in [Custom Extensions](extensions.md).
+
 ## Values and Expressions
 
 **Simple variables:**
@@ -90,6 +92,9 @@ Uses a helper to determine the partial name at runtime.
 ```
 Partial blocks render the partial if it exists, otherwise render the fallback block content. Useful for providing default content when a partial is missing.
 
+**Layout blocks (`{{#partial}}` / `{{#block}}`):**  
+Pages can define slot content with `{{#partial "name"}}...{{/partial}}`; layouts render it with `{{#block "name"}}default{{/block}}`. Supports **Direction A** (page calls layout; one pass) and **Direction B** (layout calls content; lazy slots, use `RenderWithLayout`). See [Custom Extensions — Layout blocks](extensions.md#layout-blocks-partial--block).
+
 ## Block Helpers
 
 **Conditional rendering (`if`):**
@@ -104,7 +109,7 @@ Renders the block if the expression is truthy, otherwise renders the `{{else}}` 
 
 **Custom extension — includeZero:**  
 To treat numeric zero as truthy (e.g. “0 items” vs “no data”), use `includeZero=true`:  
-`{{#if count includeZero=true}}...{{/if}}`. See [Custom extensions](extensions.md#includezero) for details.
+`{{#if count includeZero=true}}...{{/if}}`. See [Custom Extensions — includeZero](extensions.md#includezero) for details.
 
 **Block parameters for `if`/`unless`:**
 ```handlebars
@@ -296,3 +301,6 @@ Dynamic partials:
 {{> (lookup . "cardPartial") user}}
 ```
 
+## See also
+
+- **[Custom Extensions](extensions.md)** — includeZero for `{{#if}}`/`{{#unless}}`, layout blocks (`{{#partial}}`/`{{#block}}`), Direction A (page→layout) and Direction B (layout→page, lazy slots)

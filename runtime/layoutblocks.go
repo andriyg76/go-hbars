@@ -8,6 +8,10 @@ import (
 // Block implements {{#block "name"}}default{{/block}}. It writes the content
 // for name from ctx.Blocks if set; otherwise runs the default block (opts.Fn)
 // to ctx.Output. Used by layouts to render slots that the page may override.
+//
+// When ctx.LazySlots is set (layout-first / Direction B), Block writes a
+// placeholder and records the slot instead of resolving now. Call
+// ResolveLazySlots after layout and content have run.
 func Block(ctx *Context, args []any) error {
 	if len(args) == 0 {
 		return nil
@@ -19,6 +23,11 @@ func Block(ctx *Context, args []any) error {
 	}
 	if ctx.Output == nil {
 		return nil
+	}
+	if ctx.LazySlots != nil {
+		ph := ctx.LazySlots.Record(name, opts.Fn)
+		_, err := io.WriteString(ctx.Output, ph)
+		return err
 	}
 	if ctx.Blocks != nil {
 		if s, ok := ctx.Blocks[name]; ok && s != "" {

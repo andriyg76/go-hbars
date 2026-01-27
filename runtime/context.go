@@ -23,6 +23,11 @@ type Context struct {
 	// down through WithScope so layout and content see the same map. Nil when
 	// not using layout blocks.
 	Blocks map[string]string
+
+	// LazySlots enables layout-first (Direction B) lazy slots: when set, Block()
+	// writes a placeholder and records the slot instead of resolving now.
+	// Preserved through WithScope. Call ResolveLazySlots after layout + content.
+	LazySlots *LazySlotsRecorder
 }
 
 // ParsedPath represents a pre-parsed path expression.
@@ -49,7 +54,7 @@ func (c *Context) WithScope(data any, locals map[string]any, dataVars map[string
 	if c == nil {
 		return &Context{Data: data, locals: locals, data: dataVars, root: data}
 	}
-	return &Context{Data: data, parent: c, locals: locals, data: dataVars, root: c.root, Output: c.Output, Blocks: c.Blocks}
+	return &Context{Data: data, parent: c, locals: locals, data: dataVars, root: c.root, Output: c.Output, Blocks: c.Blocks, LazySlots: c.LazySlots}
 }
 
 // ResolvePath looks up a dotted path in the current context.

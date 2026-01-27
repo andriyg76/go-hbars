@@ -79,3 +79,13 @@ Layout partial:
 ```
 
 When `main` is rendered, the output includes `<title>My Page</title>` in the head, because the page filled the `"header"` slot before calling the layout.
+
+**Direction B (layout → page, lazy slots):**
+
+1. The layout runs first; it writes to a buffer and sets `ctx.LazySlots`.
+2. When the layout hits `{{#block "name"}}default{{/block}}`, it does **not** resolve yet: it writes a placeholder and records the slot.
+3. When the layout hits `{{> content}}`, the content partial runs; it can use `{{#partial "name"}}...{{/partial}}` to fill slots.
+4. After layout (and content) finish, `ResolveLazySlots` replaces placeholders with `ctx.Blocks[name]` or the default block output.
+5. Use `RenderWithLayout` / `RenderWithLayoutString` (generated when `Options.LayoutContent` is set) to run this flow.
+
+**Compiler option:** `Options.LayoutContent = &LayoutContentConfig{Layout: "layout", Content: "main"}` makes the compiler generate `RenderWithLayout(w, data)` and `RenderWithLayoutString(data)`. The layout template must invoke the content partial (e.g. `{{> main}}`). Layout runs first with `ctx.LazySlots` and a buffer; after layout returns, lazy slots are resolved and the buffer is written to the output.

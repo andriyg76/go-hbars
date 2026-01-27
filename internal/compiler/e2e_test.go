@@ -335,6 +335,103 @@ func main() {
 	}
 }
 
+func TestE2E_LayoutBlocksDirectionB(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping e2e test in short mode")
+	}
+	// Direction B (layout-first, lazy slots): layout runs first, content runs when layout does {{> main}}
+	templates := map[string]string{
+		"layout": `<head>{{#block "header"}}Default{{/block}}</head><body>{{> main}}</body>`,
+		"main":   `{{#partial "header"}}Custom Header{{/partial}}body content`,
+	}
+	data := map[string]any{}
+	dataBytes, err := json.Marshal(data)
+	if err != nil {
+		t.Fatalf("marshal data: %v", err)
+	}
+
+	code, err := CompileTemplates(templates, Options{
+		PackageName: "templates",
+		Helpers: map[string]HelperRef{
+			"block":   {ImportPath: "github.com/andriyg76/go-hbars/runtime", Ident: "Block"},
+			"partial": {ImportPath: "github.com/andriyg76/go-hbars/runtime", Ident: "Partial"},
+		},
+		LayoutContent: &LayoutContentConfig{Layout: "layout", Content: "main"},
+	})
+	if err != nil {
+		t.Fatalf("compile: %v", err)
+	}
+
+	tmpDir := t.TempDir()
+	repoRoot, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatalf("repo root: %v", err)
+	}
+	writeFile := func(path, content string) {
+		if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+			t.Fatalf("write %s: %v", path, err)
+		}
+	}
+
+	writeFile(filepath.Join(tmpDir, "go.mod"), `module test-layout-b
+
+go 1.24
+
+replace github.com/andriyg76/go-hbars => `+strings.ReplaceAll(repoRoot, "\\", "/")+`
+`)
+	if err := os.MkdirAll(filepath.Join(tmpDir, "templates"), 0755); err != nil {
+		t.Fatalf("mkdir templates: %v", err)
+	}
+	writeFile(filepath.Join(tmpDir, "templates", "templates_gen.go"), string(code))
+	writeFile(filepath.Join(tmpDir, "data.json"), string(dataBytes))
+	writeFile(filepath.Join(tmpDir, "main.go"), `package main
+
+import (
+	"encoding/json"
+	"fmt"
+	"os"
+	"strings"
+	templates "test-layout-b/templates"
+)
+
+func main() {
+	dataBytes, _ := os.ReadFile("data.json")
+	var data map[string]any
+	if err := json.Unmarshal(dataBytes, &data); err != nil {
+		fmt.Fprintf(os.Stderr, "json: %v\n", err)
+		os.Exit(1)
+	}
+	out, err := templates.RenderWithLayoutString(data)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "render: %v\n", err)
+		os.Exit(1)
+	}
+	out = strings.TrimSpace(out)
+	want := "<head>Custom Header</head><body>body content</body>"
+	if out != want {
+		fmt.Fprintf(os.Stderr, "got %q want %q\n", out, want)
+		os.Exit(1)
+	}
+	fmt.Println("OK")
+}
+`)
+
+	cmd := exec.Command("go", "mod", "tidy")
+	cmd.Dir = tmpDir
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("go mod tidy: %v", err)
+	}
+	cmd = exec.Command("go", "run", ".")
+	cmd.Dir = tmpDir
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("go run: %v\nOutput:\n%s", err, output)
+	}
+	if !strings.Contains(string(output), "OK") {
+		t.Fatalf("expected OK in output, got:\n%s", output)
+	}
+}
+
 func TestE2E_LayoutBlocks(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping e2e test in short mode")

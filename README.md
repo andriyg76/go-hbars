@@ -41,6 +41,7 @@ out, err := templates.RenderMainString(data)
 ## Documentation
 
 - **[Template Syntax](docs/syntax.md)** - Complete Handlebars syntax reference
+- **[Custom Extensions](docs/extensions.md)** - includeZero, layout blocks (partial/block), Direction A & B
 - **[Built-in Helpers](docs/helpers.md)** - Available helpers and how to use them
 - **[Processor & Server](docs/processor-server.md)** - CLI tools for static site generation
 - **[Embedded API](docs/embedded.md)** - Embedding processor and server in your applications

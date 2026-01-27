@@ -180,3 +180,66 @@ func TestPartial_MultipleSlots(t *testing.T) {
 		t.Fatalf("Blocks = %v", ctx.Blocks)
 	}
 }
+
+func TestBlock_LazySlots(t *testing.T) {
+	// When ctx.LazySlots is set, Block writes placeholder and records; does not run default now
+	recorder := NewLazySlotsRecorder()
+	ctx := NewContext(nil)
+	ctx.Output = &bytes.Buffer{}
+	ctx.LazySlots = recorder
+	opts := BlockOptions{
+		Fn: func(_ *Context, w io.Writer) error {
+			t.Fatal("default must not run when LazySlots is set")
+			return nil
+		},
+	}
+	err := Block(ctx, []any{"header", opts})
+	if err != nil {
+		t.Fatalf("Block: %v", err)
+	}
+	out := ctx.Output.(*bytes.Buffer).String()
+	if out == "" || !strings.Contains(out, "SLOT") {
+		t.Fatalf("expected placeholder in output, got %q", out)
+	}
+	slots := recorder.Slots()
+	if len(slots) != 1 || slots[0].Name != "header" {
+		t.Fatalf("expected one slot named header, got %v", slots)
+	}
+}
+
+func TestResolveLazySlots(t *testing.T) {
+	ctx := NewContext(nil)
+	recorder := NewLazySlotsRecorder()
+	ph := recorder.Record("h", func(_ *Context, w io.Writer) error {
+		_, _ = io.WriteString(w, "default")
+		return nil
+	})
+	buf := &bytes.Buffer{}
+	buf.WriteString("prefix" + ph + "suffix")
+	blocks := map[string]string{"h": "override"}
+	err := ResolveLazySlots(buf, recorder.Slots(), blocks, ctx)
+	if err != nil {
+		t.Fatalf("ResolveLazySlots: %v", err)
+	}
+	if got := buf.String(); got != "prefixoverridesuffix" {
+		t.Fatalf("got %q", got)
+	}
+}
+
+func TestResolveLazySlots_UseDefault(t *testing.T) {
+	ctx := NewContext(nil)
+	recorder := NewLazySlotsRecorder()
+	ph := recorder.Record("h", func(_ *Context, w io.Writer) error {
+		_, _ = io.WriteString(w, "default")
+		return nil
+	})
+	buf := &bytes.Buffer{}
+	buf.WriteString(ph)
+	err := ResolveLazySlots(buf, recorder.Slots(), nil, ctx)
+	if err != nil {
+		t.Fatalf("ResolveLazySlots: %v", err)
+	}
+	if got := buf.String(); got != "default" {
+		t.Fatalf("got %q", got)
+	}
+}
