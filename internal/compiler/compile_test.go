@@ -240,4 +240,34 @@ func TestCompileTemplates_InlineLiteralArgs(t *testing.T) {
 	}
 }
 
+func TestCompileTemplates_ContextInterfaces(t *testing.T) {
+	code, err := CompileTemplates(map[string]string{
+		"main": "{{title}}\n{{#with user}}{{name}}{{/with}}\n{{#each items as |item|}}{{item.id}}{{/each}}",
+	}, Options{PackageName: "templates"})
+	if err != nil {
+		t.Fatalf("CompileTemplates error: %v", err)
+	}
+	src := string(code)
+	if !strings.Contains(src, "// MainContext is the context interface inferred from template \"main\".") {
+		t.Fatalf("expected MainContext interface comment in generated code")
+	}
+	if !strings.Contains(src, "type MainContext interface {") {
+		t.Fatalf("expected type MainContext interface in generated code")
+	}
+	if !strings.Contains(src, "Title() any") {
+		t.Fatalf("expected Title() any in MainContext")
+	}
+	if !strings.Contains(src, "User() MainUserContext") {
+		t.Fatalf("expected User() MainUserContext in MainContext")
+	}
+	if !strings.Contains(src, "Items() []MainItemsItemContext") {
+		t.Fatalf("expected Items() []MainItemsItemContext in MainContext")
+	}
+	if !strings.Contains(src, "type MainUserContext interface {") {
+		t.Fatalf("expected nested MainUserContext interface")
+	}
+	if !strings.Contains(src, "type MainItemsItemContext interface {") {
+		t.Fatalf("expected MainItemsItemContext for each element")
+	}
+}
 

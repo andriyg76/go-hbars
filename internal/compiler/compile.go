@@ -93,6 +93,16 @@ func CompileTemplates(templates map[string]string, opts Options) ([]byte, error)
 	header.line(")")
 	header.line("")
 
+	contextIfaces := &codeWriter{}
+	for _, name := range names {
+		col := newPathCollector(helperExprs)
+		if err := col.collectNodes(parsed[name]); err != nil {
+			return nil, fmt.Errorf("compiler: template %q context inference: %w", name, err)
+		}
+		tree := buildTypeTree(col.paths, col.eachFields)
+		emitContextInterfaces(contextIfaces, name, tree)
+	}
+
 	partials := &codeWriter{}
 	partials.line("var partials map[string]func(*runtime.Context, io.Writer) error")
 	partials.line("")
@@ -153,6 +163,7 @@ func CompileTemplates(templates map[string]string, opts Options) ([]byte, error)
 
 	var out strings.Builder
 	out.WriteString(header.String())
+	out.WriteString(contextIfaces.String())
 	out.WriteString(partials.String())
 	out.WriteString(functions.String())
 	if bootstrap.String() != "" {
