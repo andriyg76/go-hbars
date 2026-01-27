@@ -186,6 +186,9 @@ For maps, the first parameter is the value, the second is the key.
 ```
 Any registered helper can be used as a block helper. The helper receives `BlockOptions` with `Fn` and `Inverse` callbacks to render the block content. Block helpers should check for `BlockOptions` in their arguments and call the appropriate callback.
 
+**Universal section:**  
+Any `{{#name}}...{{/name}}` that is not a built-in (`if`/`unless`/`with`/`each`) and not a registered helper is treated as a section: resolve `name` from context; if truthy, render the block with that value as context; else render `{{else}}` if present. Same semantics as `{{#with name}}...{{/with}}`. See [Custom Extensions — Universal section](extensions.md#universal-section).
+
 ## Paths and Data Variables
 
 **Parent paths:**

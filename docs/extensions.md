@@ -37,6 +37,40 @@ By default, numeric zero (`0`, `0.0`) is falsy: `{{#if count}}...{{/if}}` skips 
 
 ---
 
+## Universal section
+
+**Availability:** any block `{{#name}}...{{/name}}` that is **not** a built-in (`if`, `unless`, `with`, `each`) and **not** a registered helper.
+
+For `{{#anything}}...{{/anything}}`, if `anything` is not a known block helper, go-hbars treats it as a **section**: resolve `anything` from the context; if truthy, render the block with that value as context; otherwise render the `{{else}}` branch if present. Semantically this is the same as `{{#with anything}}...{{else}}...{{/with}}`.
+
+**Syntax:**
+```handlebars
+{{#date}}
+  <span>{{date}}</span>
+{{else}}
+  no date
+{{/date}}
+```
+With no expression after the name, the block name is used as the path. You can also write `{{#section some.path}}...{{/section}}`; then `some.path` is the expression.
+
+**Behavior:**
+- **Registered helper wins** — if `date` (or whatever name) is in the helpers registry as a block helper, it is invoked as a custom block helper.
+- **Otherwise section** — the block is compiled as `{{#with <expr>}}...{{else}}...{{/with}}`, where `<expr>` is the block's first argument or, if empty, the block name. So `{{#date}}` uses the context key `date`; `{{#foo bar}}` uses the expression `bar`.
+- Compatible with **Handlebars.java** and similar engines where `{{#date}}` means "if date is present, render block with date as context".
+
+**Example:**
+```handlebars
+{{! data: { date: "2024-01-15" } }}
+{{#date}}{{date}}{{/date}}
+{{! outputs: 2024-01-15 }}
+
+{{! data: { date: "" } }}
+{{#date}}shown{{else}}none{{/date}}
+{{! outputs: none }}
+```
+
+---
+
 ## Layout blocks (partial / block)
 
 **Availability:** block helpers `{{#partial}}` and `{{#block}}` (first-class extensions, not tied to sitegen).

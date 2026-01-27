@@ -184,11 +184,52 @@ func TestCompileTemplates_DynamicPartial(t *testing.T) {
 	}
 }
 func TestCompileTemplates_UnknownBlock(t *testing.T) {
-	_, err := CompileTemplates(map[string]string{
+	// Unknown block (no registered helper) compiles as universal section, not an error
+	code, err := CompileTemplates(map[string]string{
 		"main": "{{#noop}}ignored{{/noop}}",
 	}, Options{PackageName: "templates"})
-	if err == nil || !strings.Contains(err.Error(), "block helper") {
-		t.Fatalf("expected missing block helper error, got %v", err)
+	if err != nil {
+		t.Fatalf("expected success (universal section), got %v", err)
+	}
+	if !strings.Contains(string(code), "WithScope") {
+		t.Fatalf("expected WithScope (universal section) in generated code")
+	}
+}
+
+func TestCompileTemplates_UniversalSection(t *testing.T) {
+	// {{#date}}...{{/date}} and {{#foo}}...{{/foo}} with no helper => compiled as section (with-like)
+	code, err := CompileTemplates(map[string]string{
+		"main": `{{#date}}x{{/date}}{{#foo}}y{{else}}n{{/foo}}`,
+	}, Options{PackageName: "templates"})
+	if err != nil {
+		t.Fatalf("CompileTemplates error: %v", err)
+	}
+	src := string(code)
+	// Section semantics: resolve name, if truthy WithScope(val), else inverse
+	if !strings.Contains(src, "WithScope") {
+		t.Fatalf("expected WithScope in generated code for universal section")
+	}
+	if !strings.Contains(src, "IsTruthy") {
+		t.Fatalf("expected IsTruthy in generated code for universal section")
+	}
+}
+
+func TestCompileTemplates_UniversalSection_HelperWins(t *testing.T) {
+	// When a name is registered as block helper, it is used — not section
+	reg := helpers.Registry()
+	compilerHelpers := make(map[string]HelperRef, len(reg))
+	for name, ref := range reg {
+		compilerHelpers[name] = HelperRef{ImportPath: ref.ImportPath, Ident: ref.Ident}
+	}
+	code, err := CompileTemplates(map[string]string{
+		"main": `{{#block "x"}}default{{/block}}`,
+	}, Options{PackageName: "templates", Helpers: compilerHelpers})
+	if err != nil {
+		t.Fatalf("CompileTemplates error: %v", err)
+	}
+	src := string(code)
+	if !strings.Contains(src, "runtime.Block") {
+		t.Fatalf("expected runtime.Block when block is registered helper, got section fallback")
 	}
 }
 

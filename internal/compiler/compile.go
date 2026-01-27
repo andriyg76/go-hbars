@@ -421,8 +421,18 @@ func (g *generator) emitBlock(n *ast.Block) error {
 	case "each":
 		return g.emitEachBlock(n)
 	default:
-		// Custom block helper
-		return g.emitCustomBlockHelper(n)
+		// Registered helper → custom block helper
+		if _, ok := g.helpers[n.Name]; ok {
+			return g.emitCustomBlockHelper(n)
+		}
+		// Universal section: {{#anything}}...{{/anything}} => {{#with anything}}...{{/with}}
+		// (Mustache/Handlebars semantics: lookup name in context; if truthy, render block with that value as context)
+		sectionExpr := strings.TrimSpace(n.Args)
+		if sectionExpr == "" {
+			sectionExpr = n.Name
+		}
+		synthetic := &ast.Block{Name: "with", Args: sectionExpr, Body: n.Body, Else: n.Else, Params: n.Params}
+		return g.emitWithBlock(synthetic)
 	}
 }
 
@@ -677,6 +687,7 @@ func (g *generator) emitWithBlock(n *ast.Block) error {
 				g.w.line("}")
 			}
 			g.w.line("ctx := ctx.WithScope(%s, %s, nil)", valueExpr, localsVar)
+			g.w.line("_ = ctx // scope for body, may be unused when body is literal-only")
 			if err := g.emitNodes(n.Body); err != nil {
 				return err
 			}
@@ -709,6 +720,7 @@ func (g *generator) emitWithBlock(n *ast.Block) error {
 		g.w.line("}")
 	}
 	g.w.line("ctx := ctx.WithScope(%s, %s, nil)", valVar, localsVar)
+	g.w.line("_ = ctx // scope for body, may be unused when body is literal-only")
 	if err := g.emitNodes(n.Body); err != nil {
 		return err
 	}
@@ -729,9 +741,18 @@ func (g *generator) emitEachBlock(n *ast.Block) error {
 	if len(n.Params) > 2 {
 		return fmt.Errorf("block %q supports up to 2 params", n.Name)
 	}
-	blockExpr, _, err := g.singleBlockExpr(n)
+	// Accept "each in collection" as synonym for "each collection"
+	parts, _, err := parseParts(n.Args)
 	if err != nil {
 		return err
+	}
+	var blockExpr expr
+	if len(parts) == 2 && parts[0].kind == exprPath && parts[0].value == "in" {
+		blockExpr = parts[1]
+	} else if len(parts) != 1 {
+		return fmt.Errorf("block %q requires a single expression", n.Name)
+	} else {
+		blockExpr = parts[0]
 	}
 	valueExpr, err := g.emitExprValue(blockExpr)
 	if err != nil {

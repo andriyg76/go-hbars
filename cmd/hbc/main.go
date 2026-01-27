@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 
 	helperspkg "github.com/andriyg76/go-hbars/helpers"
@@ -321,39 +320,50 @@ func loadTemplates(path string, exts map[string]bool) (map[string]string, error)
 		name := templateName(path)
 		return map[string]string{name: string(content)}, nil
 	}
-	entries, err := os.ReadDir(path)
+	templates := make(map[string]string)
+	root := path
+	err = filepath.WalkDir(path, func(full string, d os.DirEntry, errWalk error) error {
+		if errWalk != nil {
+			return errWalk
+		}
+		if d.IsDir() {
+			return nil
+		}
+		ext := strings.ToLower(filepath.Ext(d.Name()))
+		if len(exts) > 0 && !exts[ext] {
+			return nil
+		}
+		content, errRead := os.ReadFile(full)
+		if errRead != nil {
+			return errRead
+		}
+		rel, errRel := filepath.Rel(root, full)
+		if errRel != nil {
+			return errRel
+		}
+		name := templateNameFromRel(rel)
+		if _, exists := templates[name]; exists {
+			return fmt.Errorf("duplicate template name %q", name)
+		}
+		templates[name] = string(content)
+		return nil
+	})
 	if err != nil {
 		return nil, err
 	}
-	names := make([]string, 0, len(entries))
-	templates := make(map[string]string)
-	for _, entry := range entries {
-		if entry.IsDir() {
-			continue
-		}
-		ext := strings.ToLower(filepath.Ext(entry.Name()))
-		if len(exts) > 0 && !exts[ext] {
-			continue
-		}
-		full := filepath.Join(path, entry.Name())
-		content, err := os.ReadFile(full)
-		if err != nil {
-			return nil, err
-		}
-		name := templateName(full)
-		if _, exists := templates[name]; exists {
-			return nil, fmt.Errorf("duplicate template name %q", name)
-		}
-		templates[name] = string(content)
-		names = append(names, name)
-	}
-	sort.Strings(names)
 	return templates, nil
 }
 
 func templateName(path string) string {
 	base := filepath.Base(path)
 	return strings.TrimSuffix(base, filepath.Ext(base))
+}
+
+// templateNameFromRel builds a template name from a path relative to root:
+// "parts/header.hbs" -> "parts/header", so {{> parts/header}} resolves.
+func templateNameFromRel(rel string) string {
+	normalized := filepath.ToSlash(rel)
+	return strings.TrimSuffix(normalized, filepath.Ext(normalized))
 }
 
 func defaultPackage(outPath string) string {
