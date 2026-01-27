@@ -1,8 +1,6 @@
 package sitegen
 
 import (
-	"fmt"
-
 	"github.com/andriyg76/go-hbars/internal/processor"
 )
 

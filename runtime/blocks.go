@@ -1,9 +1,53 @@
 package runtime
 
 import (
+	"encoding/json"
 	"reflect"
 	"sort"
 )
+
+// IsNumericZero reports whether v is a numeric type with value zero.
+// It handles json.Number (from decoding JSON with UseNumber()), Go numeric types,
+// and numeric kinds via reflection.
+func IsNumericZero(v any) bool {
+	if v == nil {
+		return false
+	}
+	switch n := v.(type) {
+	case json.Number:
+		if i, err := n.Int64(); err == nil {
+			return i == 0
+		}
+		if f, err := n.Float64(); err == nil {
+			return f == 0
+		}
+		return false
+	}
+	rv := reflect.ValueOf(v)
+	for rv.Kind() == reflect.Interface || rv.Kind() == reflect.Pointer {
+		if rv.IsNil() {
+			return false
+		}
+		rv = rv.Elem()
+	}
+	switch rv.Kind() {
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return rv.Int() == 0
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
+		return rv.Uint() == 0
+	case reflect.Float32, reflect.Float64:
+		return rv.Float() == 0
+	default:
+		return false
+	}
+}
+
+// IncludeZeroTruthy reports whether v should be treated as truthy when
+// the includeZero option is set: it returns true if v is numeric zero
+// or if IsTruthy(v) is true. Used by {{#if}} / {{#unless}} with includeZero=true.
+func IncludeZeroTruthy(v any) bool {
+	return IsNumericZero(v) || IsTruthy(v)
+}
 
 // IsTruthy reports whether a value should be treated as true in block helpers.
 func IsTruthy(value any) bool {

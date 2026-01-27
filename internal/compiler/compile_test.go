@@ -118,6 +118,29 @@ func TestCompileTemplates_BlockHelpers(t *testing.T) {
 	}
 }
 
+func TestCompileTemplates_IncludeZero(t *testing.T) {
+	code, err := CompileTemplates(map[string]string{
+		"main": "{{#if count includeZero=true}}zero{{else}}nope{{/if}}",
+	}, Options{PackageName: "templates"})
+	if err != nil {
+		t.Fatalf("CompileTemplates error: %v", err)
+	}
+	src := string(code)
+	if !strings.Contains(src, "runtime.IncludeZeroTruthy") {
+		t.Fatalf("expected runtime.IncludeZeroTruthy in generated code when includeZero=true, got:\n%s", src)
+	}
+	// Without includeZero, must use IsTruthy
+	code2, err := CompileTemplates(map[string]string{
+		"main": "{{#if count}}zero{{else}}nope{{/if}}",
+	}, Options{PackageName: "templates"})
+	if err != nil {
+		t.Fatalf("CompileTemplates error: %v", err)
+	}
+	if strings.Contains(string(code2), "IncludeZeroTruthy") {
+		t.Fatalf("expected IsTruthy (not IncludeZeroTruthy) when includeZero is not set")
+	}
+}
+
 func TestCompileTemplates_BlockParams(t *testing.T) {
 	code, err := CompileTemplates(map[string]string{
 		"main": "{{#each items as |item idx|}}{{item}}:{{idx}}{{/each}}",

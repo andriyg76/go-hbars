@@ -1,6 +1,7 @@
 package compiler
 
 import (
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -30,10 +31,10 @@ func TestCompileTemplates_GenerateBootstrap(t *testing.T) {
 	if !strings.Contains(src, "var rendererFuncs = map[string]func(io.Writer, any) error") {
 		t.Fatalf("missing rendererFuncs map")
 	}
-	if !strings.Contains(src, `"main": RenderMain`) {
+	if !regexp.MustCompile(`"main":\s+RenderMain`).MatchString(src) {
 		t.Fatalf("missing main in rendererFuncs")
 	}
-	if !strings.Contains(src, `"header": RenderHeader`) {
+	if !regexp.MustCompile(`"header":\s+RenderHeader`).MatchString(src) {
 		t.Fatalf("missing header in rendererFuncs")
 	}
 

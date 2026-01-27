@@ -454,13 +454,17 @@ func (g *generator) emitIfBlock(n *ast.Block, inverted bool) error {
 	if len(n.Params) > 1 {
 		return fmt.Errorf("block %q supports a single param", n.Name)
 	}
-	blockExpr, _, err := g.singleBlockExpr(n)
+	blockExpr, hash, err := g.singleBlockExpr(n)
 	if err != nil {
 		return err
 	}
+	useIncludeZero := hashHasIncludeZero(hash)
 	if truthy, ok, err := literalTruthy(blockExpr); ok {
 		if err != nil {
 			return err
+		}
+		if useIncludeZero && literalNumericZero(blockExpr) {
+			truthy = true
 		}
 		if inverted {
 			truthy = !truthy
@@ -501,7 +505,11 @@ func (g *generator) emitIfBlock(n *ast.Block, inverted bool) error {
 	valVar := g.nextTemp("val")
 	condVar := g.nextTemp("cond")
 	g.w.line("%s := %s", valVar, valueExpr)
-	g.w.line("%s := runtime.IsTruthy(%s)", condVar, valVar)
+	if useIncludeZero {
+		g.w.line("%s := runtime.IncludeZeroTruthy(%s)", condVar, valVar)
+	} else {
+		g.w.line("%s := runtime.IsTruthy(%s)", condVar, valVar)
+	}
 	condExpr := condVar
 	if inverted {
 		condExpr = "!" + condVar
@@ -885,6 +893,17 @@ func (g *generator) singleBlockExpr(n *ast.Block) (expr, []hashArg, error) {
 	return parts[0], hash, nil
 }
 
+// hashHasIncludeZero reports whether the hash contains includeZero=true.
+// Used by {{#if}} / {{#unless}} to enable the includeZero custom extension.
+func hashHasIncludeZero(hash []hashArg) bool {
+	for _, h := range hash {
+		if h.key == "includeZero" && h.value.kind == exprBool && h.value.value == "true" {
+			return true
+		}
+	}
+	return false
+}
+
 func (g *generator) emitValueExpr(expr string, raw bool) {
 	if raw {
 		g.writeValue("runtime.WriteRaw", expr)
@@ -1104,6 +1123,15 @@ func literalTruthy(value expr) (bool, bool, error) {
 	default:
 		return false, false, nil
 	}
+}
+
+// literalNumericZero reports whether the expression is a literal numeric zero.
+func literalNumericZero(value expr) bool {
+	if value.kind != exprNumber {
+		return false
+	}
+	num, err := strconv.ParseFloat(value.value, 64)
+	return err == nil && num == 0
 }
 
 func formatNumberLiteral(value string) (string, error) {

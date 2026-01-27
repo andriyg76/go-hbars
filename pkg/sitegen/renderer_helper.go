@@ -3,7 +3,6 @@ package sitegen
 import (
 	"fmt"
 	"io"
-	"reflect"
 
 	"github.com/andriyg76/go-hbars/internal/processor"
 )

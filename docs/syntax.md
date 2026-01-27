@@ -102,6 +102,10 @@ Partial blocks render the partial if it exists, otherwise render the fallback bl
 ```
 Renders the block if the expression is truthy, otherwise renders the `{{else}}` block if present.
 
+**Custom extension — includeZero:**  
+To treat numeric zero as truthy (e.g. “0 items” vs “no data”), use `includeZero=true`:  
+`{{#if count includeZero=true}}...{{/if}}`. See [Custom extensions](extensions.md#includezero) for details.
+
 **Block parameters for `if`/`unless`:**
 ```handlebars
 {{#if user.active as |active|}}
