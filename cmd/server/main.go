@@ -2,17 +2,23 @@ package main
 
 import (
 	"flag"
-	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"path/filepath"
 
+	"github.com/andriyg76/glog"
 	"github.com/andriyg76/go-hbars/internal/processor"
 	"github.com/andriyg76/go-hbars/internal/server"
+	"github.com/andriyg76/hexerr"
 )
 
+type e struct{}
+
 func main() {
+	hexerr.SetFilterPrefixes(e{})
+
+	log := glog.Create(glog.INFO)
+
 	var (
 		rootPath      = flag.String("root", "", "base directory for resolving relative paths (default: current working directory)")
 		dataPath      = flag.String("data-path", "data", "path to data files directory")
@@ -30,7 +36,7 @@ func main() {
 		var err error
 		root, err = os.Getwd()
 		if err != nil {
-			log.Fatalf("Failed to get working directory: %v", err)
+			log.Fatal("Failed to get working directory: %v", err)
 		}
 	}
 
@@ -46,7 +52,7 @@ func main() {
 	// Load shared data
 	sharedData, err := processor.LoadSharedData(filepath.Join(root, *sharedPath))
 	if err != nil {
-		log.Fatalf("Failed to load shared data: %v", err)
+		log.Fatal("Failed to load shared data: %v", err)
 	}
 
 	// Create renderer
@@ -54,7 +60,7 @@ func main() {
 	// For now, we'll create a placeholder that needs to be implemented
 	renderer, err := createRenderer(*templatePkg)
 	if err != nil {
-		log.Fatalf("Failed to create renderer: %v", err)
+		log.Fatal("Failed to create renderer: %v", err)
 	}
 
 	// Create processor
@@ -64,16 +70,16 @@ func main() {
 	handler := server.NewHandler(proc, sharedData, filepath.Join(root, *staticDir))
 
 	// Start server
-	fmt.Printf("Starting server on %s\n", *addr)
-	fmt.Printf("Data path: %s\n", filepath.Join(root, *dataPath))
-	fmt.Printf("Templates path: %s\n", filepath.Join(root, *templatesPath))
+	log.Info("Starting server on %s", *addr)
+	log.Info("Data path: %s", filepath.Join(root, *dataPath))
+	log.Info("Templates path: %s", filepath.Join(root, *templatesPath))
 	if *staticDir != "" {
-		fmt.Printf("Static files: %s\n", filepath.Join(root, *staticDir))
+		log.Info("Static files: %s", filepath.Join(root, *staticDir))
 	}
-	fmt.Println("Press Ctrl+C to stop")
+	log.Info("Press Ctrl+C to stop")
 
 	if err := http.ListenAndServe(*addr, handler); err != nil {
-		log.Fatalf("Server failed: %v", err)
+		log.Fatal("Server failed: %v", err)
 	}
 }
 
@@ -83,6 +89,5 @@ func createRenderer(templatePkg string) (processor.TemplateRenderer, error) {
 	// For now, return an error indicating that templates need to be loaded
 	// In a real implementation, you would use reflection or a registry to load
 	// the compiled template package
-	return nil, fmt.Errorf("template renderer not implemented - you need to load compiled templates")
+	return nil, hexerr.New("template renderer not implemented - you need to load compiled templates")
 }
-

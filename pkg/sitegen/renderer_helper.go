@@ -1,10 +1,10 @@
 package sitegen
 
 import (
-	"fmt"
 	"io"
 
 	"github.com/andriyg76/go-hbars/internal/processor"
+	"github.com/andriyg76/hexerr"
 )
 
 // RenderFunc is a function that renders a template.
@@ -34,7 +34,7 @@ func NewRendererFromFunctions(funcs map[string]RenderFunc) processor.TemplateRen
 func LoadRendererFromPackage(templatePackage any) (processor.TemplateRenderer, error) {
 	renderer, err := processor.NewCompiledTemplateRenderer(templatePackage)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create renderer: %w", err)
+		return nil, hexerr.Wrap(err, "failed to create renderer")
 	}
 	return renderer, nil
 }
@@ -46,7 +46,7 @@ func LoadRendererFromPackage(templatePackage any) (processor.TemplateRenderer, e
 // 3. Otherwise returns an error
 func AutoLoadRenderer(templatePackage any) (processor.TemplateRenderer, error) {
 	if templatePackage == nil {
-		return nil, fmt.Errorf("templatePackage cannot be nil")
+		return nil, hexerr.New("templatePackage cannot be nil")
 	}
 
 	// Check if it's already a map of functions
@@ -57,4 +57,3 @@ func AutoLoadRenderer(templatePackage any) (processor.TemplateRenderer, error) {
 	// Try reflection-based loading
 	return LoadRendererFromPackage(templatePackage)
 }
-

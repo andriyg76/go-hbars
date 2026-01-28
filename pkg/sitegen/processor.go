@@ -1,11 +1,11 @@
 package sitegen
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 
 	"github.com/andriyg76/go-hbars/internal/processor"
+	"github.com/andriyg76/hexerr"
 )
 
 // Processor processes data files and generates static HTML files.
@@ -27,7 +27,7 @@ func NewProcessor(config *Config, renderer processor.TemplateRenderer) (*Process
 		var err error
 		root, err = os.Getwd()
 		if err != nil {
-			return nil, fmt.Errorf("failed to get working directory: %w", err)
+			return nil, hexerr.Wrap(err, "failed to get working directory")
 		}
 	}
 
@@ -59,7 +59,7 @@ func (p *Processor) ProcessFile(dataFilePath string) (string, []byte, error) {
 	sharedPath := filepath.Join(p.config.RootPath, p.config.SharedPath)
 	sharedData, err := processor.LoadSharedData(sharedPath)
 	if err != nil {
-		return "", nil, fmt.Errorf("failed to load shared data: %w", err)
+		return "", nil, hexerr.Wrap(err, "failed to load shared data")
 	}
 
 	return p.proc.ProcessFile(dataFilePath, sharedData)
@@ -69,4 +69,3 @@ func (p *Processor) ProcessFile(dataFilePath string) (string, []byte, error) {
 func (p *Processor) Config() *Config {
 	return p.config
 }
-

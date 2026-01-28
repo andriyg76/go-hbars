@@ -5,6 +5,8 @@ import (
 	"io"
 	"reflect"
 	"strings"
+
+	"github.com/andriyg76/hexerr"
 )
 
 // CompiledTemplateRenderer renders templates using compiled template functions.
@@ -71,12 +73,12 @@ func (r *CompiledTemplateRenderer) Render(templateName string, w io.Writer, data
 	// Find matching template name
 	actualName, ok := r.findTemplateName(templateName)
 	if !ok {
-		return fmt.Errorf("template %q not found in compiled templates (available: %v)", templateName, r.getAvailableTemplates())
+		return hexerr.New(fmt.Sprintf("template %q not found in compiled templates (available: %v)", templateName, r.getAvailableTemplates()))
 	}
 
 	renderFunc, ok := r.renderFuncs[actualName]
 	if !ok {
-		return fmt.Errorf("template %q not found in compiled templates", templateName)
+		return hexerr.New(fmt.Sprintf("template %q not found in compiled templates", templateName))
 	}
 
 	// Call the render function: RenderTemplateName(w io.Writer, data any) error
@@ -88,7 +90,7 @@ func (r *CompiledTemplateRenderer) Render(templateName string, w io.Writer, data
 	results := renderFunc.Call(args)
 	if len(results) > 0 {
 		if err, ok := results[0].Interface().(error); ok && err != nil {
-			return fmt.Errorf("failed to render template %q: %w", templateName, err)
+			return hexerr.Wrapf(err, "failed to render template %q", templateName)
 		}
 	}
 
@@ -112,19 +114,19 @@ func normalizeTemplateName(name string) string {
 // 3. All path separators removed
 func (r *CompiledTemplateRenderer) findTemplateName(templateName string) (string, bool) {
 	normalized := normalizeTemplateName(templateName)
-	
+
 	// Try exact normalized match
 	if _, ok := r.renderFuncs[normalized]; ok {
 		return normalized, true
 	}
-	
+
 	// Try with path separators removed
 	noPath := strings.ReplaceAll(normalized, "/", "")
 	noPath = strings.ReplaceAll(noPath, "\\", "")
 	if _, ok := r.renderFuncs[noPath]; ok {
 		return noPath, true
 	}
-	
+
 	// Try base name only (last component)
 	parts := strings.Split(normalized, "/")
 	if len(parts) > 1 {
@@ -133,7 +135,7 @@ func (r *CompiledTemplateRenderer) findTemplateName(templateName string) (string
 			return baseName, true
 		}
 	}
-	
+
 	// Try camelCase version (e.g., "blog/post" -> "blogPost")
 	if len(parts) > 1 {
 		camelCase := parts[0]
@@ -146,7 +148,7 @@ func (r *CompiledTemplateRenderer) findTemplateName(templateName string) (string
 			return camelCase, true
 		}
 	}
-	
+
 	return "", false
 }
 
@@ -164,4 +166,3 @@ func (r *CompiledTemplateRenderer) getAvailableTemplates() []string {
 	}
 	return names
 }
-

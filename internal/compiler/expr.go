@@ -3,6 +3,8 @@ package compiler
 import (
 	"fmt"
 	"strings"
+
+	"github.com/andriyg76/hexerr"
 )
 
 type exprKind int
@@ -40,7 +42,7 @@ func parseParts(input string) ([]expr, []hashArg, error) {
 		return nil, nil, err
 	}
 	if p.hasNext() {
-		return nil, nil, fmt.Errorf("unexpected token %q", p.peek().value)
+		return nil, nil, hexerr.New(fmt.Sprintf("unexpected token %q", p.peek().value))
 	}
 	return parts, hash, nil
 }
@@ -85,16 +87,16 @@ func (p *exprParser) parseParts(stopAtRParen bool) ([]expr, []hashArg, error) {
 			if stopAtRParen {
 				return parts, hash, nil
 			}
-			return nil, nil, fmt.Errorf("unexpected )")
+			return nil, nil, hexerr.New("unexpected )")
 		}
 		if p.peek().typ == tokEquals {
-			return nil, nil, fmt.Errorf("unexpected =")
+			return nil, nil, hexerr.New("unexpected =")
 		}
 		if p.peek().typ == tokWord && p.peekNext().typ == tokEquals {
 			key := p.next().value
 			p.next()
 			if key == "" {
-				return nil, nil, fmt.Errorf("empty hash key")
+				return nil, nil, hexerr.New("empty hash key")
 			}
 			value, err := p.parseExpr()
 			if err != nil {
@@ -110,7 +112,7 @@ func (p *exprParser) parseParts(stopAtRParen bool) ([]expr, []hashArg, error) {
 		parts = append(parts, part)
 	}
 	if stopAtRParen {
-		return nil, nil, fmt.Errorf("missing )")
+		return nil, nil, hexerr.New("missing )")
 	}
 	return parts, hash, nil
 }
@@ -125,13 +127,13 @@ func (p *exprParser) parseExpr() (expr, error) {
 	case tokLParen:
 		return p.parseSubexpr()
 	case tokRParen:
-		return expr{}, fmt.Errorf("unexpected )")
+		return expr{}, hexerr.New("unexpected )")
 	case tokEquals:
-		return expr{}, fmt.Errorf("unexpected =")
+		return expr{}, hexerr.New("unexpected =")
 	case tokEOF:
-		return expr{}, fmt.Errorf("unexpected end of expression")
+		return expr{}, hexerr.New("unexpected end of expression")
 	default:
-		return expr{}, fmt.Errorf("unexpected token")
+		return expr{}, hexerr.New("unexpected token")
 	}
 }
 
@@ -145,13 +147,13 @@ func (p *exprParser) parseSubexpr() (expr, error) {
 	}
 	p.next()
 	if len(parts) == 0 {
-		return expr{}, fmt.Errorf("empty subexpression")
+		return expr{}, hexerr.New("empty subexpression")
 	}
 	if len(parts) == 1 && len(hash) == 0 {
 		return parts[0], nil
 	}
 	if parts[0].kind != exprPath {
-		return expr{}, fmt.Errorf("subexpression must start with a helper name")
+		return expr{}, hexerr.New("subexpression must start with a helper name")
 	}
 	return expr{
 		kind: exprCall,
@@ -235,7 +237,7 @@ func tokenizeExpr(input string) ([]token, error) {
 				i++
 			}
 			if !closed {
-				return nil, fmt.Errorf("unclosed string literal")
+				return nil, hexerr.New("unclosed string literal")
 			}
 			tokens = append(tokens, token{typ: tokString, value: sb.String()})
 		default:

@@ -2,7 +2,6 @@ package compiler
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"go/format"
 	"path"
@@ -12,6 +11,7 @@ import (
 
 	"github.com/andriyg76/go-hbars/internal/ast"
 	"github.com/andriyg76/go-hbars/internal/parser"
+	"github.com/andriyg76/hexerr"
 )
 
 // HelperRef points to a helper implementation.
@@ -31,7 +31,7 @@ type Options struct {
 // CompileTemplates compiles templates into Go source code.
 func CompileTemplates(templates map[string]string, opts Options) ([]byte, error) {
 	if opts.PackageName == "" {
-		return nil, errors.New("compiler: package name is required")
+		return nil, hexerr.New("compiler: package name is required")
 	}
 	runtimeImport := opts.RuntimeImport
 	if runtimeImport == "" {
@@ -47,7 +47,7 @@ func CompileTemplates(templates map[string]string, opts Options) ([]byte, error)
 	for name, tmpl := range templates {
 		nodes, err := parser.Parse(tmpl)
 		if err != nil {
-			return nil, fmt.Errorf("compiler: template %q: %w", name, err)
+			return nil, hexerr.Wrapf(err, "compiler: template %q", name)
 		}
 		parsed[name] = nodes
 		names = append(names, name)
@@ -59,7 +59,7 @@ func CompileTemplates(templates map[string]string, opts Options) ([]byte, error)
 	for _, name := range names {
 		ident := goIdent(name)
 		if prev, exists := seenFunc[ident]; exists {
-			return nil, fmt.Errorf("compiler: templates %q and %q map to %q", prev, name, ident)
+			return nil, hexerr.New(fmt.Sprintf("compiler: templates %q and %q map to %q", prev, name, ident))
 		}
 		seenFunc[ident] = name
 		funcNames[name] = ident
@@ -97,7 +97,7 @@ func CompileTemplates(templates map[string]string, opts Options) ([]byte, error)
 	for _, name := range names {
 		col := newPathCollector(helperExprs)
 		if err := col.collectNodes(parsed[name]); err != nil {
-			return nil, fmt.Errorf("compiler: template %q context inference: %w", name, err)
+			return nil, hexerr.Wrapf(err, "compiler: template %q context inference", name)
 		}
 		tree := buildTypeTree(col.paths, col.eachFields)
 		emitContextInterfaces(contextIfaces, name, tree)
@@ -128,7 +128,7 @@ func CompileTemplates(templates map[string]string, opts Options) ([]byte, error)
 		functions.indentInc()
 		functions.line("ctx.Output = w")
 		if err := gen.emitNodes(nodes); err != nil {
-			return nil, fmt.Errorf("compiler: template %q: %w", name, err)
+			return nil, hexerr.Wrapf(err, "compiler: template %q", name)
 		}
 		functions.line("return nil")
 		functions.indentDec()
@@ -172,7 +172,7 @@ func CompileTemplates(templates map[string]string, opts Options) ([]byte, error)
 
 	formatted, err := format.Source([]byte(out.String()))
 	if err != nil {
-		return nil, fmt.Errorf("compiler: format: %w", err)
+		return nil, hexerr.Wrapf(err, "compiler: format")
 	}
 	return formatted, nil
 }
@@ -201,17 +201,17 @@ func prepareHelpers(helpers map[string]HelperRef, runtimeImport string) (map[str
 	for _, name := range names {
 		ref := helpers[name]
 		if name == "" {
-			return nil, nil, fmt.Errorf("compiler: helper name is empty")
+			return nil, nil, hexerr.New("compiler: helper name is empty")
 		}
 		if ref.Ident == "" {
-			return nil, nil, fmt.Errorf("compiler: helper %q has empty identifier", name)
+			return nil, nil, hexerr.New(fmt.Sprintf("compiler: helper %q has empty identifier", name))
 		}
 		if ref.ImportPath == "" {
 			helperExprs[name] = ref.Ident
 			continue
 		}
 		if strings.Contains(ref.Ident, ".") || !isIdent(ref.Ident) {
-			return nil, nil, fmt.Errorf("compiler: helper %q identifier %q must be a Go identifier", name, ref.Ident)
+			return nil, nil, hexerr.New(fmt.Sprintf("compiler: helper %q identifier %q must be a Go identifier", name, ref.Ident))
 		}
 		if runtimeImport != "" && ref.ImportPath == runtimeImport {
 			helperExprs[name] = "runtime." + ref.Ident
@@ -329,7 +329,7 @@ func (g *generator) emitNodes(nodes []ast.Node) error {
 				return err
 			}
 		default:
-			return fmt.Errorf("compiler: unsupported node %T", node)
+			return hexerr.New(fmt.Sprintf("compiler: unsupported node %T", node))
 		}
 	}
 	return nil
@@ -368,7 +368,7 @@ func (g *generator) emitMustache(n *ast.Mustache) error {
 	}
 	if len(parts) == 0 {
 		if len(hash) > 0 {
-			return fmt.Errorf("unexpected hash arguments")
+			return hexerr.New("unexpected hash arguments")
 		}
 		return nil
 	}
@@ -379,7 +379,7 @@ func (g *generator) emitMustache(n *ast.Mustache) error {
 			}
 		}
 		if len(hash) > 0 {
-			return fmt.Errorf("hash arguments require a helper")
+			return hexerr.New("hash arguments require a helper")
 		}
 		valueExpr, err := g.emitExprValue(parts[0])
 		if err != nil {
@@ -389,11 +389,11 @@ func (g *generator) emitMustache(n *ast.Mustache) error {
 		return nil
 	}
 	if parts[0].kind != exprPath {
-		return fmt.Errorf("helper name must be a path")
+		return hexerr.New("helper name must be a path")
 	}
 	helperExpr, ok := g.helpers[parts[0].value]
 	if !ok {
-		return fmt.Errorf("helper %q is not defined", parts[0].value)
+		return hexerr.New(fmt.Sprintf("helper %q is not defined", parts[0].value))
 	}
 	return g.emitHelperOutput(helperExpr, parts[1:], hash, n.Raw)
 }
@@ -404,10 +404,10 @@ func (g *generator) emitPartial(n *ast.Partial) error {
 		return err
 	}
 	if len(parts) == 0 {
-		return fmt.Errorf("partial invocation is empty")
+		return hexerr.New("partial invocation is empty")
 	}
 	if len(parts) > 2 {
-		return fmt.Errorf("partial: context must be a single expression")
+		return hexerr.New("partial: context must be a single expression")
 	}
 	nameExpr := parts[0]
 	var ctxExpr expr
@@ -442,7 +442,7 @@ func (g *generator) emitPartial(n *ast.Partial) error {
 		name := nameExpr.value
 		goName, ok := g.partials[name]
 		if !ok {
-			return fmt.Errorf("partial %q is not defined", name)
+			return hexerr.New(fmt.Sprintf("partial %q is not defined", name))
 		}
 		g.w.line("if err := render%s(%s, w); err != nil {", goName, ctxVar)
 		g.w.indentInc()
@@ -460,7 +460,7 @@ func (g *generator) emitPartial(n *ast.Partial) error {
 			g.w.line("}")
 			return nil
 		}
-		return fmt.Errorf("partial %q is not defined", nameExpr.value)
+		return hexerr.New(fmt.Sprintf("partial %q is not defined", nameExpr.value))
 	}
 
 	nameValue, err := g.emitExprValue(nameExpr)
@@ -485,7 +485,7 @@ func (g *generator) emitPartial(n *ast.Partial) error {
 
 func (g *generator) emitIfBlock(n *ast.Block, inverted bool) error {
 	if len(n.Params) > 1 {
-		return fmt.Errorf("block %q supports a single param", n.Name)
+		return hexerr.New(fmt.Sprintf("block %q supports a single param", n.Name))
 	}
 	blockExpr, hash, err := g.singleBlockExpr(n)
 	if err != nil {
@@ -508,12 +508,12 @@ func (g *generator) emitIfBlock(n *ast.Block, inverted bool) error {
 	if inverted {
 		condExpr = "!" + condVar
 	}
-	
+
 	// Support block params for if/unless
 	localsVar := "nil"
 	if len(n.Params) > 0 {
 		if len(n.Params) > 1 {
-			return fmt.Errorf("block %q supports a single param", n.Name)
+			return hexerr.New(fmt.Sprintf("block %q supports a single param", n.Name))
 		}
 		localsVar = g.nextTemp("locals")
 		g.w.line("%s := map[string]any{", localsVar)
@@ -522,7 +522,7 @@ func (g *generator) emitIfBlock(n *ast.Block, inverted bool) error {
 		g.w.indentDec()
 		g.w.line("}")
 	}
-	
+
 	g.w.line("if %s {", condExpr)
 	g.w.indentInc()
 	if len(n.Params) > 0 {
@@ -546,7 +546,7 @@ func (g *generator) emitIfBlock(n *ast.Block, inverted bool) error {
 
 func (g *generator) emitWithBlock(n *ast.Block) error {
 	if len(n.Params) > 1 {
-		return fmt.Errorf("block %q supports a single param", n.Name)
+		return hexerr.New(fmt.Sprintf("block %q supports a single param", n.Name))
 	}
 	blockExpr, _, err := g.singleBlockExpr(n)
 	if err != nil {
@@ -591,7 +591,7 @@ func (g *generator) emitWithBlock(n *ast.Block) error {
 
 func (g *generator) emitEachBlock(n *ast.Block) error {
 	if len(n.Params) > 2 {
-		return fmt.Errorf("block %q supports up to 2 params", n.Name)
+		return hexerr.New(fmt.Sprintf("block %q supports up to 2 params", n.Name))
 	}
 	// Accept "each in collection" as synonym for "each collection"
 	parts, _, err := parseParts(n.Args)
@@ -602,7 +602,7 @@ func (g *generator) emitEachBlock(n *ast.Block) error {
 	if len(parts) == 2 && parts[0].kind == exprPath && parts[0].value == "in" {
 		blockExpr = parts[1]
 	} else if len(parts) != 1 {
-		return fmt.Errorf("block %q requires a single expression", n.Name)
+		return hexerr.New(fmt.Sprintf("block %q requires a single expression", n.Name))
 	} else {
 		blockExpr = parts[0]
 	}
@@ -682,15 +682,15 @@ func (g *generator) emitCustomBlockHelper(n *ast.Block) error {
 	}
 	helperExpr, ok := g.helpers[n.Name]
 	if !ok {
-		return fmt.Errorf("block helper %q is not defined", n.Name)
+		return hexerr.New(fmt.Sprintf("block helper %q is not defined", n.Name))
 	}
 	if len(parts) == 0 {
-		return fmt.Errorf("block helper %q requires at least one argument", n.Name)
+		return hexerr.New(fmt.Sprintf("block helper %q requires at least one argument", n.Name))
 	}
 	if parts[0].kind != exprPath {
-		return fmt.Errorf("block helper name must be a path")
+		return hexerr.New("block helper name must be a path")
 	}
-	
+
 	// Emit block helper call
 	// Block helpers receive: context, options with fn/inverse/fnElse
 	// We need to create a function that renders the body
@@ -703,7 +703,7 @@ func (g *generator) emitCustomBlockHelper(n *ast.Block) error {
 	g.w.line("return nil")
 	g.w.indentDec()
 	g.w.line("}")
-	
+
 	inverseFnVar := "nil"
 	if len(n.Else) > 0 {
 		inverseFnVar = g.nextTemp("inverseFn")
@@ -716,7 +716,7 @@ func (g *generator) emitCustomBlockHelper(n *ast.Block) error {
 		g.w.indentDec()
 		g.w.line("}")
 	}
-	
+
 	// Build options hash
 	optionsVar := g.nextTemp("options")
 	g.w.line("%s := runtime.BlockOptions{", optionsVar)
@@ -727,7 +727,7 @@ func (g *generator) emitCustomBlockHelper(n *ast.Block) error {
 	}
 	g.w.indentDec()
 	g.w.line("}")
-	
+
 	// Prepare arguments: parts[0] is first arg, options appended later
 	argsExpr, err := g.emitArgs(parts, hash)
 	if err != nil {
@@ -742,7 +742,7 @@ func (g *generator) emitCustomBlockHelper(n *ast.Block) error {
 		g.w.line("%s := append(%s, %s)", argsVar, argsExpr, optionsVar)
 		argsExpr = argsVar
 	}
-	
+
 	// Call block helper; it receives full args (including BlockOptions) and uses GetBlockOptions internally
 	hasOptsVar := g.nextTemp("hasOpts")
 	g.w.line("_, %s := runtime.GetBlockOptions(%s)", hasOptsVar, argsExpr)
@@ -765,7 +765,7 @@ func (g *generator) singleBlockExpr(n *ast.Block) (expr, []hashArg, error) {
 		return expr{}, nil, err
 	}
 	if len(parts) != 1 {
-		return expr{}, nil, fmt.Errorf("block %q requires a single expression", n.Name)
+		return expr{}, nil, hexerr.New(fmt.Sprintf("block %q requires a single expression", n.Name))
 	}
 	return parts[0], hash, nil
 }
@@ -820,7 +820,7 @@ func (g *generator) emitArgs(args []expr, hash []hashArg) (string, error) {
 		if arg.kind == exprCall {
 			helperExpr, ok := g.helpers[arg.name]
 			if !ok {
-				return "", fmt.Errorf("helper %q is not defined", arg.name)
+				return "", hexerr.New(fmt.Sprintf("helper %q is not defined", arg.name))
 			}
 			var err error
 			exprValue, err = g.emitHelperValue(helperExpr, arg.args, arg.hash)
@@ -889,7 +889,7 @@ func (g *generator) emitExprValue(value expr) (string, error) {
 	if value.kind == exprCall {
 		helperExpr, ok := g.helpers[value.name]
 		if !ok {
-			return "", fmt.Errorf("helper %q is not defined", value.name)
+			return "", hexerr.New(fmt.Sprintf("helper %q is not defined", value.name))
 		}
 		return g.emitHelperValue(helperExpr, value.args, value.hash)
 	}
@@ -914,7 +914,7 @@ func (g *generator) emitLiteralValue(value expr) (string, error) {
 	case exprNull:
 		return "nil", nil
 	default:
-		return "", fmt.Errorf("invalid expression")
+		return "", hexerr.New("invalid expression")
 	}
 }
 
@@ -979,7 +979,7 @@ func argFromExpr(value expr) (arg, error) {
 	case exprNull:
 		return arg{kind: "runtime.ArgNull", value: ""}, nil
 	default:
-		return arg{}, fmt.Errorf("invalid expression")
+		return arg{}, hexerr.New("invalid expression")
 	}
 }
 

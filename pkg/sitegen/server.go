@@ -1,13 +1,13 @@
 package sitegen
 
 import (
-	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
 
 	"github.com/andriyg76/go-hbars/internal/processor"
 	"github.com/andriyg76/go-hbars/internal/server"
+	"github.com/andriyg76/hexerr"
 )
 
 // Server is a semi-static web server that generates pages on the fly.
@@ -31,7 +31,7 @@ func NewServer(config *Config, renderer processor.TemplateRenderer) (*Server, er
 		var err error
 		root, err = os.Getwd()
 		if err != nil {
-			return nil, fmt.Errorf("failed to get working directory: %w", err)
+			return nil, hexerr.Wrap(err, "failed to get working directory")
 		}
 	}
 
@@ -47,7 +47,7 @@ func NewServer(config *Config, renderer processor.TemplateRenderer) (*Server, er
 	sharedPath := filepath.Join(root, config.SharedPath)
 	sharedData, err := processor.LoadSharedData(sharedPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to load shared data: %w", err)
+		return nil, hexerr.Wrap(err, "failed to load shared data")
 	}
 
 	// Create processor
@@ -107,4 +107,3 @@ func (s *Server) Address() string {
 func (s *Server) Config() *Config {
 	return s.config
 }
-
