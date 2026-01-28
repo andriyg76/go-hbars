@@ -447,7 +447,7 @@ func emitNodeInterfaces(w *codeWriter, templateName, goIdent, pathPrefix string,
 		}
 		subPath := field
 		if pathPrefix != "" {
-			subPath = pathPrefix + field
+			subPath = pathPrefix + "." + field
 		}
 		if child.isSlice {
 			emitNodeInterfaces(w, templateName, goIdent, subPath, child, seen)
