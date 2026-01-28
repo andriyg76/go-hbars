@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 
 	"github.com/andriyg76/go-hbars/internal/processor"
+	"github.com/andriyg76/go-hbars/pkg/renderer"
 	"github.com/andriyg76/hexerr"
 )
 
@@ -12,11 +13,11 @@ import (
 type Processor struct {
 	config   *Config
 	proc     *processor.Processor
-	renderer processor.TemplateRenderer
+	renderer renderer.TemplateRenderer
 }
 
 // NewProcessor creates a new processor with the given configuration and renderer.
-func NewProcessor(config *Config, renderer processor.TemplateRenderer) (*Processor, error) {
+func NewProcessor(config *Config, r renderer.TemplateRenderer) (*Processor, error) {
 	if config == nil {
 		config = DefaultConfig()
 	}
@@ -32,19 +33,18 @@ func NewProcessor(config *Config, renderer processor.TemplateRenderer) (*Process
 	}
 
 	procConfig := &processor.Config{
-		RootPath:      root,
-		DataPath:      config.DataPath,
-		SharedPath:    config.SharedPath,
-		TemplatesPath: config.TemplatesPath,
-		OutputPath:    config.OutputPath,
+		RootPath:   root,
+		DataPath:   config.DataPath,
+		SharedPath: config.SharedPath,
+		OutputPath: config.OutputPath,
 	}
 
-	proc := processor.NewProcessor(procConfig, renderer)
+	proc := processor.NewProcessor(procConfig, r)
 
 	return &Processor{
 		config:   config,
 		proc:     proc,
-		renderer: renderer,
+		renderer: r,
 	}, nil
 }
 

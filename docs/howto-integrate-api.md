@@ -80,40 +80,7 @@ For each template `name.hbs`, the generated package exposes:
 - `RenderName(w io.Writer, data any) error`
 - `RenderNameString(data any) (string, error)`
 
-## Generated file details (compiled templates)
-
-The generated file (e.g. `templates_gen.go`) contains:
-
-- Package header and imports (`io`, `strings`, the runtime package, and helper imports if used).
-- Internal render functions named `renderXxx(ctx *runtime.Context, w io.Writer) error`.
-- Public functions named `RenderXxx(w io.Writer, data any) error` and `RenderXxxString(data any) (string, error)`.
-- A `partials` map used for `{{> partial}}` lookups inside templates.
-
-### How template file names map to function names
-
-Template names are derived from the file path relative to the template root (`-in`):
-
-- `main.hbs` → `RenderMain` / `RenderMainString`
-- `blog/post.hbs` → `RenderBlogPost` / `RenderBlogPostString`
-- `user-card.hbs` → `RenderUserCard` / `RenderUserCardString`
-- `user_card.hbs` → `RenderUserCard` / `RenderUserCardString`
-- `user.profile.hbs` → `RenderUserProfile` / `RenderUserProfileString`
-
-Rules:
-
-- The `.hbs` extension is removed.
-- Path separators and non-alphanumeric characters are treated as word boundaries.
-- Words are title-cased and concatenated (`blog/post` → `BlogPost`).
-- If two templates produce the same identifier, compilation fails with a clear error.
-
-### Partial lookup names
-
-Partials are keyed by their template name (path without `.hbs`), for example:
-
-- `partials["header"]` for `header.hbs`.
-- `partials["blog/post"]` for `blog/post.hbs`.
-
-When you write `{{> blog/post}}` inside a template, the compiler resolves it to the matching entry in `partials`.
+(How template file names map to Go function names and what the generated file contains: see [Compiled template file](compiled-templates.md).)
 
 ## 5. Run the program
 

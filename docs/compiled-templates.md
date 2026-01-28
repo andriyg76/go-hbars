@@ -1,0 +1,74 @@
+# Compiled template file (implementation details)
+
+This document describes the **generated Go file** produced by `hbc` from `.hbs` templates: how template file names map to Go symbols, and what the compiler emits.
+
+## Template name → Go identifier
+
+The compiler uses the **template name** = file name without `.hbs` (e.g. `main.hbs` → `main`, `blog/post.hbs` → `blog/post`). From that name it derives a **Go identifier** used in function names:
+
+1. Split the name by any character that is **not** a letter or digit (`/`, `_`, `-`, space, etc.).
+2. Capitalize the first letter of each part.
+3. Concatenate the parts.
+4. If the result is empty or starts with a digit, prefix `"Template"`.
+
+| Template file   | Template name   | Go identifier |
+|----------------|-----------------|----------------|
+| `main.hbs`     | `main`          | `Main`         |
+| `header.hbs`   | `header`        | `Header`       |
+| `blog/post.hbs`| `blog/post`     | `BlogPost`     |
+| `compat_footer.hbs` | `compat_footer` | `CompatFooter` |
+| `404.hbs`      | `404`           | `Template404`  |
+| `userCard.hbs` | `userCard`      | `UserCard`     |
+
+Two different template names that map to the same Go identifier (e.g. `blog-post` and `blog_post` → `BlogPost`) cause a compile-time error: the compiler reports the conflict.
+
+## Generated API per template
+
+For each template name, the generated package exposes:
+
+| Go symbol | Signature | Description |
+|-----------|------------|--------------|
+| `renderXxx` | `func(ctx *runtime.Context, w io.Writer) error` | Internal: used by partials and by `RenderXxx`. Not intended for direct use. |
+| `RenderXxx` | `func(w io.Writer, data any) error` | Renders the template with `data` into `w`. |
+| `RenderXxxString` | `func(data any) (string, error)` | Renders the template with `data` and returns the result as a string. |
+
+Example for `main.hbs` (Go name `Main`):
+
+```go
+func renderMain(ctx *runtime.Context, w io.Writer) error { ... }
+func RenderMain(w io.Writer, data any) error { ... }
+func RenderMainString(data any) (string, error) { ... }
+```
+
+## Structure of the generated file
+
+1. **Package and imports**  
+   Generated package name (from `-pkg`), imports for `io`, `strings`, `runtime`, and any helper packages.
+
+2. **Context interfaces** (optional)  
+   Type-safe accessors for template context paths (inferred from template expressions). Used by the runtime; names are derived from the template Go identifier and path (e.g. `MainContextUser`, `MainContextItems`).
+
+3. **Partials map**  
+   ```go
+   var partials map[string]func(*runtime.Context, io.Writer) error
+   func init() {
+       partials = map[string]func(*runtime.Context, io.Writer) error{
+           "main":   renderMain,
+           "header": renderHeader,
+           ...
+       }
+   }
+   ```  
+   Keys are template names (as in file names without `.hbs`). Used internally when a template contains `{{> partialName }}`.
+
+4. **Functions**  
+   For each template: `renderXxx`, `RenderXxx`, `RenderXxxString` as above.
+
+5. **Bootstrap block** (only with `-bootstrap`)  
+   See [Bootstrap-generated code](bootstrap-generated.md).
+
+## Summary
+
+- **Template name** = file name without `.hbs`.
+- **Go name** = split by non-alphanumeric, capitalize each part, join; if empty or leading digit, prefix `Template`.
+- **Public API**: `RenderXxx(w, data)` and `RenderXxxString(data)`; internal `renderXxx` and `partials` are for compiler/runtime use.

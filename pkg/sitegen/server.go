@@ -7,6 +7,7 @@ import (
 
 	"github.com/andriyg76/go-hbars/internal/processor"
 	"github.com/andriyg76/go-hbars/internal/server"
+	"github.com/andriyg76/go-hbars/pkg/renderer"
 	"github.com/andriyg76/hexerr"
 )
 
@@ -20,7 +21,7 @@ type Server struct {
 }
 
 // NewServer creates a new server with the given configuration and renderer.
-func NewServer(config *Config, renderer processor.TemplateRenderer) (*Server, error) {
+func NewServer(config *Config, r renderer.TemplateRenderer) (*Server, error) {
 	if config == nil {
 		config = DefaultConfig()
 	}
@@ -39,7 +40,6 @@ func NewServer(config *Config, renderer processor.TemplateRenderer) (*Server, er
 		RootPath:      root,
 		DataPath:      config.DataPath,
 		SharedPath:    config.SharedPath,
-		TemplatesPath: config.TemplatesPath,
 		OutputPath:    "", // Not used for server
 	}
 
@@ -51,7 +51,7 @@ func NewServer(config *Config, renderer processor.TemplateRenderer) (*Server, er
 	}
 
 	// Create processor
-	proc := processor.NewProcessor(procConfig, renderer)
+	proc := processor.NewProcessor(procConfig, r)
 
 	// Create handler
 	staticDir := ""

@@ -9,6 +9,7 @@ import (
 	"github.com/andriyg76/glog"
 	"github.com/andriyg76/go-hbars/internal/processor"
 	"github.com/andriyg76/go-hbars/internal/server"
+	"github.com/andriyg76/go-hbars/pkg/renderer"
 	"github.com/andriyg76/hexerr"
 )
 
@@ -42,11 +43,10 @@ func main() {
 
 	// Create configuration
 	config := &processor.Config{
-		RootPath:      root,
-		DataPath:      *dataPath,
-		SharedPath:    *sharedPath,
-		TemplatesPath: *templatesPath,
-		OutputPath:    "", // Not used for server
+		RootPath:   root,
+		DataPath:   *dataPath,
+		SharedPath: *sharedPath,
+		OutputPath: "", // Not used for server
 	}
 
 	// Load shared data
@@ -85,7 +85,7 @@ func main() {
 
 // createRenderer creates a template renderer.
 // This is a placeholder - in a real implementation, you would load the compiled template package.
-func createRenderer(templatePkg string) (processor.TemplateRenderer, error) {
+func createRenderer(templatePkg string) (renderer.TemplateRenderer, error) {
 	// For now, return an error indicating that templates need to be loaded
 	// In a real implementation, you would use reflection or a registry to load
 	// the compiled template package

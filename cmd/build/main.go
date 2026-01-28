@@ -7,6 +7,7 @@ import (
 
 	"github.com/andriyg76/glog"
 	"github.com/andriyg76/go-hbars/internal/processor"
+	"github.com/andriyg76/go-hbars/pkg/renderer"
 	"github.com/andriyg76/hexerr"
 )
 
@@ -19,7 +20,6 @@ func main() {
 		rootPath      = flag.String("root", "", "base directory for resolving relative paths (default: current working directory)")
 		dataPath      = flag.String("data-path", "data", "path to data files directory")
 		sharedPath    = flag.String("shared-path", "shared", "path to shared data directory")
-		templatesPath = flag.String("templates-path", ".processor/templates", "path to templates directory")
 		outputPath    = flag.String("output-path", "pages", "path to output directory")
 		templatePkg   = flag.String("template-pkg", "", "path to compiled template package")
 	)
@@ -37,11 +37,10 @@ func main() {
 
 	// Create configuration
 	config := &processor.Config{
-		RootPath:      root,
-		DataPath:      *dataPath,
-		SharedPath:    *sharedPath,
-		TemplatesPath: *templatesPath,
-		OutputPath:    *outputPath,
+		RootPath:   root,
+		DataPath:   *dataPath,
+		SharedPath: *sharedPath,
+		OutputPath: *outputPath,
 	}
 
 	// Create renderer
@@ -66,7 +65,7 @@ func main() {
 
 // createRenderer creates a template renderer.
 // This is a placeholder - in a real implementation, you would load the compiled template package.
-func createRenderer(templatePkg string) (processor.TemplateRenderer, error) {
+func createRenderer(templatePkg string) (renderer.TemplateRenderer, error) {
 	// For now, return an error indicating that templates need to be loaded
 	return nil, hexerr.New("template renderer not implemented - you need to load compiled templates")
 }

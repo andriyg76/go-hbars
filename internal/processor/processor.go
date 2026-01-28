@@ -1,49 +1,42 @@
 package processor
 
 import (
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/andriyg76/go-hbars/pkg/renderer"
 	"github.com/andriyg76/hexerr"
 )
 
-// TemplateRenderer is an interface for rendering compiled templates.
-type TemplateRenderer interface {
-	Render(templateName string, w io.Writer, data any) error
-}
-
 // Config holds processor configuration.
 type Config struct {
-	RootPath      string
-	DataPath      string
-	SharedPath    string
-	TemplatesPath string
-	OutputPath    string
+	RootPath   string
+	DataPath   string
+	SharedPath string
+	OutputPath string
 }
 
 // DefaultConfig returns a default configuration.
 func DefaultConfig() *Config {
 	return &Config{
-		DataPath:      "data",
-		SharedPath:    "shared",
-		TemplatesPath: ".processor/templates",
-		OutputPath:    "pages",
+		DataPath:   "data",
+		SharedPath: "shared",
+		OutputPath: "pages",
 	}
 }
 
 // Processor processes data files and renders them using templates.
 type Processor struct {
 	config   *Config
-	renderer TemplateRenderer
+	renderer renderer.TemplateRenderer
 }
 
 // NewProcessor creates a new processor with the given configuration and renderer.
-func NewProcessor(config *Config, renderer TemplateRenderer) *Processor {
+func NewProcessor(config *Config, r renderer.TemplateRenderer) *Processor {
 	return &Processor{
 		config:   config,
-		renderer: renderer,
+		renderer: r,
 	}
 }
 
