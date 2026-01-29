@@ -2,6 +2,8 @@
 
 Step-by-step guide to add Handlebars templates to a Go project using go-hbars from GitHub and `go:generate` with the compiler (hbc). No local `replace` — dependency is resolved from GitHub.
 
+**Alternative:** use the [init](init.md) command to create a new project or add templates to an existing module: `go run github.com/andriyg76/go-hbars/cmd/init@latest new myapp` or `init add`.
+
 ## 1. Create a new project
 
 ```bash
@@ -99,3 +101,19 @@ go run .
 | 5 | Run with `go run .` |
 
 No `replace` in `go.mod` is required; the dependency is taken from GitHub. To pin a version, use a specific tag instead of `@latest` in the `go:generate` line (e.g. `@v0.1.0` when available).
+
+## Working with a local checkout
+
+When developing go-hbars itself or testing changes before a release:
+
+1. Clone the repo locally, e.g. `~/src/go-hbars`.
+2. In your application’s `go.mod` add a `replace` so the module points at the local copy:
+
+   ```go
+   replace github.com/andriyg76/go-hbars => /home/you/src/go-hbars
+   ```
+
+3. Keep the same `//go:generate` line (with or without `@latest`). When you run `go generate ./...`, `go run` will use the replaced module and thus your local hbc.
+4. From the go-hbars repo you can also run the compiler directly: `go run ./cmd/hbc -in /path/to/templates -out /path/to/templates_gen.go -pkg templates` (from the repo root).
+
+Generated files include a `// Generator version: ...` comment when the compiler was built with version info (e.g. from the hbc CLI).

@@ -40,6 +40,7 @@ out, err := templates.RenderMainString(data)
 
 ## Documentation
 
+- **[init: create or add to a project](docs/init.md)** - Scaffold a new go-hbars project or add templates to an existing module
 - **[Template Syntax](docs/syntax.md)** - Complete Handlebars syntax reference
 - **[Custom Extensions](docs/extensions.md)** - includeZero
 - **[Built-in Helpers](docs/helpers.md)** - Available helpers and how to use them

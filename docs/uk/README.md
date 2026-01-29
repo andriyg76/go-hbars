@@ -2,6 +2,7 @@
 
 ## Інтеграція
 
+- [init: створити проєкт або додати до нього](init.md) — scaffold нового проєкту або додати шаблони до існуючого модуля
 - [Як інтегрувати API](howto-integrate-api.md) — шаблони + go:generate
 - [Як інтегрувати bootstrap](howto-integrate-bootstrap.md) — QuickServer + QuickProcessor
 

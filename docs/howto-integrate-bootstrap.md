@@ -2,6 +2,8 @@
 
 Step-by-step guide to add Handlebars templates with **bootstrap** code: `-bootstrap` generates `NewQuickServer()` and `NewQuickProcessor()` so you can run a semi-static HTTP server or generate static HTML from data files. Uses go-hbars from GitHub (no local `replace` in production).
 
+**Alternative:** use the [init](init.md) command: `go run github.com/andriyg76/go-hbars/cmd/init@latest new myapp -bootstrap` or `init add -bootstrap` in an existing module.
+
 ## 1. Create a new project
 
 ```bash
@@ -119,5 +121,16 @@ Create a `shared/` directory. JSON/YAML/TOML files there are loaded and merged i
 | 6 | Set Config().DataPath, OutputPath/Addr to match your layout |
 
 Bootstrap uses only public packages (`pkg/renderer`, `pkg/sitegen`), so your project can depend on go-hbars from GitHub without a local `replace`.
+
+### Working with a local checkout
+
+When developing go-hbars or testing unreleased changes:
+
+1. Clone the repo locally (e.g. `~/src/go-hbars`).
+2. In your app’s `go.mod` add: `replace github.com/andriyg76/go-hbars => /path/to/go-hbars`
+3. Keep the same `//go:generate` line; `go generate ./...` will use the local hbc via the replace.
+4. Or from the go-hbars repo: `go run ./cmd/hbc -in . -out ./templates_gen.go -pkg templates -bootstrap` (run from the template directory or pass correct `-in`).
+
+Generated code includes a `// Generator version: ...` comment when the compiler supplies version info.
 
 (What bootstrap generates and the developer-facing interface: see [Bootstrap-generated code](bootstrap-generated.md).)

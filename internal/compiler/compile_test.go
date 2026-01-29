@@ -24,6 +24,19 @@ func TestCompileTemplates_GeneratesFunctions(t *testing.T) {
 	}
 }
 
+func TestCompileTemplates_GeneratorVersion(t *testing.T) {
+	code, err := CompileTemplates(map[string]string{
+		"main": "Hi",
+	}, Options{PackageName: "templates", GeneratorVersion: "v0.1.0"})
+	if err != nil {
+		t.Fatalf("CompileTemplates error: %v", err)
+	}
+	src := string(code)
+	if !strings.Contains(src, "// Generator version: v0.1.0") {
+		t.Fatalf("expected Generator version comment in generated code, got:\n%s", src)
+	}
+}
+
 func TestCompileTemplates_HelperDirectCall(t *testing.T) {
 	code, err := CompileTemplates(map[string]string{
 		"main": "{{upper name}}",
