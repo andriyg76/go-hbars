@@ -13,10 +13,8 @@ import (
 	"github.com/andriyg76/hexerr"
 )
 
-type e struct{}
-
 func main() {
-	hexerr.SetFilterPrefixes(e{})
+	hexerr.SetFilterPrefixes("github.com/andriyg76/go-hbars")
 
 	log := glog.Create(glog.INFO)
 
