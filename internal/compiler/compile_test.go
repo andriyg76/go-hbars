@@ -211,6 +211,30 @@ func TestCompileTemplates_UnknownBlock(t *testing.T) {
 	}
 }
 
+func TestCompileTemplates_LayoutBlocks(t *testing.T) {
+	// Layout block/partial: {{#block "name"}}default{{/block}} and {{#partial "name"}}content{{/partial}}
+	code, err := CompileTemplates(map[string]string{
+		"layout": `<div>{{#block "content"}}default content{{/block}}</div>`,
+		"page":   `{{#partial "content"}}<p>page body</p>{{/partial}}{{> layout}}`,
+	}, Options{PackageName: "templates"})
+	if err != nil {
+		t.Fatalf("CompileTemplates error: %v", err)
+	}
+	src := string(code)
+	if !strings.Contains(src, "*runtime.Blocks") {
+		t.Fatalf("expected *runtime.Blocks in generated code when using block/partial")
+	}
+	if !strings.Contains(src, "RenderPageWithBlocks") {
+		t.Fatalf("expected RenderPageWithBlocks in generated code")
+	}
+	if !strings.Contains(src, "blocks.Get(") {
+		t.Fatalf("expected blocks.Get in generated code for {{#block}}")
+	}
+	if !strings.Contains(src, "blocks.Set(") {
+		t.Fatalf("expected blocks.Set in generated code for {{#partial}}")
+	}
+}
+
 func TestCompileTemplates_UniversalSection(t *testing.T) {
 	// {{#date}}...{{/date}} and {{#foo}}...{{/foo}} with no helper => compiled as section (with-like)
 	code, err := CompileTemplates(map[string]string{

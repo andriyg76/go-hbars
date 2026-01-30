@@ -273,7 +273,7 @@ func CompileTemplates(templates map[string]string, opts Options) ([]byte, error)
 	// Generate bootstrap code if requested
 	bootstrap := &codeWriter{}
 	if opts.GenerateBootstrap {
-		generateBootstrapCode(bootstrap, names, funcNames, partialParamTypes)
+		generateBootstrapCode(bootstrap, names, funcNames, partialParamTypes, useLayoutBlocks)
 	}
 
 	var out strings.Builder
@@ -1413,7 +1413,7 @@ func (g *generator) emitPathValue(path string) string {
 }
 
 func (g *generator) writeValue(fn string, expr string) {
-	g.w.line("if err := %s(w, %s); err != nil {", fn, expr)
+	g.w.line("if err := %s(%s, %s); err != nil {", fn, g.currentWriter(), expr)
 	g.w.indentInc()
 	g.w.line("return err")
 	g.w.indentDec()

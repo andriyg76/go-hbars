@@ -4,7 +4,8 @@ package compiler
 // It writes rendererFuncs, NewRenderer, NewQuickProcessor, and NewQuickServer.
 // partialParamTypes: when a partial uses another template's context (e.g. footer uses MainContext),
 // the bootstrap uses that context type and its FromMap for the wrapper.
-func generateBootstrapCode(w *codeWriter, templateNames []string, funcNames map[string]string, partialParamTypes map[string]string) {
+// useLayoutBlocks: when true, templates use {{#block}}/{{#partial}} layout and rendererFuncs call RenderXxxWithBlocks with runtime.NewBlocks().
+func generateBootstrapCode(w *codeWriter, templateNames []string, funcNames map[string]string, partialParamTypes map[string]string, useLayoutBlocks bool) {
 	// Generate renderer map with wrappers that accept any and convert to context type
 	w.line("")
 	w.line("// rendererFuncs maps template names to render functions.")
@@ -19,8 +20,14 @@ func generateBootstrapCode(w *codeWriter, templateNames []string, funcNames map[
 		fromMap := rootContext + "FromMap"
 		w.line("%q: func(w io.Writer, data any) error {", name)
 		w.indentInc()
-		w.line("if c, ok := data.(%s); ok { return Render%s(w, c) }", rootContext, goName)
-		w.line("if m, ok := data.(map[string]any); ok { return Render%s(w, %s(m)) }", goName, fromMap)
+		if useLayoutBlocks {
+			w.line("blocks := runtime.NewBlocks()")
+			w.line("if c, ok := data.(%s); ok { return Render%sWithBlocks(w, c, blocks) }", rootContext, goName)
+			w.line("if m, ok := data.(map[string]any); ok { return Render%sWithBlocks(w, %s(m), blocks) }", goName, fromMap)
+		} else {
+			w.line("if c, ok := data.(%s); ok { return Render%s(w, c) }", rootContext, goName)
+			w.line("if m, ok := data.(map[string]any); ok { return Render%s(w, %s(m)) }", goName, fromMap)
+		}
 		w.line("return fmt.Errorf(%q, data)", name+": expected "+rootContext+" or map[string]any, got %T")
 		w.indentDec()
 		w.line("},")
