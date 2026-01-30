@@ -30,16 +30,16 @@ For each template name, the generated package exposes:
 
 | Go symbol | Signature | Description |
 |-----------|------------|--------------|
-| `renderXxx` | `func(ctx *runtime.Context, w io.Writer) error` | Internal: used by partials and by `RenderXxx`. Not intended for direct use. |
-| `RenderXxx` | `func(w io.Writer, data any) error` | Renders the template with `data` into `w`. |
-| `RenderXxxString` | `func(data any) (string, error)` | Renders the template with `data` and returns the result as a string. |
+| `renderXxx` | `func(data XxxContext, w io.Writer) error` | Internal: used by partials and by `RenderXxx`. Not intended for direct use. |
+| `RenderXxx` | `func(w io.Writer, data XxxContext) error` | Renders the template with `data` into `w`. |
+| `RenderXxxString` | `func(data XxxContext) (string, error)` | Renders the template with `data` and returns the result as a string. |
 
 Example for `main.hbs` (Go name `Main`):
 
 ```go
-func renderMain(ctx *runtime.Context, w io.Writer) error { ... }
-func RenderMain(w io.Writer, data any) error { ... }
-func RenderMainString(data any) (string, error) { ... }
+func renderMain(data MainContext, w io.Writer) error { ... }
+func RenderMain(w io.Writer, data MainContext) error { ... }
+func RenderMainString(data MainContext) (string, error) { ... }
 ```
 
 ## Structure of the generated file
@@ -47,16 +47,16 @@ func RenderMainString(data any) (string, error) { ... }
 1. **Package and imports**  
    Generated package name (from `-pkg`), imports for `io`, `strings`, `runtime`, and any helper packages.
 
-2. **Context interfaces** (optional)  
-   Type-safe accessors for template context paths (inferred from template expressions). Used by the runtime; names are derived from the template Go identifier and path (e.g. `MainContextUser`, `MainContextItems`).
+2. **Context interfaces and types**  
+   Type-safe accessors for template context paths (inferred from template expressions). The compiler emits interface types (e.g. `MainContext`, `MainContextUser`) and optional `XxxContextFromMap` constructors. Names are derived from the template Go identifier and path (e.g. `MainContextUser`, `MainContextItems`).
 
 3. **Partials map**  
    ```go
-   var partials map[string]func(*runtime.Context, io.Writer) error
+   var partials map[string]func(any, io.Writer) error
    func init() {
-       partials = map[string]func(*runtime.Context, io.Writer) error{
-           "main":   renderMain,
-           "header": renderHeader,
+       partials = map[string]func(any, io.Writer) error{
+           "main":   func(ctx any, w io.Writer) error { return renderMain(ctx.(MainContext), w) },
+           "header": func(ctx any, w io.Writer) error { return renderHeader(ctx.(HeaderContext), w) },
            ...
        }
    }
@@ -73,4 +73,4 @@ func RenderMainString(data any) (string, error) { ... }
 
 - **Template name** = file name without `.hbs`.
 - **Go name** = split by non-alphanumeric, capitalize each part, join; if empty or leading digit, prefix `Template`.
-- **Public API**: `RenderXxx(w, data)` and `RenderXxxString(data)`; internal `renderXxx` and `partials` are for compiler/runtime use.
+- **Public API**: `RenderXxx(w, data)` and `RenderXxxString(data)` with typed context (e.g. `MainContext`); internal `renderXxx` and `partials` are for compiler/runtime use.

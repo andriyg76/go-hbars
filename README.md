@@ -77,6 +77,8 @@ go install github.com/andriyg76/go-hbars/cmd/hbc@latest
 
 ### Use Compiled Templates
 
+Data must satisfy the generated context type (e.g. `MainContext`); use a struct or `map[string]any`, or the generated `XxxContextFromMap` if available.
+
 ```go
 import "github.com/your/project/templates"
 

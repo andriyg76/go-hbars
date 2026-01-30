@@ -30,16 +30,16 @@
 
 | Go-символ     | Сигнатура | Опис |
 |---------------|-----------|------|
-| `renderXxx`  | `func(ctx *runtime.Context, w io.Writer) error` | Внутрішня: використовується партіалами та `RenderXxx`. Не призначена для прямого виклику. |
-| `RenderXxx`   | `func(w io.Writer, data any) error` | Рендерить шаблон з `data` у `w`. |
-| `RenderXxxString` | `func(data any) (string, error)` | Рендерить шаблон з `data` і повертає результат як рядок. |
+| `renderXxx`  | `func(data XxxContext, w io.Writer) error` | Внутрішня: використовується партіалами та `RenderXxx`. Не призначена для прямого виклику. |
+| `RenderXxx`   | `func(w io.Writer, data XxxContext) error` | Рендерить шаблон з `data` у `w`. |
+| `RenderXxxString` | `func(data XxxContext) (string, error)` | Рендерить шаблон з `data` і повертає результат як рядок. |
 
 Приклад для `main.hbs` (Go-ім'я `Main`):
 
 ```go
-func renderMain(ctx *runtime.Context, w io.Writer) error { ... }
-func RenderMain(w io.Writer, data any) error { ... }
-func RenderMainString(data any) (string, error) { ... }
+func renderMain(data MainContext, w io.Writer) error { ... }
+func RenderMain(w io.Writer, data MainContext) error { ... }
+func RenderMainString(data MainContext) (string, error) { ... }
 ```
 
 ## Структура згенерованого файлу
@@ -47,16 +47,16 @@ func RenderMainString(data any) (string, error) { ... }
 1. **Пакет та імпорти**  
    Ім'я пакету (з `-pkg`), імпорти для `io`, `strings`, `runtime` та пакетів хелперів.
 
-2. **Контекстні інтерфейси** (опційно)  
-   Типобезпечні аксесори для шляхів контексту шаблону (виводяться з виразів у шаблоні). Використовуються рантаймом; імена похідні від Go-ідентифікатора шаблону та шляху (наприклад `MainContextUser`, `MainContextItems`).
+2. **Контекстні інтерфейси та типи**  
+   Типобезпечні аксесори для шляхів контексту шаблону (виводяться з виразів у шаблоні). Компілятор випромінює інтерфейсні типи (наприклад `MainContext`, `MainContextUser`) та опційні конструктори `XxxContextFromMap`. Імена похідні від Go-ідентифікатора шаблону та шляху (наприклад `MainContextUser`, `MainContextItems`).
 
 3. **Мапа partials**  
    ```go
-   var partials map[string]func(*runtime.Context, io.Writer) error
+   var partials map[string]func(any, io.Writer) error
    func init() {
-       partials = map[string]func(*runtime.Context, io.Writer) error{
-           "main":   renderMain,
-           "header": renderHeader,
+       partials = map[string]func(any, io.Writer) error{
+           "main":   func(ctx any, w io.Writer) error { return renderMain(ctx.(MainContext), w) },
+           "header": func(ctx any, w io.Writer) error { return renderHeader(ctx.(HeaderContext), w) },
            ...
        }
    }
@@ -73,4 +73,4 @@ func RenderMainString(data any) (string, error) { ... }
 
 - **Ім'я шаблону** = ім'я файлу без `.hbs`.
 - **Go-ім'я** = розбити по не-буквоцифровим, з великої літери кожну частину, склеїти; якщо порожньо або починається з цифри — префікс `Template`.
-- **Публічний API**: `RenderXxx(w, data)` та `RenderXxxString(data)`; внутрішні `renderXxx` та `partials` — для компілятора/рантайму.
+- **Публічний API**: `RenderXxx(w, data)` та `RenderXxxString(data)` з типізованим контекстом (наприклад `MainContext`); внутрішні `renderXxx` та `partials` — для компілятора/рантайму.

@@ -30,7 +30,7 @@ go-hbars включає набір хелперів, узгоджений із H
 ```go
 //go:generate hbc -in ./templates -out ./templates_gen.go -pkg templates -helper upper=Upper
 
-func Upper(ctx *runtime.Context, args []any) (any, error) {
+func Upper(args []any) (any, error) {
 	if len(args) == 0 {
 		return "", nil
 	}

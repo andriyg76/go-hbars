@@ -4,12 +4,12 @@
 
 ## Базове використання
 
-Після компіляції шаблонів через `hbc` ви отримуєте згенеровані функції для кожного шаблону:
+Після компіляції шаблонів через `hbc` ви отримуєте згенеровані функції для кожного шаблону. Компілятор випромінює **типізовані контексти** (наприклад `MainContext`), виведені з виразів у шаблоні:
 
 ```go
 import "github.com/your/project/templates"
 
-// Рендер у writer
+// Рендер у writer (data має задовольняти тип контексту шаблону, напр. MainContext)
 var b strings.Builder
 if err := templates.RenderMain(&b, data); err != nil {
     // обробити помилку
@@ -24,36 +24,15 @@ out, err := templates.RenderMainString(data)
 
 Для кожного файлу шаблону (наприклад `main.hbs`) компілятор генерує:
 
-1. **Внутрішня функція рендеру**: `renderMain(ctx *runtime.Context, w io.Writer) error`
-2. **Публічна функція рендеру**: `RenderMain(w io.Writer, data any) error`
-3. **Обгортка для рядка**: `RenderMainString(data any) (string, error)`
+1. **Внутрішня функція рендеру**: `renderMain(data MainContext, w io.Writer) error`
+2. **Публічна функція рендеру**: `RenderMain(w io.Writer, data MainContext) error`
+3. **Обгортка для рядка**: `RenderMainString(data MainContext) (string, error)`
+
+Тип контексту (наприклад `MainContext`) — це інтерфейс, виведений зі шляхів, що використовуються в шаблоні; можна передати структуру або `map[string]any` з потрібними полями.
 
 ## Пакет runtime
 
-Пакет `runtime` надає базову функціональність виконання шаблонів.
-
-### Контекст
-
-```go
-// NewContext створює новий контекст рендеру
-ctx := runtime.NewContext(data)
-
-// WithData створює дочірній контекст з новими даними
-childCtx := ctx.WithData(newData)
-
-// WithScope створює дочірній контекст з новими даними та опційними locals/data vars
-childCtx := ctx.WithScope(data, locals, dataVars)
-```
-
-### Розв’язання шляхів
-
-```go
-// ResolvePath шукає точковий шлях у поточному контексті
-value, ok := runtime.ResolvePath(ctx, "user.name")
-
-// ResolvePathParsed розв’язує попередньо розпарсений вираз шляху
-value, ok := runtime.ResolvePathParsed(ctx, parsedPath)
-```
+Пакет `runtime` надає типи та утиліти для згенерованого коду та власних хелперів.
 
 ### Вивід
 
@@ -71,15 +50,10 @@ str := runtime.Stringify(value)
 ### Аргументи хелперів
 
 ```go
-// EvalArg обчислює вираз аргументу
-value := runtime.EvalArg(ctx, runtime.ArgPath, "user.name")
-value := runtime.EvalArg(ctx, runtime.ArgString, "literal")
-value := runtime.EvalArg(ctx, runtime.ArgNumber, "42")
-
 // HashArg витягує hash-аргументи з аргументів хелпера
 hash, ok := runtime.HashArg(args)
 
-// GetBlockOptions витягує опції блоку з аргументів хелпера
+// GetBlockOptions витягує опції блоку з аргументів хелпера (для блокових хелперів)
 opts, ok := runtime.GetBlockOptions(args)
 ```
 
@@ -101,17 +75,19 @@ safe := runtime.SafeString("<b>bold</b>")
 
 ## Функції-хелпери
 
-Хелпери повинні мати таку сигнатуру:
+Прості хелпери (не блокові) повинні мати таку сигнатуру:
 
 ```go
-func MyHelper(ctx *runtime.Context, args []any) (any, error)
+func MyHelper(args []any) (any, error)
 ```
+
+Аргументи **обчислюються компілятором** перед передачею; ви отримуєте вже обчислені значення. Контекст не передається — компілятор підставляє потрібні звертання.
 
 ### Доступ до аргументів
 
 ```go
-func MyHelper(ctx *runtime.Context, args []any) (any, error) {
-    // Позиційні аргументи
+func MyHelper(args []any) (any, error) {
+    // Позиційні аргументи (вже обчислені)
     if len(args) == 0 {
         return nil, fmt.Errorf("missing argument")
     }
@@ -129,56 +105,61 @@ func MyHelper(ctx *runtime.Context, args []any) (any, error) {
 
 ### Блокові хелпери
 
+Блокові хелпери викликаються компілятором з одним аргументом: повним зрізом `args`, останнім елементом якого є опції блоку. Використовуйте сигнатуру `func(args []any) error` та витягуйте опції через `runtime.GetBlockOptions(args)`:
+
 ```go
-func MyBlockHelper(ctx *runtime.Context, args []any) (any, error) {
+func MyBlockHelper(args []any) error {
     opts, ok := runtime.GetBlockOptions(args)
     if !ok {
-        // Не використовується як блок
-        return "default", nil
+        return fmt.Errorf("block helper did not receive BlockOptions")
     }
-    
-    // Рендер основного блоку
+    // Рендер основного блоку (opts.Fn(w) потребує w з контексту виклику)
     if opts.Fn != nil {
-        var b strings.Builder
-        if err := opts.Fn(ctx, &b); err != nil {
-            return nil, err
+        if err := opts.Fn(w); err != nil {
+            return err
         }
-        return b.String(), nil
     }
-    
     // Рендер блоку inverse/else
     if opts.Inverse != nil {
-        var b strings.Builder
-        if err := opts.Inverse(ctx, &b); err != nil {
-            return nil, err
+        if err := opts.Inverse(w); err != nil {
+            return err
         }
-        return b.String(), nil
     }
-    
-    return "", nil
+    return nil
 }
 ```
+
+`BlockOptions` містить:
+
+```go
+type BlockOptions struct {
+    Fn      func(io.Writer) error  // тіло основного блоку
+    Inverse func(io.Writer) error   // тіло блоку else
+}
+```
+
+У runtime також визначено `BlockHelper` як `func(args []any, options BlockOptions) error` для ручного виклику блокового хелпера з двома аргументами. При виклику зі згенерованого коду передається лише `args` (опції — останній елемент).
 
 ## Партіали
 
 Партіали автоматично реєструються в згенерованому коді:
 
 ```go
-// Доступ до мапи partials (внутрішнє)
-partials["header"](ctx, w)
-
-// Партіали використовуються в шаблонах через {{> header}}
+// partials map (внутрішня): ім'я шаблону -> func(data any, w io.Writer) error
+partials["header"](data, w)
 ```
+
+У шаблонах вони використовуються через `{{> header}}` або `{{> (lookup ...) }}`.
 
 ## Типи даних
 
 ### Дані контексту
 
-Дані контексту можуть бути будь-яким Go-типом:
+Дані контексту для шаблону задовольняють згенерований інтерфейс контексту (наприклад `MainContext`). На практиці можна передавати:
+
 - Мапи (`map[string]any`)
 - Структури (з експортованими полями або JSON-тегами)
-- Зрізи/масиви
-- Примітиви (string, int, float, bool тощо)
+- Компілятор також генерує конструктори `XxxContextFromMap` для побудови контексту з `map[string]any`.
 
 ### Hash-аргументи
 
@@ -192,8 +173,8 @@ type Hash map[string]any
 
 ```go
 type BlockOptions struct {
-    Fn      func(*Context, io.Writer) error
-    Inverse func(*Context, io.Writer) error
+    Fn      func(io.Writer) error
+    Inverse func(io.Writer) error
 }
 ```
 
@@ -205,7 +186,7 @@ type BlockOptions struct {
 - Відсутній хелпер (помилка компіляції)
 - Помилки рантайму в хелперах
 - Невірні типи даних
-- Помилки розв’язання шляху
+- Блоковий хелпер не отримав BlockOptions
 
 Завжди перевіряйте помилки:
 
@@ -220,8 +201,7 @@ if err != nil {
 
 - Шаблони компілюються в Go-код, тому виконання швидке
 - Немає парсингу шаблонів під час виконання
-- Створення контексту легке
-- Розв’язання шляхів використовує пошук рядків у рантаймі (`ResolvePath` / `ResolvePathValue`)
+- Типи контексту визначаються під час компіляції; хелпери отримують уже обчислені аргументи
 
 ## Приклади
 
@@ -234,14 +214,15 @@ data := map[string]any{
         "name": "Alice",
     },
 }
-
-out, err := templates.RenderMainString(data)
+// Якщо шаблон використовує ці шляхи, згенерований MainContext дозволить мапу або структуру.
+// Використовуйте MainContextFromMap(data), якщо компілятор його згенерував, або передайте структуру.
+out, err := templates.RenderMainString(templates.MainContextFromMap(data))
 ```
 
 ### Власний хелпер
 
 ```go
-func FormatCurrency(ctx *runtime.Context, args []any) (any, error) {
+func FormatCurrency(args []any) (any, error) {
     if len(args) == 0 {
         return "", nil
     }
@@ -263,31 +244,24 @@ func FormatCurrency(ctx *runtime.Context, args []any) (any, error) {
 ### Блоковий хелпер
 
 ```go
-func IfHelper(ctx *runtime.Context, args []any) (any, error) {
+func IfHelper(args []any) error {
     opts, ok := runtime.GetBlockOptions(args)
     if !ok {
-        return nil, fmt.Errorf("if must be used as block")
+        return fmt.Errorf("if: no block options")
     }
-    
+    if len(args) < 1 {
+        return fmt.Errorf("if requires a condition")
+    }
     condition := args[0]
     if runtime.IsTruthy(condition) {
         if opts.Fn != nil {
-            var b strings.Builder
-            if err := opts.Fn(ctx, &b); err != nil {
-                return nil, err
-            }
-            return b.String(), nil
+            return opts.Fn(w) // w — writer виводу шаблону (у контексті згенерованого коду)
         }
-    } else {
-        if opts.Inverse != nil {
-            var b strings.Builder
-            if err := opts.Inverse(ctx, &b); err != nil {
-                return nil, err
-            }
-            return b.String(), nil
-        }
+    } else if opts.Inverse != nil {
+        return opts.Inverse(w)
     }
-    
-    return "", nil
+    return nil
 }
 ```
+
+Примітка: вбудовані `if`/`unless`/`each`/`with` реалізовані компілятором; приклад вище ілюструє рантайм API для власних блокових хелперів. Коли компілятор викликає блоковий хелпер, він викликає `helper(args)`; writer `w` є у контексті згенерованої функції рендеру. Власні хелпери, що викликаються зі згенерованого коду та мають рендерити блок, повинні отримувати або захоплювати writer (наприклад через адаптер).
