@@ -68,7 +68,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "json: %v\n", err)
 		os.Exit(1)
 	}
-	out, err := templates.RenderMainString(data)
+	out, err := templates.RenderMainString(templates.MainContextFromMap(data))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "render: %v\n", err)
 		os.Exit(1)

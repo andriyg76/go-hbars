@@ -3,14 +3,22 @@ package compiler
 // generateBootstrapCode generates helper functions for quick server/processor setup.
 // It writes rendererFuncs, NewRenderer, NewQuickProcessor, and NewQuickServer.
 func generateBootstrapCode(w *codeWriter, templateNames []string, funcNames map[string]string) {
-	// Generate renderer map
+	// Generate renderer map with wrappers that accept any and convert to context type
 	w.line("")
 	w.line("// rendererFuncs maps template names to render functions.")
 	w.line("var rendererFuncs = map[string]func(io.Writer, any) error{")
 	w.indentInc()
 	for _, name := range templateNames {
 		goName := funcNames[name]
-		w.line("%q: Render%s,", name, goName)
+		rootContext := goName + "Context"
+		fromMap := goName + "ContextFromMap"
+		w.line("%q: func(w io.Writer, data any) error {", name)
+		w.indentInc()
+		w.line("if c, ok := data.(%s); ok { return Render%s(w, c) }", rootContext, goName)
+		w.line("if m, ok := data.(map[string]any); ok { return Render%s(w, %s(m)) }", goName, fromMap)
+		w.line("return fmt.Errorf(%q, data)", name+": expected "+rootContext+" or map[string]any, got %T")
+		w.indentDec()
+		w.line("},")
 	}
 	w.indentDec()
 	w.line("}")

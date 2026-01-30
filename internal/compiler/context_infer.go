@@ -403,6 +403,11 @@ func contextItemInterfaceName(templateIdent, collectionPath string) string {
 	return sb.String()
 }
 
+// contextDataStructName returns the generated struct name for a context interface (e.g. MainContext -> MainContextData).
+func contextDataStructName(ifaceName string) string {
+	return ifaceName + "Data"
+}
+
 func emitContextInterfaces(w *codeWriter, templateName string, tree *typeNode) {
 	goName := goIdent(templateName)
 	rootName := goName + "Context"
@@ -413,6 +418,7 @@ func emitContextInterfaces(w *codeWriter, templateName string, tree *typeNode) {
 	w.line("type %s interface {", rootName)
 	w.indentInc()
 	emitInterfaceMethods(w, templateName, goName, "", tree, seen)
+	w.line("Raw() any")
 	w.indentDec()
 	w.line("}")
 	emitNodeInterfaces(w, templateName, goName, "", tree, seen)
@@ -501,4 +507,166 @@ func emitInterfaceMethods(w *codeWriter, templateName, goIdent, pathPrefix strin
 		}
 		w.line("%s() any", methodName)
 	}
+}
+
+// emitContextDataTypes emits all ...ContextData structs and FromMap for the given template.
+func emitContextDataTypes(w *codeWriter, templateName string, tree *typeNode) {
+	goName := goIdent(templateName)
+	seen := make(map[string]bool)
+	emitNodeContextDataTypes(w, templateName, goName, "", tree, seen)
+	rootName := goName + "Context"
+	rootDataName := contextDataStructName(rootName)
+	emitRootContextDataStruct(w, templateName, goName, tree, rootDataName)
+	emitFromMap(w, goName, rootName, rootDataName)
+}
+
+func emitNodeContextDataTypes(w *codeWriter, templateName, goIdent, pathPrefix string, n *typeNode, seen map[string]bool) {
+	if n == nil {
+		return
+	}
+	// Recurse first so nested/item types are emitted before types that depend on them.
+	if n.fields != nil {
+		var names []string
+		for f := range n.fields {
+			if f == "" || (len(f) > 0 && (f[0] == '@' || f[0] == '.')) {
+				continue
+			}
+			names = append(names, f)
+		}
+		sort.Strings(names)
+		for _, field := range names {
+			child := n.fields[field]
+			subPath := field
+			if pathPrefix != "" {
+				subPath = pathPrefix + "." + field
+			}
+			emitNodeContextDataTypes(w, templateName, goIdent, subPath, child, seen)
+		}
+	}
+	if n.isSlice && n.sliceElem != nil && pathPrefix != "" {
+		emitNodeContextDataTypes(w, templateName, goIdent, pathPrefix+".", n.sliceElem, seen)
+	}
+	// Emit this node's ContextData (skip root; root is emitted by emitRootContextDataStruct).
+	if pathPrefix == "" {
+		return
+	}
+	if n.isSlice && n.sliceElem != nil {
+		elemName := contextItemInterfaceName(goIdent, pathPrefix)
+		dataName := contextDataStructName(elemName)
+		if seen[dataName] {
+			return
+		}
+		seen[dataName] = true
+		emitItemContextDataStruct(w, goIdent, pathPrefix, n.sliceElem, dataName, elemName)
+		return
+	}
+	if n.fields != nil && len(n.fields) > 0 {
+		ifaceName := contextInterfaceName(goIdent, pathPrefix)
+		dataName := contextDataStructName(ifaceName)
+		if seen[dataName] {
+			return
+		}
+		seen[dataName] = true
+		emitObjectContextDataStruct(w, templateName, goIdent, pathPrefix+".", n, dataName, ifaceName)
+	}
+}
+
+func emitObjectContextDataStruct(w *codeWriter, templateName, goIdent, pathPrefix string, n *typeNode, dataName, ifaceName string) {
+	w.line("")
+	w.line("// %s is a map-backed implementation of %s.", dataName, ifaceName)
+	w.line("type %s struct { m map[string]any }", dataName)
+	w.line("")
+	emitContextDataMethods(w, templateName, goIdent, pathPrefix, n, dataName)
+}
+
+func emitItemContextDataStruct(w *codeWriter, goIdent, collectionPath string, n *typeNode, dataName, ifaceName string) {
+	w.line("")
+	w.line("// %s is a map-backed implementation of %s.", dataName, ifaceName)
+	w.line("type %s struct { m map[string]any }", dataName)
+	w.line("")
+	pathPrefix := collectionPath + "."
+	emitContextDataMethods(w, "", goIdent, pathPrefix, n, dataName)
+}
+
+func emitContextDataMethods(w *codeWriter, templateName, goIdent, pathPrefix string, n *typeNode, dataName string) {
+	if n == nil || n.fields == nil {
+		return
+	}
+	var names []string
+	for f := range n.fields {
+		if f == "" || (len(f) > 0 && (f[0] == '@' || f[0] == '.')) {
+			continue
+		}
+		names = append(names, f)
+	}
+	sort.Strings(names)
+	for _, field := range names {
+		child := n.fields[field]
+		methodName := goFieldName(field)
+		if methodName == "" {
+			continue
+		}
+		mapKey := field
+		if child.isSlice && child.sliceElem != nil {
+			elemName := contextItemInterfaceName(goIdent, pathPrefix+field)
+			elemDataName := contextDataStructName(elemName)
+			w.line("func (d %s) %s() []%s {", dataName, methodName, elemName)
+			w.indentInc()
+			w.line("v := d.m[%q]", mapKey)
+			w.line("if v == nil { return nil }")
+			w.line("s, ok := v.([]any)")
+			w.line("if !ok { return nil }")
+			w.line("out := make([]%s, len(s))", elemName)
+			w.line("for i := range s {")
+			w.indentInc()
+			w.line("if m, ok := s[i].(map[string]any); ok {")
+			w.indentInc()
+			w.line("out[i] = %s{m}", elemDataName)
+			w.indentDec()
+			w.line("}")
+			w.indentDec()
+			w.line("}")
+			w.line("return out")
+			w.indentDec()
+			w.line("}")
+			continue
+		}
+		if len(child.fields) > 0 {
+			ifaceName := contextInterfaceName(goIdent, pathPrefix+field)
+			nestedDataName := contextDataStructName(ifaceName)
+			w.line("func (d %s) %s() %s {", dataName, methodName, ifaceName)
+			w.indentInc()
+			w.line("v := d.m[%q]", mapKey)
+			w.line("if v == nil { return nil }")
+			w.line("m, ok := v.(map[string]any)")
+			w.line("if !ok { return nil }")
+			w.line("return %s{m}", nestedDataName)
+			w.indentDec()
+			w.line("}")
+			continue
+		}
+		w.line("func (d %s) %s() any { return d.m[%q] }", dataName, methodName, mapKey)
+	}
+}
+
+func emitRootContextDataStruct(w *codeWriter, templateName, goIdent string, tree *typeNode, rootDataName string) {
+	rootName := goIdent + "Context"
+	w.line("")
+	w.line("// %s is a map-backed implementation of %s.", rootDataName, rootName)
+	w.line("type %s struct { m map[string]any }", rootDataName)
+	w.line("")
+	emitContextDataMethods(w, templateName, goIdent, "", tree, rootDataName)
+	w.line("func (d %s) Raw() any { return d.m }", rootDataName)
+}
+
+func emitFromMap(w *codeWriter, goIdent, rootIfaceName, rootDataName string) {
+	fromMapName := goIdent + "ContextFromMap"
+	w.line("")
+	w.line("// %s returns a %s backed by m. If m is nil, a new empty map is used.", fromMapName, rootIfaceName)
+	w.line("func %s(m map[string]any) %s {", fromMapName, rootIfaceName)
+	w.indentInc()
+	w.line("if m == nil { m = make(map[string]any) }")
+	w.line("return %s{m}", rootDataName)
+	w.indentDec()
+	w.line("}")
 }

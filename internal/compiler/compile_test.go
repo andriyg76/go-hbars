@@ -13,10 +13,10 @@ func TestCompileTemplates_GeneratesFunctions(t *testing.T) {
 		t.Fatalf("CompileTemplates error: %v", err)
 	}
 	src := string(code)
-	if !strings.Contains(src, "func RenderMain(w io.Writer, data any) error") {
+	if !strings.Contains(src, "func RenderMain(w io.Writer, data MainContext) error") {
 		t.Fatalf("missing RenderMain writer signature")
 	}
-	if !strings.Contains(src, "func RenderMainString(data any) (string, error)") {
+	if !strings.Contains(src, "func RenderMainString(data MainContext) (string, error)") {
 		t.Fatalf("missing RenderMainString wrapper")
 	}
 	if !strings.Contains(src, "runtime.WriteEscaped") {
@@ -281,6 +281,15 @@ func TestCompileTemplates_ContextInterfaces(t *testing.T) {
 	}
 	if !strings.Contains(src, "type MainItemsItemContext interface {") {
 		t.Fatalf("expected MainItemsItemContext for each element")
+	}
+	if !strings.Contains(src, "Raw() any") {
+		t.Fatalf("expected Raw() any in root context interface")
+	}
+	if !strings.Contains(src, "type MainContextData struct") {
+		t.Fatalf("expected MainContextData map-backed type")
+	}
+	if !strings.Contains(src, "func MainContextFromMap(m map[string]any) MainContext") {
+		t.Fatalf("expected MainContextFromMap constructor")
 	}
 }
 

@@ -136,7 +136,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "failed to parse data: %v\n", err)
 		os.Exit(1)
 	}
-	output, err := templates.RenderMainString(data)
+	output, err := templates.RenderMainString(templates.MainContextFromMap(data))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to render: %v\n", err)
 		os.Exit(1)
