@@ -150,14 +150,17 @@ opts := compiler.Options{
 Власні хелпери можна реалізувати як звичайні Go-функції та зіставити їх через `-helper name=Ident`. Сигнатура:
 
 ```go
-func MyHelper(ctx *runtime.Context, args []any) (any, error)
+func MyHelper(args []any) (any, error)
 ```
 
-Hash-аргументи передаються останнім елементом у `args`. Використовуйте `runtime.HashArg(args)` для їх отримання:
+Аргументи обчислюються компілятором перед передачею; ви отримуєте вже обчислені значення. Контекст не передається. Hash-аргументи передаються останнім елементом у `args`. Використовуйте `runtime.HashArg(args)` для їх отримання:
 
 ```go
-func FormatCurrency(ctx *runtime.Context, args []any) (any, error) {
-	amount := args[0]
+func FormatCurrency(args []any) (any, error) {
+	if len(args) == 0 {
+		return "", nil
+	}
+	amount := runtime.Stringify(args[0])
 	hash, _ := runtime.HashArg(args)
 	symbol := "$"
 	if hash != nil {
@@ -165,57 +168,48 @@ func FormatCurrency(ctx *runtime.Context, args []any) (any, error) {
 			symbol = s
 		}
 	}
-	return fmt.Sprintf("%s%.2f", symbol, amount), nil
+	return fmt.Sprintf("%s%s", symbol, amount), nil
 }
 ```
 
 ### Блокові хелпери
 
-Будь-який хелпер може використовуватися як блоковий. У блоці хелпер отримує `runtime.BlockOptions` останнім аргументом. Використовуйте `runtime.GetBlockOptions(args)`:
+Блокові хелпери мають сигнатуру `func(args []any) error`. У блоці хелпер отримує `runtime.BlockOptions` останнім елементом `args`. Використовуйте `runtime.GetBlockOptions(args)`. `BlockOptions.Fn` та `BlockOptions.Inverse` мають тип `func(io.Writer) error` (приймають лише writer):
 
 ```go
-func MyBlockHelper(ctx *runtime.Context, args []any) (any, error) {
+func MyBlockHelper(args []any) error {
 	opts, ok := runtime.GetBlockOptions(args)
 	if !ok {
-		// Не використовується як блок
-		return "default", nil
+		return fmt.Errorf("block helper did not receive BlockOptions")
 	}
-	
-	var b strings.Builder
-	if err := opts.Fn(ctx, &b); err != nil {
-		return nil, err
+	if opts.Fn != nil {
+		if err := opts.Fn(w); err != nil {
+			return err
+		}
 	}
-	return b.String(), nil
+	return nil
 }
 ```
 
-Блокові хелпери можуть умовно рендерити основний блок (`opts.Fn`) або блок inverse/else (`opts.Inverse`):
+Блокові хелпери можуть умовно рендерити основний блок (`opts.Fn`) або блок inverse/else (`opts.Inverse`). При виклику зі згенерованого коду передається лише `args`; writer `w` є у контексті згенерованої функції рендеру (див. [API шаблонів](api.md)):
 
 ```go
-func IfHelper(ctx *runtime.Context, args []any) (any, error) {
+func IfHelper(args []any) error {
 	opts, ok := runtime.GetBlockOptions(args)
 	if !ok {
-		return nil, fmt.Errorf("if helper must be used as a block")
+		return fmt.Errorf("if helper must be used as a block")
 	}
-	
+	if len(args) == 0 {
+		return fmt.Errorf("if requires a condition")
+	}
 	condition := args[0]
 	if runtime.IsTruthy(condition) {
 		if opts.Fn != nil {
-			var b strings.Builder
-			if err := opts.Fn(ctx, &b); err != nil {
-				return nil, err
-			}
-			return b.String(), nil
+			return opts.Fn(w)
 		}
-	} else {
-		if opts.Inverse != nil {
-			var b strings.Builder
-			if err := opts.Inverse(ctx, &b); err != nil {
-				return nil, err
-			}
-			return b.String(), nil
-		}
+	} else if opts.Inverse != nil {
+		return opts.Inverse(w)
 	}
-	return "", nil
+	return nil
 }
 ```

@@ -8,11 +8,9 @@ import (
 )
 
 func TestFormatDate(t *testing.T) {
-	ctx := runtime.NewContext(nil)
-	
 	// Test with time.Time
 	now := time.Date(2026, 1, 25, 10, 30, 0, 0, time.UTC)
-	result, err := FormatDate(ctx, []any{now})
+	result, err := FormatDate([]any{now})
 	if err != nil {
 		t.Fatalf("FormatDate error: %v", err)
 	}
@@ -21,7 +19,7 @@ func TestFormatDate(t *testing.T) {
 	}
 	
 	// Test with string
-	result, err = FormatDate(ctx, []any{"2026-01-25"})
+	result, err = FormatDate([]any{"2026-01-25"})
 	if err != nil {
 		t.Fatalf("FormatDate error: %v", err)
 	}
@@ -31,7 +29,7 @@ func TestFormatDate(t *testing.T) {
 	
 	// Test with custom format
 	hash := runtime.Hash{"format": "2006-01-02 15:04:05"}
-	result, err = FormatDate(ctx, []any{now, hash})
+	result, err = FormatDate([]any{now, hash})
 	if err != nil {
 		t.Fatalf("FormatDate error: %v", err)
 	}
@@ -41,10 +39,8 @@ func TestFormatDate(t *testing.T) {
 }
 
 func TestDefault(t *testing.T) {
-	ctx := runtime.NewContext(nil)
-	
 	// Test with truthy value
-	result, err := Default(ctx, []any{"value", "default"})
+	result, err := Default([]any{"value", "default"})
 	if err != nil {
 		t.Fatalf("Default error: %v", err)
 	}
@@ -53,7 +49,7 @@ func TestDefault(t *testing.T) {
 	}
 	
 	// Test with falsy value
-	result, err = Default(ctx, []any{"", "default"})
+	result, err = Default([]any{"", "default"})
 	if err != nil {
 		t.Fatalf("Default error: %v", err)
 	}
@@ -63,7 +59,7 @@ func TestDefault(t *testing.T) {
 	
 	// Test with hash argument
 	hash := runtime.Hash{"value": "fallback"}
-	result, err = Default(ctx, []any{"", hash})
+	result, err = Default([]any{"", hash})
 	if err != nil {
 		t.Fatalf("Default error: %v", err)
 	}
@@ -73,13 +69,9 @@ func TestDefault(t *testing.T) {
 }
 
 func TestLookup(t *testing.T) {
-	ctx := runtime.NewContext(map[string]any{
-		"key": "value",
-	})
-	
-	// Test with map
+	// Test with map: lookup key in object
 	data := map[string]any{"name": "test"}
-	result, err := Lookup(ctx, []any{data, "name"})
+	result, err := Lookup([]any{data, "name"})
 	if err != nil {
 		t.Fatalf("Lookup error: %v", err)
 	}
@@ -87,20 +79,18 @@ func TestLookup(t *testing.T) {
 		t.Errorf("expected 'test', got %q", result)
 	}
 	
-	// Test with context path
-	result, err = Lookup(ctx, []any{nil, "key"})
+	// Lookup with nil object returns nil (no context in helpers)
+	result, err = Lookup([]any{nil, "key"})
 	if err != nil {
 		t.Fatalf("Lookup error: %v", err)
 	}
-	if result != "value" {
-		t.Errorf("expected 'value', got %q", result)
+	if result != nil {
+		t.Errorf("expected nil for nil object, got %q", result)
 	}
 }
 
 func TestUpperLower(t *testing.T) {
-	ctx := runtime.NewContext(nil)
-	
-	result, err := Upper(ctx, []any{"hello"})
+	result, err := Upper([]any{"hello"})
 	if err != nil {
 		t.Fatalf("Upper error: %v", err)
 	}
@@ -108,7 +98,7 @@ func TestUpperLower(t *testing.T) {
 		t.Errorf("expected 'HELLO', got %q", result)
 	}
 	
-	result, err = Lower(ctx, []any{"WORLD"})
+	result, err = Lower([]any{"WORLD"})
 	if err != nil {
 		t.Fatalf("Lower error: %v", err)
 	}
@@ -118,10 +108,8 @@ func TestUpperLower(t *testing.T) {
 }
 
 func TestComparisonHelpers(t *testing.T) {
-	ctx := runtime.NewContext(nil)
-	
 	// Test Eq
-	result, err := Eq(ctx, []any{5, 5})
+	result, err := Eq([]any{5, 5})
 	if err != nil {
 		t.Fatalf("Eq error: %v", err)
 	}
@@ -129,7 +117,7 @@ func TestComparisonHelpers(t *testing.T) {
 		t.Errorf("expected true, got %v", result)
 	}
 	
-	result, err = Eq(ctx, []any{5, 6})
+	result, err = Eq([]any{5, 6})
 	if err != nil {
 		t.Fatalf("Eq error: %v", err)
 	}
@@ -138,7 +126,7 @@ func TestComparisonHelpers(t *testing.T) {
 	}
 	
 	// Test Lt
-	result, err = Lt(ctx, []any{5, 10})
+	result, err = Lt([]any{5, 10})
 	if err != nil {
 		t.Fatalf("Lt error: %v", err)
 	}
@@ -147,7 +135,7 @@ func TestComparisonHelpers(t *testing.T) {
 	}
 	
 	// Test Gt
-	result, err = Gt(ctx, []any{10, 5})
+	result, err = Gt([]any{10, 5})
 	if err != nil {
 		t.Fatalf("Gt error: %v", err)
 	}
@@ -157,10 +145,8 @@ func TestComparisonHelpers(t *testing.T) {
 }
 
 func TestMathHelpers(t *testing.T) {
-	ctx := runtime.NewContext(nil)
-	
 	// Test Add
-	result, err := Add(ctx, []any{5, 3})
+	result, err := Add([]any{5, 3})
 	if err != nil {
 		t.Fatalf("Add error: %v", err)
 	}
@@ -169,7 +155,7 @@ func TestMathHelpers(t *testing.T) {
 	}
 	
 	// Test Multiply
-	result, err = Multiply(ctx, []any{5, 3})
+	result, err = Multiply([]any{5, 3})
 	if err != nil {
 		t.Fatalf("Multiply error: %v", err)
 	}
@@ -178,7 +164,7 @@ func TestMathHelpers(t *testing.T) {
 	}
 	
 	// Test Divide
-	result, err = Divide(ctx, []any{10, 2})
+	result, err = Divide([]any{10, 2})
 	if err != nil {
 		t.Fatalf("Divide error: %v", err)
 	}
@@ -188,10 +174,8 @@ func TestMathHelpers(t *testing.T) {
 }
 
 func TestStringHelpers(t *testing.T) {
-	ctx := runtime.NewContext(nil)
-	
 	// Test Capitalize
-	result, err := Capitalize(ctx, []any{"hello"})
+	result, err := Capitalize([]any{"hello"})
 	if err != nil {
 		t.Fatalf("Capitalize error: %v", err)
 	}
@@ -200,7 +184,7 @@ func TestStringHelpers(t *testing.T) {
 	}
 	
 	// Test Truncate
-	result, err = Truncate(ctx, []any{"hello world", 5})
+	result, err = Truncate([]any{"hello world", 5})
 	if err != nil {
 		t.Fatalf("Truncate error: %v", err)
 	}
@@ -209,7 +193,7 @@ func TestStringHelpers(t *testing.T) {
 	}
 	
 	// Test Join
-	result, err = Join(ctx, []any{[]any{"a", "b", "c"}, "-"})
+	result, err = Join([]any{[]any{"a", "b", "c"}, "-"})
 	if err != nil {
 		t.Fatalf("Join error: %v", err)
 	}
@@ -219,10 +203,8 @@ func TestStringHelpers(t *testing.T) {
 }
 
 func TestCollectionHelpers(t *testing.T) {
-	ctx := runtime.NewContext(nil)
-	
 	// Test Length
-	result, err := Length(ctx, []any{[]any{1, 2, 3}})
+	result, err := Length([]any{[]any{1, 2, 3}})
 	if err != nil {
 		t.Fatalf("Length error: %v", err)
 	}
@@ -231,7 +213,7 @@ func TestCollectionHelpers(t *testing.T) {
 	}
 	
 	// Test First
-	result, err = First(ctx, []any{[]any{"a", "b", "c"}})
+	result, err = First([]any{[]any{"a", "b", "c"}})
 	if err != nil {
 		t.Fatalf("First error: %v", err)
 	}
@@ -240,7 +222,7 @@ func TestCollectionHelpers(t *testing.T) {
 	}
 	
 	// Test Last
-	result, err = Last(ctx, []any{[]any{"a", "b", "c"}})
+	result, err = Last([]any{[]any{"a", "b", "c"}})
 	if err != nil {
 		t.Fatalf("Last error: %v", err)
 	}
@@ -249,7 +231,7 @@ func TestCollectionHelpers(t *testing.T) {
 	}
 	
 	// Test InArray
-	result, err = InArray(ctx, []any{"b", []any{"a", "b", "c"}})
+	result, err = InArray([]any{"b", []any{"a", "b", "c"}})
 	if err != nil {
 		t.Fatalf("InArray error: %v", err)
 	}

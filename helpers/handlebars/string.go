@@ -8,19 +8,19 @@ import (
 )
 
 // Upper converts a string to uppercase.
-func Upper(ctx *runtime.Context, args []any) (any, error) {
+func Upper(args []any) (any, error) {
 	s := helpers.GetStringArg(args, 0)
 	return strings.ToUpper(s), nil
 }
 
 // Lower converts a string to lowercase.
-func Lower(ctx *runtime.Context, args []any) (any, error) {
+func Lower(args []any) (any, error) {
 	s := helpers.GetStringArg(args, 0)
 	return strings.ToLower(s), nil
 }
 
 // Capitalize capitalizes the first letter of a string.
-func Capitalize(ctx *runtime.Context, args []any) (any, error) {
+func Capitalize(args []any) (any, error) {
 	s := helpers.GetStringArg(args, 0)
 	if s == "" {
 		return "", nil
@@ -29,7 +29,7 @@ func Capitalize(ctx *runtime.Context, args []any) (any, error) {
 }
 
 // CapitalizeAll capitalizes all words in a string.
-func CapitalizeAll(ctx *runtime.Context, args []any) (any, error) {
+func CapitalizeAll(args []any) (any, error) {
 	s := helpers.GetStringArg(args, 0)
 	words := strings.Fields(s)
 	for i, word := range words {
@@ -41,7 +41,7 @@ func CapitalizeAll(ctx *runtime.Context, args []any) (any, error) {
 }
 
 // Truncate truncates a string to the specified length.
-func Truncate(ctx *runtime.Context, args []any) (any, error) {
+func Truncate(args []any) (any, error) {
 	s := helpers.GetStringArg(args, 0)
 	length := 30
 	if len(args) > 1 {
@@ -71,7 +71,7 @@ func Truncate(ctx *runtime.Context, args []any) (any, error) {
 }
 
 // Reverse reverses a string.
-func Reverse(ctx *runtime.Context, args []any) (any, error) {
+func Reverse(args []any) (any, error) {
 	s := helpers.GetStringArg(args, 0)
 	runes := []rune(s)
 	for i, j := 0, len(runes)-1; i < j; i, j = i+1, j-1 {
@@ -81,7 +81,7 @@ func Reverse(ctx *runtime.Context, args []any) (any, error) {
 }
 
 // Replace replaces occurrences of a substring.
-func Replace(ctx *runtime.Context, args []any) (any, error) {
+func Replace(args []any) (any, error) {
 	s := helpers.GetStringArg(args, 0)
 	old := helpers.GetStringArg(args, 1)
 	new := helpers.GetStringArg(args, 2)
@@ -89,7 +89,7 @@ func Replace(ctx *runtime.Context, args []any) (any, error) {
 }
 
 // StripTags removes HTML tags from a string.
-func StripTags(ctx *runtime.Context, args []any) (any, error) {
+func StripTags(args []any) (any, error) {
 	s := helpers.GetStringArg(args, 0)
 	var result strings.Builder
 	inTag := false
@@ -106,7 +106,7 @@ func StripTags(ctx *runtime.Context, args []any) (any, error) {
 }
 
 // StripQuotes removes quotes from a string.
-func StripQuotes(ctx *runtime.Context, args []any) (any, error) {
+func StripQuotes(args []any) (any, error) {
 	s := helpers.GetStringArg(args, 0)
 	s = strings.TrimPrefix(s, `"`)
 	s = strings.TrimSuffix(s, `"`)
@@ -116,7 +116,7 @@ func StripQuotes(ctx *runtime.Context, args []any) (any, error) {
 }
 
 // Join joins array elements with a separator.
-func Join(ctx *runtime.Context, args []any) (any, error) {
+func Join(args []any) (any, error) {
 	arr := helpers.GetArg(args, 0)
 	sep := ", "
 	if len(args) > 1 {
@@ -143,7 +143,7 @@ func Join(ctx *runtime.Context, args []any) (any, error) {
 }
 
 // Split splits a string by a separator.
-func Split(ctx *runtime.Context, args []any) (any, error) {
+func Split(args []any) (any, error) {
 	s := helpers.GetStringArg(args, 0)
 	sep := ","
 	if len(args) > 1 {

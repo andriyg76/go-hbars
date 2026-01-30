@@ -1,6 +1,10 @@
 package runtime
 
-import "fmt"
+import (
+	"fmt"
+	"io"
+	"log"
+)
 
 // Hash represents named helper arguments.
 type Hash map[string]any
@@ -23,4 +27,14 @@ func HashArg(args []any) (Hash, bool) {
 // MissingPartial formats a missing partial error.
 func MissingPartial(name string) error {
 	return fmt.Errorf("partial %q is not defined", name)
+}
+
+// MissingPartialOutput is used for dynamic partials only: when the partial name
+// is not found, it writes the error message to w (HTML output) and logs it
+// with log.Error, then the render continues without failing.
+func MissingPartialOutput(w io.Writer, name string) {
+	msg := fmt.Sprintf("partial %q is not defined", name)
+	log.Printf("[ERROR] %s", msg)
+	// Write to HTML output so it's visible in the page
+	io.WriteString(w, "<!-- "+msg+" -->")
 }

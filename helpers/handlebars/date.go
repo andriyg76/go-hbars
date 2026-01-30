@@ -9,7 +9,7 @@ import (
 )
 
 // FormatDate formats a date using the specified format.
-func FormatDate(ctx *runtime.Context, args []any) (any, error) {
+func FormatDate(args []any) (any, error) {
 	arg := helpers.GetArg(args, 0)
 	if arg == nil {
 		return "", nil
@@ -47,7 +47,7 @@ func FormatDate(ctx *runtime.Context, args []any) (any, error) {
 }
 
 // Now returns the current time.
-func Now(ctx *runtime.Context, args []any) (any, error) {
+func Now(args []any) (any, error) {
 	format := time.RFC3339
 	hash, _ := runtime.HashArg(args)
 	if hash != nil {
@@ -59,7 +59,7 @@ func Now(ctx *runtime.Context, args []any) (any, error) {
 }
 
 // Ago returns a human-readable time ago string.
-func Ago(ctx *runtime.Context, args []any) (any, error) {
+func Ago(args []any) (any, error) {
 	arg := helpers.GetArg(args, 0)
 	if arg == nil {
 		return "", nil

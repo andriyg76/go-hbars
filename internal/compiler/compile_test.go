@@ -49,7 +49,7 @@ func TestCompileTemplates_HelperDirectCall(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CompileTemplates error: %v", err)
 	}
-	if !strings.Contains(string(code), "Upper(ctx") {
+	if !strings.Contains(string(code), "Upper(") {
 		t.Fatalf("expected Upper helper call in generated code")
 	}
 }
@@ -89,10 +89,10 @@ func TestCompileTemplates_Subexpressions(t *testing.T) {
 		t.Fatalf("CompileTemplates error: %v", err)
 	}
 	src := string(code)
-	if !strings.Contains(src, "Lower(ctx") {
+	if !strings.Contains(src, "Lower(") {
 		t.Fatalf("expected Lower helper call in generated code")
 	}
-	if !strings.Contains(src, "Upper(ctx") {
+	if !strings.Contains(src, "Upper(") {
 		t.Fatalf("expected Upper helper call in generated code")
 	}
 }
@@ -126,8 +126,9 @@ func TestCompileTemplates_BlockHelpers(t *testing.T) {
 	if !strings.Contains(src, "runtime.IsTruthy") {
 		t.Fatalf("expected runtime.IsTruthy in generated code")
 	}
-	if !strings.Contains(src, "runtime.Iterate") {
-		t.Fatalf("expected runtime.Iterate in generated code")
+	// Typed context: each uses range over typed collection, no runtime.Iterate
+	if !strings.Contains(src, "range") {
+		t.Fatalf("expected range (each) in generated code")
 	}
 }
 
@@ -162,13 +163,15 @@ func TestCompileTemplates_BlockParams(t *testing.T) {
 		t.Fatalf("CompileTemplates error: %v", err)
 	}
 	src := string(code)
-	if !strings.Contains(src, "ctx.WithScope(item.Value") {
-		t.Fatalf("expected WithScope for each block params")
+	// Typed context: each iterates over typed collection
+	if !strings.Contains(src, "range") {
+		t.Fatalf("expected range for each block")
 	}
-	if !strings.Contains(src, "\"item\"") {
+	// Block params item/idx appear as scope or loop vars
+	if !strings.Contains(src, "item") {
 		t.Fatalf("expected item block param in generated code")
 	}
-	if !strings.Contains(src, "\"idx\"") {
+	if !strings.Contains(src, "idx") {
 		t.Fatalf("expected idx block param in generated code")
 	}
 }
@@ -190,8 +193,8 @@ func TestCompileTemplates_DynamicPartial(t *testing.T) {
 	if !strings.Contains(src, "partials[") {
 		t.Fatalf("expected dynamic partial lookup")
 	}
-	if !strings.Contains(src, "MissingPartial") {
-		t.Fatalf("expected MissingPartial error handling")
+	if !strings.Contains(src, "MissingPartialOutput") {
+		t.Fatalf("expected MissingPartialOutput for dynamic partial when not found")
 	}
 }
 func TestCompileTemplates_UnknownBlock(t *testing.T) {
@@ -202,8 +205,9 @@ func TestCompileTemplates_UnknownBlock(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected success (universal section), got %v", err)
 	}
-	if !strings.Contains(string(code), "WithScope") {
-		t.Fatalf("expected WithScope (universal section) in generated code")
+	// Typed context: section uses typed scope, no runtime WithScope
+	if !strings.Contains(string(code), "IsTruthy") {
+		t.Fatalf("expected IsTruthy (universal section) in generated code")
 	}
 }
 
@@ -216,12 +220,12 @@ func TestCompileTemplates_UniversalSection(t *testing.T) {
 		t.Fatalf("CompileTemplates error: %v", err)
 	}
 	src := string(code)
-	// Section semantics: resolve name, if truthy WithScope(val), else inverse
-	if !strings.Contains(src, "WithScope") {
-		t.Fatalf("expected WithScope in generated code for universal section")
-	}
+	// Typed context: section uses typed scope (getter + IsTruthy), no runtime WithScope
 	if !strings.Contains(src, "IsTruthy") {
 		t.Fatalf("expected IsTruthy in generated code for universal section")
+	}
+	if !strings.Contains(src, "render") {
+		t.Fatalf("expected render call in generated code")
 	}
 }
 
@@ -248,8 +252,12 @@ func TestCompileTemplates_InlineLiteralArgs(t *testing.T) {
 		t.Fatalf("CompileTemplates error: %v", err)
 	}
 	src := string(code)
-	if !strings.Contains(src, "EvalArg") {
-		t.Fatalf("expected EvalArg for helper args")
+	// Typed context: helper args are resolved as typed getters/literals, no EvalArg
+	if !strings.Contains(src, "Upper(") {
+		t.Fatalf("expected Upper helper call in generated code")
+	}
+	if !strings.Contains(src, "\"Ada\"") {
+		t.Fatalf("expected inline literal in generated code")
 	}
 }
 
@@ -290,6 +298,29 @@ func TestCompileTemplates_ContextInterfaces(t *testing.T) {
 	}
 	if !strings.Contains(src, "func MainContextFromMap(m map[string]any) MainContext") {
 		t.Fatalf("expected MainContextFromMap constructor")
+	}
+}
+
+func TestCompileTemplates_PartialsUseFromMap(t *testing.T) {
+	code, err := CompileTemplates(map[string]string{
+		"main":    "{{title}}{{> header}}",
+		"header":  "<h1>{{title}}</h1>",
+	}, Options{PackageName: "templates"})
+	if err != nil {
+		t.Fatalf("CompileTemplates error: %v", err)
+	}
+	src := string(code)
+	if !strings.Contains(src, "func contextMap(ctx any) map[string]any") {
+		t.Fatalf("expected contextMap helper in generated code")
+	}
+	if !strings.Contains(src, "m := contextMap(ctx)") {
+		t.Fatalf("expected partials to use contextMap(ctx)")
+	}
+	if !strings.Contains(src, "MainContextFromMap(m)") {
+		t.Fatalf("expected partials to use FromMap(m) instead of type assertion")
+	}
+	if strings.Contains(src, "ctx.(MainContext)") {
+		t.Fatalf("partials must not use type assertion for context")
 	}
 }
 

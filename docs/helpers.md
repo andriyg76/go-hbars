@@ -150,14 +150,17 @@ opts := compiler.Options{
 You can implement custom helpers as regular Go functions and map them with `-helper name=Ident`. Helper functions must match this signature:
 
 ```go
-func MyHelper(ctx *runtime.Context, args []any) (any, error)
+func MyHelper(args []any) (any, error)
 ```
 
-Hash arguments are passed as the last element in `args`. Use `runtime.HashArg(args)` to retrieve them:
+Arguments are resolved by the compiler before being passed; you receive evaluated values. No context is passed. Hash arguments are passed as the last element in `args`. Use `runtime.HashArg(args)` to retrieve them:
 
 ```go
-func FormatCurrency(ctx *runtime.Context, args []any) (any, error) {
-	amount := args[0]
+func FormatCurrency(args []any) (any, error) {
+	if len(args) == 0 {
+		return "", nil
+	}
+	amount := runtime.Stringify(args[0])
 	hash, _ := runtime.HashArg(args)
 	symbol := "$"
 	if hash != nil {
@@ -165,59 +168,49 @@ func FormatCurrency(ctx *runtime.Context, args []any) (any, error) {
 			symbol = s
 		}
 	}
-	return fmt.Sprintf("%s%.2f", symbol, amount), nil
+	return fmt.Sprintf("%s%s", symbol, amount), nil
 }
 ```
 
 ### Block Helpers
 
-Any helper can be used as a block helper. When used as a block, the helper receives `runtime.BlockOptions` as the last argument. Use `runtime.GetBlockOptions(args)` to retrieve it:
+Block helpers use signature `func(args []any) error`. When used as a block, the helper receives `runtime.BlockOptions` as the last element of `args`. Use `runtime.GetBlockOptions(args)` to retrieve it. `BlockOptions.Fn` and `BlockOptions.Inverse` have type `func(io.Writer) error` (they receive only the writer):
 
 ```go
-func MyBlockHelper(ctx *runtime.Context, args []any) (any, error) {
+func MyBlockHelper(args []any) error {
 	opts, ok := runtime.GetBlockOptions(args)
 	if !ok {
-		// Not used as a block, handle as regular helper
-		return "default", nil
+		return fmt.Errorf("block helper did not receive BlockOptions")
 	}
-	
-	// Render the block content
-	var b strings.Builder
-	if err := opts.Fn(ctx, &b); err != nil {
-		return nil, err
+	if opts.Fn != nil {
+		if err := opts.Fn(w); err != nil {
+			return err
+		}
 	}
-	return b.String(), nil
+	return nil
 }
 ```
 
-Block helpers can conditionally render the main block (`opts.Fn`) or the inverse/else block (`opts.Inverse`):
+Block helpers can conditionally render the main block (`opts.Fn`) or the inverse/else block (`opts.Inverse`). When invoked from generated code, only `args` is passed; the writer `w` is in scope in the generated render function (see [Template API](api.md) for details):
 
 ```go
-func IfHelper(ctx *runtime.Context, args []any) (any, error) {
+func IfHelper(args []any) error {
 	opts, ok := runtime.GetBlockOptions(args)
 	if !ok {
-		return nil, fmt.Errorf("if helper must be used as a block")
+		return fmt.Errorf("if helper must be used as a block")
 	}
-	
+	if len(args) == 0 {
+		return fmt.Errorf("if requires a condition")
+	}
 	condition := args[0]
 	if runtime.IsTruthy(condition) {
 		if opts.Fn != nil {
-			var b strings.Builder
-			if err := opts.Fn(ctx, &b); err != nil {
-				return nil, err
-			}
-			return b.String(), nil
+			return opts.Fn(w)
 		}
-	} else {
-		if opts.Inverse != nil {
-			var b strings.Builder
-			if err := opts.Inverse(ctx, &b); err != nil {
-				return nil, err
-			}
-			return b.String(), nil
-		}
+	} else if opts.Inverse != nil {
+		return opts.Inverse(w)
 	}
-	return "", nil
+	return nil
 }
 ```
 

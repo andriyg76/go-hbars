@@ -4,17 +4,16 @@ import (
 	"net/url"
 
 	"github.com/andriyg76/go-hbars/helpers"
-	"github.com/andriyg76/go-hbars/runtime"
 )
 
 // EncodeURI encodes a URI component.
-func EncodeURI(ctx *runtime.Context, args []any) (any, error) {
+func EncodeURI(args []any) (any, error) {
 	s := helpers.GetStringArg(args, 0)
 	return url.QueryEscape(s), nil
 }
 
 // DecodeURI decodes a URI component.
-func DecodeURI(ctx *runtime.Context, args []any) (any, error) {
+func DecodeURI(args []any) (any, error) {
 	s := helpers.GetStringArg(args, 0)
 	decoded, err := url.QueryUnescape(s)
 	if err != nil {
@@ -24,7 +23,7 @@ func DecodeURI(ctx *runtime.Context, args []any) (any, error) {
 }
 
 // StripProtocol strips the protocol from a URL.
-func StripProtocol(ctx *runtime.Context, args []any) (any, error) {
+func StripProtocol(args []any) (any, error) {
 	s := helpers.GetStringArg(args, 0)
 	u, err := url.Parse(s)
 	if err != nil {
@@ -38,7 +37,7 @@ func StripProtocol(ctx *runtime.Context, args []any) (any, error) {
 }
 
 // StripQuerystring strips the query string from a URL.
-func StripQuerystring(ctx *runtime.Context, args []any) (any, error) {
+func StripQuerystring(args []any) (any, error) {
 	s := helpers.GetStringArg(args, 0)
 	u, err := url.Parse(s)
 	if err != nil {

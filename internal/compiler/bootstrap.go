@@ -2,7 +2,9 @@ package compiler
 
 // generateBootstrapCode generates helper functions for quick server/processor setup.
 // It writes rendererFuncs, NewRenderer, NewQuickProcessor, and NewQuickServer.
-func generateBootstrapCode(w *codeWriter, templateNames []string, funcNames map[string]string) {
+// partialParamTypes: when a partial uses another template's context (e.g. footer uses MainContext),
+// the bootstrap uses that context type and its FromMap for the wrapper.
+func generateBootstrapCode(w *codeWriter, templateNames []string, funcNames map[string]string, partialParamTypes map[string]string) {
 	// Generate renderer map with wrappers that accept any and convert to context type
 	w.line("")
 	w.line("// rendererFuncs maps template names to render functions.")
@@ -10,8 +12,11 @@ func generateBootstrapCode(w *codeWriter, templateNames []string, funcNames map[
 	w.indentInc()
 	for _, name := range templateNames {
 		goName := funcNames[name]
-		rootContext := goName + "Context"
-		fromMap := goName + "ContextFromMap"
+		rootContext := partialParamTypes[name]
+		if rootContext == "" {
+			rootContext = goName + "Context"
+		}
+		fromMap := rootContext + "FromMap"
 		w.line("%q: func(w io.Writer, data any) error {", name)
 		w.indentInc()
 		w.line("if c, ok := data.(%s); ok { return Render%s(w, c) }", rootContext, goName)
