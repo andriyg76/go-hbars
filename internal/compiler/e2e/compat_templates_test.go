@@ -12,6 +12,81 @@ import (
 	"github.com/andriyg76/go-hbars/internal/compiler"
 )
 
+// loadCompatTemplates loads compat templates and helpers (shared with TestE2E_CompatTemplates).
+func loadCompatTemplates(t *testing.T) (map[string]string, compiler.Options) {
+	t.Helper()
+	root := repoRoot(t)
+	tmplDir := filepath.Join(root, "examples", "compat", "templates")
+	tmpls := make(map[string]string)
+	entries, err := os.ReadDir(tmplDir)
+	if err != nil {
+		t.Fatalf("failed to read templates directory: %v", err)
+	}
+	for _, entry := range entries {
+		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".hbs") {
+			name := strings.TrimSuffix(entry.Name(), ".hbs")
+			content, err := os.ReadFile(filepath.Join(tmplDir, entry.Name()))
+			if err != nil {
+				t.Fatalf("failed to read template %s: %v", entry.Name(), err)
+			}
+			tmpls[name] = string(content)
+		}
+	}
+	helperRegistry := helpers.Registry()
+	compilerHelpers := make(map[string]compiler.HelperRef, len(helperRegistry))
+	for name, ref := range helperRegistry {
+		compilerHelpers[name] = compiler.HelperRef{
+			ImportPath: ref.ImportPath,
+			Ident:      ref.Ident,
+		}
+	}
+	opts := compiler.Options{
+		PackageName: "templates",
+		Helpers:     compilerHelpers,
+	}
+	return tmpls, opts
+}
+
+// TestCompat_IteratorGenerated compiles compat and checks that {{#each users}} produces
+// correct iterator code (Users() and len/range). Use to debug iterator issues.
+func TestCompat_IteratorGenerated(t *testing.T) {
+	tmpls, opts := loadCompatTemplates(t)
+	code, err := compiler.CompileTemplates(tmpls, opts)
+	if err != nil {
+		t.Fatalf("compile: %v", err)
+	}
+	src := string(code)
+	// Main template has {{#each users}} -> MainContextData.Users() and range
+	if !strings.Contains(src, "func (d MainContextData) Users()") {
+		t.Errorf("generated code should have MainContextData.Users(); snippet:\n%s", grepSnippet(src, "MainContextData", "Users", "func"))
+	}
+	if !strings.Contains(src, "if len(") {
+		t.Errorf("generated code should have if len(...) for each; snippet:\n%s", grepSnippet(src, "len(", "range", "if"))
+	}
+	if !strings.Contains(src, "range ") {
+		t.Errorf("generated code should have range for each block")
+	}
+}
+
+func grepSnippet(src string, substrings ...string) string {
+	for _, s := range substrings {
+		if idx := strings.Index(src, s); idx >= 0 {
+			start := idx
+			if start > 200 {
+				start -= 200
+			} else {
+				start = 0
+			}
+			end := idx + len(s) + 300
+			if end > len(src) {
+				end = len(src)
+			}
+			return src[start:end]
+		}
+	}
+	return src[:min(500, len(src))]
+}
+
 func TestE2E_CompatTemplates(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping e2e test in short mode")

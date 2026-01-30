@@ -30,11 +30,18 @@ func MissingPartial(name string) error {
 }
 
 // MissingPartialOutput is used for dynamic partials only: when the partial name
-// is not found, it writes the error message to w (HTML output) and logs it
-// with log.Error, then the render continues without failing.
+// is not found, it writes the error message (HTML comment) and logs with
+// log.Error; the render continues without failing. If w implements
+// LazyBlockWriter, the output is registered as a lazy block and written on Flush.
 func MissingPartialOutput(w io.Writer, name string) {
 	msg := fmt.Sprintf("partial %q is not defined", name)
 	log.Printf("[ERROR] %s", msg)
-	// Write to HTML output so it's visible in the page
-	io.WriteString(w, "<!-- "+msg+" -->")
+	htmlComment := "<!-- " + msg + " -->"
+	if lw, ok := w.(LazyBlockWriter); ok {
+		lw.WriteLazyBlock(func(out io.Writer) {
+			io.WriteString(out, htmlComment)
+		})
+		return
+	}
+	io.WriteString(w, htmlComment)
 }

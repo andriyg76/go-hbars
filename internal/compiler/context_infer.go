@@ -697,7 +697,8 @@ func resolvePathToMethodChain(node *typeNode, pathPrefix, path, goIdent string) 
 		if methodName == "" {
 			return "", false
 		}
-		if child.isSlice && child.sliceElem != nil {
+		// Slice is allowed only as the last segment (e.g. "users" in {{#each users}}) so we get data.Users().
+		if child.isSlice && child.sliceElem != nil && i < len(parts)-1 {
 			return "", false
 		}
 		chain = append(chain, methodName+"()")
