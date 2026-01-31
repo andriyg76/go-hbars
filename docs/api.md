@@ -197,10 +197,10 @@ All render functions return errors. Common error scenarios:
 - Invalid data types
 - Block helper did not receive BlockOptions
 
-Always check errors:
+Always check errors. When using a `map[string]any` (e.g. from JSON), use the generated `XxxContextFromMap` so data satisfies the context type:
 
 ```go
-out, err := templates.RenderMainString(data)
+out, err := templates.RenderMainString(templates.MainContextFromMap(data))
 if err != nil {
     log.Fatal(err)
 }

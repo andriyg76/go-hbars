@@ -47,9 +47,9 @@ func loadCompatTemplates(t *testing.T) (map[string]string, compiler.Options) {
 	return tmpls, opts
 }
 
-// TestCompat_IteratorGenerated compiles compat and checks that {{#each users}} produces
+// TestE2E_Compat_IteratorGenerated compiles compat and checks that {{#each users}} produces
 // correct iterator code (Users() and len/range). Use to debug iterator issues.
-func TestCompat_IteratorGenerated(t *testing.T) {
+func TestE2E_Compat_IteratorGenerated(t *testing.T) {
 	tmpls, opts := loadCompatTemplates(t)
 	code, err := compiler.CompileTemplates(tmpls, opts)
 	if err != nil {
@@ -182,6 +182,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"sort"
 	"strings"
 
 	templates "test-templates/templates"
@@ -198,6 +199,44 @@ func normalizeWhitespace(s string) string {
 	s = strings.Join(lines, "\n")
 	s = regexp.MustCompile("\\n{2,}").ReplaceAllString(s, "\n")
 	return strings.Trim(s, "\n")
+}
+
+// normalizeMapKeyOrder sorts consecutive "  key=value" lines so map iteration order does not affect the comparison.
+func normalizeMapKeyOrder(s string) string {
+	lines := strings.Split(s, "\n")
+	var i int
+	for i < len(lines) {
+		// Find a run of lines that look like "  key=value"
+		var run []int
+		for i < len(lines) {
+			trimmed := strings.TrimSpace(lines[i])
+			if trimmed == "" || !strings.Contains(trimmed, "=") {
+				i++
+				continue
+			}
+			// Indented key=value (e.g. "  lang=en")
+			if strings.HasPrefix(lines[i], " ") && len(trimmed) > 0 {
+				run = append(run, i)
+				i++
+			} else {
+				break
+			}
+		}
+		if len(run) > 1 {
+			group := make([]string, len(run))
+			for j, idx := range run {
+				group[j] = lines[idx]
+			}
+			sort.Strings(group)
+			for j, idx := range run {
+				lines[idx] = group[j]
+			}
+		}
+		if len(run) == 0 {
+			i++
+		}
+	}
+	return strings.Join(lines, "\n")
 }
 
 func main() {
@@ -226,6 +265,8 @@ func main() {
 	expected = strings.ReplaceAll(expected, "\r\n", "\n")
 	output = normalizeWhitespace(output)
 	expected = normalizeWhitespace(expected)
+	output = normalizeMapKeyOrder(output)
+	expected = normalizeMapKeyOrder(expected)
 	if output != expected {
 		fmt.Fprintf(os.Stderr, "output mismatch!\n")
 		fmt.Fprintf(os.Stderr, "Expected:\n%s\n", expected)

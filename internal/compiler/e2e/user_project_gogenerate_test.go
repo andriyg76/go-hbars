@@ -118,12 +118,12 @@ func main() {
 		os.Exit(1)
 	}
 
-	compatOut, err := templates.RenderCompatString(compatData)
+	compatOut, err := templates.RenderCompatString(templates.CompatContextFromMap(compatData))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "render compat: %v\n", err)
 		os.Exit(1)
 	}
-	showcaseOut, err := templates.RenderShowcaseString(showcaseData)
+	showcaseOut, err := templates.RenderShowcaseString(templates.ShowcaseContextFromMap(showcaseData))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "render showcase: %v\n", err)
 		os.Exit(1)

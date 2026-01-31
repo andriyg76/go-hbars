@@ -47,6 +47,7 @@ out, err := templates.RenderMainString(data)
 - **[Processor & Server](docs/processor-server.md)** - CLI tools for static site generation
 - **[Embedded API](docs/embedded.md)** - Embedding processor and server in your applications
 - **[Template API](docs/api.md)** - Runtime API for compiled templates
+- **[Testing](docs/testing.md)** - Unit and E2E tests
 
 ## Features
 
@@ -121,6 +122,20 @@ All core Handlebars syntax features are now implemented:
 - ✅ Custom block helpers
 - ✅ Block params for `if`/`unless`
 - ✅ `else if` shorthand
+
+## Testing
+
+```bash
+go test ./...
+```
+
+E2E tests (compile templates, run generated code in a temp module) are in `internal/compiler/e2e/`. They are skipped in short mode:
+
+```bash
+go test ./internal/compiler/e2e/... -v -count=1
+```
+
+Use `-short` to skip E2E tests for a faster run.
 
 ## Compatibility
 
