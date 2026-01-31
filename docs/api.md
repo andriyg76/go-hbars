@@ -24,7 +24,7 @@ out, err := templates.RenderMainString(data)
 
 For each template file (e.g. `main.hbs`), the compiler generates:
 
-1. **Internal render function**: `renderMain(data MainContext, w io.Writer) error`
+1. **Internal render function**: `renderMain(data MainContext, w io.Writer, root any) error` (used by partials; `root` is the caller’s root context for `@root`)
 2. **Public render function**: `RenderMain(w io.Writer, data MainContext) error`
 3. **String wrapper**: `RenderMainString(data MainContext) (string, error)`
 
@@ -71,6 +71,15 @@ if runtime.IsTruthy(value) {
 ```go
 // SafeString marks a value as pre-escaped HTML
 safe := runtime.SafeString("<b>bold</b>")
+```
+
+### Context and partials
+
+```go
+// LookupPath returns the value at a dot-separated path from root (e.g. "title", "user.name").
+// Root can be map[string]any or implement Raw() any returning a map.
+// Used by generated code for @root.xxx inside partials when root comes from another template.
+val := runtime.LookupPath(root, "title")
 ```
 
 ## Helper Functions

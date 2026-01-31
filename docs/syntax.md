@@ -202,13 +202,13 @@ Special variables available in certain contexts:
 - `@last` - `true` if this is the last item
 - `@root` - The root context (top-level data)
 
-**Root access:**
+**Root access (`@root`):**
 ```handlebars
 {{#with user}}
   {{name}} - {{@root.title}}
 {{/with}}
 ```
-Access the root context from anywhere using `@root`.
+`@root` refers to the **root context** (the top-level data passed to the template). Use `@root` or `@root.path` (e.g. `@root.title`, `@root.user.name`) to read from the root from any nested block or **partial**. When a partial is rendered, the caller passes its root context so that `{{@root.xxx}}` inside the partial resolves to the same root data (e.g. the main template’s data).
 
 ## Truthiness
 

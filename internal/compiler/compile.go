@@ -145,9 +145,9 @@ func CompileTemplates(templates map[string]string, opts Options) ([]byte, error)
 
 	partials := &codeWriter{}
 	if useLayoutBlocks {
-		partials.line("var partials map[string]func(any, io.Writer, *runtime.Blocks) error")
+		partials.line("var partials map[string]func(any, io.Writer, any, *runtime.Blocks) error")
 	} else {
-		partials.line("var partials map[string]func(any, io.Writer) error")
+		partials.line("var partials map[string]func(any, io.Writer, any) error")
 	}
 	partials.line("")
 	partials.line("// contextMap returns map[string]any from ctx (either direct map or Raw() from context data).")
@@ -167,9 +167,9 @@ func CompileTemplates(templates map[string]string, opts Options) ([]byte, error)
 	partials.line("func init() {")
 	partials.indentInc()
 	if useLayoutBlocks {
-		partials.line("partials = map[string]func(any, io.Writer, *runtime.Blocks) error{")
+		partials.line("partials = map[string]func(any, io.Writer, any, *runtime.Blocks) error{")
 	} else {
-		partials.line("partials = map[string]func(any, io.Writer) error{")
+		partials.line("partials = map[string]func(any, io.Writer, any) error{")
 	}
 	partials.indentInc()
 	for _, name := range names {
@@ -180,17 +180,17 @@ func CompileTemplates(templates map[string]string, opts Options) ([]byte, error)
 		}
 		fromMapName := strings.TrimSuffix(ctxType, "Context") + "ContextFromMap"
 		if useLayoutBlocks {
-			partials.line("%q: func(ctx any, w io.Writer, blocks *runtime.Blocks) error {", name)
+			partials.line("%q: func(ctx any, w io.Writer, root any, blocks *runtime.Blocks) error {", name)
 		} else {
-			partials.line("%q: func(ctx any, w io.Writer) error {", name)
+			partials.line("%q: func(ctx any, w io.Writer, root any) error {", name)
 		}
 		partials.indentInc()
 		partials.line("m := contextMap(ctx)")
 		partials.line("if m == nil { return nil }")
 		if useLayoutBlocks {
-			partials.line("return render%s(%s(m), w, blocks)", goName, fromMapName)
+			partials.line("return render%s(%s(m), w, root, blocks)", goName, fromMapName)
 		} else {
-			partials.line("return render%s(%s(m), w)", goName, fromMapName)
+			partials.line("return render%s(%s(m), w, root)", goName, fromMapName)
 		}
 		partials.indentDec()
 		partials.line("},")
@@ -215,14 +215,14 @@ func CompileTemplates(templates map[string]string, opts Options) ([]byte, error)
 			ownerName = name
 		}
 		tree := typeTrees[ownerName]
-		gen := &generator{w: functions, helpers: helperExprs, partials: funcNames, typeTrees: typeTrees, tree: tree, goName: goName}
+		gen := &generator{w: functions, helpers: helperExprs, partials: funcNames, typeTrees: typeTrees, tree: tree, goName: goName, rootVar: "root"}
 		if useLayoutBlocks {
 			gen.blocksVar = "blocks"
 		}
 		if useLayoutBlocks {
-			functions.line("func render%s(data %s, w io.Writer, blocks *runtime.Blocks) error {", goName, rootContext)
+			functions.line("func render%s(data %s, w io.Writer, root any, blocks *runtime.Blocks) error {", goName, rootContext)
 		} else {
-			functions.line("func render%s(data %s, w io.Writer) error {", goName, rootContext)
+			functions.line("func render%s(data %s, w io.Writer, root any) error {", goName, rootContext)
 		}
 		functions.indentInc()
 		functions.line("if data == nil {")
@@ -241,9 +241,9 @@ func CompileTemplates(templates map[string]string, opts Options) ([]byte, error)
 		functions.line("func Render%s(w io.Writer, data %s) error {", goName, rootContext)
 		functions.indentInc()
 		if useLayoutBlocks {
-			functions.line("return render%s(data, w, nil)", goName)
+			functions.line("return render%s(data, w, data, nil)", goName)
 		} else {
-			functions.line("return render%s(data, w)", goName)
+			functions.line("return render%s(data, w, data)", goName)
 		}
 		functions.indentDec()
 		functions.line("}")
@@ -251,7 +251,7 @@ func CompileTemplates(templates map[string]string, opts Options) ([]byte, error)
 		if useLayoutBlocks {
 			functions.line("func Render%sWithBlocks(w io.Writer, data %s, blocks *runtime.Blocks) error {", goName, rootContext)
 			functions.indentInc()
-			functions.line("return render%s(data, w, blocks)", goName)
+			functions.line("return render%s(data, w, data, blocks)", goName)
 			functions.indentDec()
 			functions.line("}")
 			functions.line("")
@@ -527,6 +527,7 @@ type generator struct {
 	tree        *typeNode
 	goName      string
 	typedStack  []typedScope
+	rootVar     string   // name of root context variable ("root"); same as data in entry, passed in for partials
 	blocksVar   string   // non-empty when layout block/partial are used
 	writerStack []string // when non-empty, currentWriter() returns "&" + top for partial body capture
 }
@@ -721,15 +722,15 @@ func (g *generator) emitPartial(n *ast.Partial) error {
 		}
 		if usePartialsMap {
 			if g.blocksVar != "" {
-				g.w.line("if err := partials[%q](%s, %s, %s); err != nil {", name, partialCtxVar, writerArg, g.blocksVar)
+				g.w.line("if err := partials[%q](%s, %s, %s, %s); err != nil {", name, partialCtxVar, writerArg, g.rootVar, g.blocksVar)
 			} else {
-				g.w.line("if err := partials[%q](%s, %s); err != nil {", name, partialCtxVar, writerArg)
+				g.w.line("if err := partials[%q](%s, %s, %s); err != nil {", name, partialCtxVar, writerArg, g.rootVar)
 			}
 		} else {
 			if g.blocksVar != "" {
-				g.w.line("if err := render%s(%s, %s, %s); err != nil {", goName, partialCtxVar, writerArg, g.blocksVar)
+				g.w.line("if err := render%s(%s, %s, %s, %s); err != nil {", goName, partialCtxVar, writerArg, g.rootVar, g.blocksVar)
 			} else {
-				g.w.line("if err := render%s(%s, %s); err != nil {", goName, partialCtxVar, writerArg)
+				g.w.line("if err := render%s(%s, %s, %s); err != nil {", goName, partialCtxVar, writerArg, g.rootVar)
 			}
 		}
 		g.w.indentInc()
@@ -742,15 +743,15 @@ func (g *generator) emitPartial(n *ast.Partial) error {
 		if goName, ok := g.partials[nameExpr.value]; ok {
 			if usePartialsMap {
 				if g.blocksVar != "" {
-					g.w.line("if err := partials[%q](%s, %s, %s); err != nil {", nameExpr.value, partialCtxVar, writerArg, g.blocksVar)
+					g.w.line("if err := partials[%q](%s, %s, %s, %s); err != nil {", nameExpr.value, partialCtxVar, writerArg, g.rootVar, g.blocksVar)
 				} else {
-					g.w.line("if err := partials[%q](%s, %s); err != nil {", nameExpr.value, partialCtxVar, writerArg)
+					g.w.line("if err := partials[%q](%s, %s, %s); err != nil {", nameExpr.value, partialCtxVar, writerArg, g.rootVar)
 				}
 			} else {
 				if g.blocksVar != "" {
-					g.w.line("if err := render%s(%s, %s, %s); err != nil {", goName, partialCtxVar, writerArg, g.blocksVar)
+					g.w.line("if err := render%s(%s, %s, %s, %s); err != nil {", goName, partialCtxVar, writerArg, g.rootVar, g.blocksVar)
 				} else {
-					g.w.line("if err := render%s(%s, %s); err != nil {", goName, partialCtxVar, writerArg)
+					g.w.line("if err := render%s(%s, %s, %s); err != nil {", goName, partialCtxVar, writerArg, g.rootVar)
 				}
 			}
 			g.w.indentInc()
@@ -774,9 +775,9 @@ func (g *generator) emitPartial(n *ast.Partial) error {
 	g.w.line("runtime.MissingPartialOutput(%s, %s)", writerArg, nameVar)
 	g.w.indentDec()
 	if g.blocksVar != "" {
-		g.w.line("} else if err := partialFn(%s, %s, %s); err != nil {", partialCtxVar, writerArg, g.blocksVar)
+		g.w.line("} else if err := partialFn(%s, %s, %s, %s); err != nil {", partialCtxVar, writerArg, g.rootVar, g.blocksVar)
 	} else {
-		g.w.line("} else if err := partialFn(%s, %s); err != nil {", partialCtxVar, writerArg)
+		g.w.line("} else if err := partialFn(%s, %s, %s); err != nil {", partialCtxVar, writerArg, g.rootVar)
 	}
 	g.w.indentInc()
 	g.w.line("return err")
@@ -1405,6 +1406,26 @@ func (g *generator) currentTypedScope() (typedScope, bool) {
 
 func (g *generator) emitPathValue(path string) string {
 	path = strings.TrimSpace(path)
+	// @root: resolve from root context (root param; in entry template root == data).
+	if path == "@root" || strings.HasPrefix(path, "@root.") {
+		rest := strings.TrimPrefix(path, "@root")
+		rest = strings.TrimPrefix(rest, ".")
+		if rest == "" {
+			return g.rootVar
+		}
+		// Typed access when root has same type as our tree (entry or same-template partial).
+		if g.tree != nil {
+			chain, ok := resolvePathToMethodChain(g.tree, "", rest, g.goName)
+			if ok {
+				if chain == "" {
+					return g.rootVar
+				}
+				return g.rootVar + "." + chain
+			}
+		}
+		// Partial with root from another template: runtime path lookup.
+		return "runtime.LookupPath(" + g.rootVar + ", " + strconv.Quote(rest) + ")"
+	}
 	// @index and @key: use the each loop's key variable (index for slice, key for map)
 	if path == "@index" || path == "@key" {
 		for i := len(g.typedStack) - 1; i >= 0; i-- {

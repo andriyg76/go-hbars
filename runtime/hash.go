@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"strings"
 )
 
 // Hash represents named helper arguments.
@@ -41,6 +42,41 @@ func MergePartialContext(base, additions map[string]any) map[string]any {
 		out[k] = v
 	}
 	return out
+}
+
+// LookupPath returns the value at the dot-separated path from root (e.g. "title", "user.name").
+// Root can be map[string]any or implement Raw() any returning a map. Used for @root.xxx in partials.
+func LookupPath(root any, path string) any {
+	m := contextMapFromAny(root)
+	if m == nil || path == "" {
+		return nil
+	}
+	parts := strings.Split(path, ".")
+	var cur any = m
+	for _, key := range parts {
+		if cur == nil {
+			return nil
+		}
+		if m, ok := cur.(map[string]any); ok {
+			cur = m[key]
+			continue
+		}
+		return nil
+	}
+	return cur
+}
+
+func contextMapFromAny(ctx any) map[string]any {
+	if m, ok := ctx.(map[string]any); ok {
+		return m
+	}
+	type rawer interface{ Raw() any }
+	if r, ok := ctx.(rawer); ok {
+		if m, ok := r.Raw().(map[string]any); ok {
+			return m
+		}
+	}
+	return nil
 }
 
 // MissingPartialOutput is used for dynamic partials only: when the partial name

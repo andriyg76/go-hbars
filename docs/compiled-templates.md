@@ -30,14 +30,14 @@ For each template name, the generated package exposes:
 
 | Go symbol | Signature | Description |
 |-----------|------------|--------------|
-| `renderXxx` | `func(data XxxContext, w io.Writer) error` | Internal: used by partials and by `RenderXxx`. Not intended for direct use. |
+| `renderXxx` | `func(data XxxContext, w io.Writer, root any) error` | Internal: used by partials and by `RenderXxx`. The `root` argument is the root context (same as `data` when rendering the template as entry; when the template is used as a partial, the caller passes its root so that `@root` inside the partial works). Not intended for direct use. |
 | `RenderXxx` | `func(w io.Writer, data XxxContext) error` | Renders the template with `data` into `w`. |
 | `RenderXxxString` | `func(data XxxContext) (string, error)` | Renders the template with `data` and returns the result as a string. |
 
 Example for `main.hbs` (Go name `Main`):
 
 ```go
-func renderMain(data MainContext, w io.Writer) error { ... }
+func renderMain(data MainContext, w io.Writer, root any) error { ... }
 func RenderMain(w io.Writer, data MainContext) error { ... }
 func RenderMainString(data MainContext) (string, error) { ... }
 ```
@@ -51,7 +51,7 @@ func RenderMainString(data MainContext) (string, error) { ... }
    Type-safe accessors for template context paths (inferred from template expressions). The compiler emits interface types (e.g. `MainContext`, `MainContextUser`) and optional `XxxContextFromMap` constructors. Names are derived from the template Go identifier and path (e.g. `MainContextUser`, `MainContextItems`).
 
 3. **Partials map**  
-   Keys are template names (as in file names without `.hbs`). Used when a template contains `{{> partialName }}` with explicit context or hash. When the partial is called with **no arguments and no hash** (e.g. `{{> header}}`), the compiler calls `renderXxx(data, w)` with the current context directly; when there is an explicit context or hash, it uses the `partials` map so context is converted via `contextMap` and `XxxContextFromMap`. Partial context rules: no args → current context; only hash → hash plus keys used in the partial (from current scope); explicit context and/or hash → base context merged with hash.
+   Keys are template names (as in file names without `.hbs`). Values are functions `func(ctx any, w io.Writer, root any) error` (or with `*runtime.Blocks` when using layout blocks). Used when a template contains `{{> partialName }}` with explicit context or hash. When the partial is called with **no arguments and no hash** (e.g. `{{> header}}`), the compiler calls `renderXxx(data, w, root)` with the current context and the caller’s root; when there is an explicit context or hash, it uses the `partials` map so context is converted via `contextMap` and `XxxContextFromMap`. The `root` argument ensures `@root` inside partials resolves to the top-level data (e.g. the main template’s data). Partial context rules: no args → current context; only hash → hash plus keys used in the partial (from current scope); explicit context and/or hash → base context merged with hash.
 
 4. **Functions**  
    For each template: `renderXxx`, `RenderXxx`, `RenderXxxString` as above.

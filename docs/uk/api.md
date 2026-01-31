@@ -24,7 +24,7 @@ out, err := templates.RenderMainString(data)
 
 Для кожного файлу шаблону (наприклад `main.hbs`) компілятор генерує:
 
-1. **Внутрішня функція рендеру**: `renderMain(data MainContext, w io.Writer) error`
+1. **Внутрішня функція рендеру**: `renderMain(data MainContext, w io.Writer, root any) error` (використовується партіалами; `root` — кореневий контекст викликача для `@root`)
 2. **Публічна функція рендеру**: `RenderMain(w io.Writer, data MainContext) error`
 3. **Обгортка для рядка**: `RenderMainString(data MainContext) (string, error)`
 
@@ -71,6 +71,15 @@ if runtime.IsTruthy(value) {
 ```go
 // SafeString позначає значення як попередньо екранований HTML
 safe := runtime.SafeString("<b>bold</b>")
+```
+
+### Контекст і партіали
+
+```go
+// LookupPath повертає значення за крапковим шляхом від root (наприклад "title", "user.name").
+// Root може бути map[string]any або реалізовувати Raw() any з мапою.
+// Використовується згенерованим кодом для @root.xxx у партіалах, коли root приходить з іншого шаблону.
+val := runtime.LookupPath(root, "title")
 ```
 
 ## Функції-хелпери
