@@ -143,7 +143,7 @@ func (p *exprParser) parseSubexpr() (expr, error) {
 		return expr{}, err
 	}
 	if !p.hasNext() || p.peek().typ != tokRParen {
-		return expr{}, fmt.Errorf("missing )")
+		return expr{}, hexerr.New("missing )")
 	}
 	p.next()
 	if len(parts) == 0 {

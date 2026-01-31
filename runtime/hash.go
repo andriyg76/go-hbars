@@ -5,6 +5,8 @@ import (
 	"io"
 	"log"
 	"strings"
+
+	"github.com/andriyg76/hexerr"
 )
 
 // Hash represents named helper arguments.
@@ -27,7 +29,7 @@ func HashArg(args []any) (Hash, bool) {
 
 // MissingPartial formats a missing partial error.
 func MissingPartial(name string) error {
-	return fmt.Errorf("partial %q is not defined", name)
+	return hexerr.Newf("partial %q is not defined", name)
 }
 
 // MergePartialContext returns a new map with base keys/values plus additions (additions override).

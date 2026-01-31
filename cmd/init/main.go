@@ -22,6 +22,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/andriyg76/hexerr"
 )
 
 func main() {
@@ -317,9 +319,9 @@ func readModulePath(goModPath string) (string, error) {
 		}
 	}
 	if err := sc.Err(); err != nil {
-		return "", fmt.Errorf("reading go.mod: %w", err)
+		return "", hexerr.Wrapf(err, "reading go.mod")
 	}
-	return "", fmt.Errorf("no module directive in go.mod")
+	return "", hexerr.New("no module directive in go.mod")
 }
 
 func addAPI(root, module string) {
