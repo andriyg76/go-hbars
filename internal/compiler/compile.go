@@ -215,7 +215,7 @@ func CompileTemplates(templates map[string]string, opts Options) ([]byte, error)
 			ownerName = name
 		}
 		tree := typeTrees[ownerName]
-		gen := &generator{w: functions, helpers: helperExprs, partials: funcNames, tree: tree, goName: goName}
+		gen := &generator{w: functions, helpers: helperExprs, partials: funcNames, typeTrees: typeTrees, tree: tree, goName: goName}
 		if useLayoutBlocks {
 			gen.blocksVar = "blocks"
 		}
@@ -522,6 +522,7 @@ type generator struct {
 	w           *codeWriter
 	helpers     map[string]string
 	partials    map[string]string
+	typeTrees   map[string]*typeNode
 	tempID      int
 	tree        *typeNode
 	goName      string
@@ -655,29 +656,61 @@ func (g *generator) emitPartial(n *ast.Partial) error {
 	}
 	nameExpr := parts[0]
 	scope, _ := g.currentTypedScope()
+	// Current context is passed only when there are no explicit params and no hash ({{> name}}).
 	partialCtxVar := scope.varName
-	// Hash (e.g. {{> footer note="thanks"}}): pass a clean map with only those fields as context.
-	if len(hash) > 0 {
-		mapVar, err := g.emitPartialContextMap(hash)
-		if err != nil {
-			return err
-		}
-		partialCtxVar = mapVar
-	} else if len(parts) == 2 {
-		// Explicit context (e.g. {{> orderRow order}}): pass the given expression (row data).
+	baseCtxVar := scope.varName
+	if len(parts) == 2 {
 		valueExpr, err := g.emitExprValue(parts[1])
 		if err != nil {
 			return err
 		}
-		partialCtxVar = g.nextTemp("partialCtx")
+		baseCtxVar = g.nextTemp("partialBase")
 		if valueExpr == "nil" {
-			g.w.line("var %s any", partialCtxVar)
+			g.w.line("var %s any", baseCtxVar)
 		} else {
-			g.w.line("%s := %s", partialCtxVar, valueExpr)
+			g.w.line("%s := %s", baseCtxVar, valueExpr)
 		}
 	}
+	// Partial context: only hash => hash + keys used in partial (from current scope); explicit+hash => base + hash.
+	if len(hash) > 0 {
+		hashMapVar, err := g.emitPartialContextMap(hash)
+		if err != nil {
+			return err
+		}
+		partialCtxVar = g.nextTemp("partialCtx")
+		partialName := ""
+		if nameExpr.kind == exprString {
+			partialName = nameExpr.value
+		} else if nameExpr.kind == exprPath {
+			partialName = nameExpr.value
+		}
+		if len(parts) == 1 && partialName != "" && g.typeTrees != nil && g.typeTrees[partialName] != nil {
+			// Only hash, static partial: context = hash + keys the partial uses (from current scope).
+			g.w.line("%s := runtime.MergePartialContext(nil, %s)", partialCtxVar, hashMapVar)
+			hashKeys := make(map[string]bool)
+			for _, h := range hash {
+				if h.key != "" {
+					hashKeys[h.key] = true
+				}
+			}
+			for _, key := range RootFieldKeys(g.typeTrees[partialName]) {
+				if hashKeys[key] {
+					continue
+				}
+				valExpr := g.emitPathValue(key)
+				g.w.line("%s[%q] = %s", partialCtxVar, key, valExpr)
+			}
+		} else {
+			// Explicit context + hash, or dynamic partial with hash: base map + hash.
+			baseMapVar := g.nextTemp("partialBaseMap")
+			g.w.line("%s := contextMap(%s)", baseMapVar, baseCtxVar)
+			g.w.line("%s := runtime.MergePartialContext(%s, %s)", partialCtxVar, baseMapVar, hashMapVar)
+		}
+	} else if len(parts) == 2 {
+		partialCtxVar = baseCtxVar
+	}
 
-	// When context is a raw map (hash) or explicit (parts==2), use partials map so contextMap+FromMap convert it.
+	// When context is a merged map (hash) or explicit (parts==2), use partials map so contextMap+FromMap convert it.
 	usePartialsMap := len(hash) > 0 || len(parts) == 2
 	writerArg := g.currentWriter()
 	if nameExpr.kind == exprString {

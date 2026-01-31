@@ -348,3 +348,52 @@ func TestCompileTemplates_PartialsUseFromMap(t *testing.T) {
 	}
 }
 
+// TestCompileTemplates_PartialContextRules checks partial context rules:
+// - {{> name}} (no args, no hash) => current context passed as-is (renderXxx(data, ...)).
+// - {{> name note="x"}} (only hash) => context = hash + keys used in partial from current scope (MergePartialContext(nil, hash) then add scope keys).
+func TestCompileTemplates_PartialContextRules(t *testing.T) {
+	// Only hash + partial uses a key not in hash => that key comes from current scope.
+	t.Run("only_hash_plus_partial_keys", func(t *testing.T) {
+		code, err := CompileTemplates(map[string]string{
+			"main":   `{{title}}{{> footer note="thanks"}}`,
+			"footer": `{{note}} {{title}}`,
+		}, Options{PackageName: "templates"})
+		if err != nil {
+			t.Fatalf("compile: %v", err)
+		}
+		src := string(code)
+		if !strings.Contains(src, "runtime.MergePartialContext(nil,") {
+			t.Errorf("only-hash partial should use MergePartialContext(nil, hash); got snippet: %s", grepOne(src, "MergePartialContext"))
+		}
+		// Footer uses "title"; not in hash => should add from scope.
+		if !strings.Contains(src, `["title"]`) && !strings.Contains(src, "[\"title\"]") {
+			t.Errorf("partial uses {{title}} but hash has only note; expected partialCtx[\"title\"] = ... from scope")
+		}
+	})
+	// No args, no hash => current context (renderXxx(data, ...)), not partials map.
+	t.Run("no_args_current_context", func(t *testing.T) {
+		code, err := CompileTemplates(map[string]string{
+			"main":   `{{> header}}`,
+			"header": `<h1>{{title}}</h1>`,
+		}, Options{PackageName: "templates"})
+		if err != nil {
+			t.Fatalf("compile: %v", err)
+		}
+		src := string(code)
+		if !strings.Contains(src, "renderHeader(data,") {
+			t.Errorf("{{> header}} with no args should call renderHeader(data, ...); got: %s", grepOne(src, "renderHeader"))
+		}
+	})
+}
+
+func grepOne(src, sub string) string {
+	if i := strings.Index(src, sub); i >= 0 {
+		end := i + len(sub) + 80
+		if end > len(src) {
+			end = len(src)
+		}
+		return src[i:end]
+	}
+	return "(not found)"
+}
+

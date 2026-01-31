@@ -742,6 +742,22 @@ func nodeAtPath(root *typeNode, path string) *typeNode {
 	return cur
 }
 
+// RootFieldKeys returns root-level field names from the type tree (keys used at root context).
+func RootFieldKeys(tree *typeNode) []string {
+	if tree == nil || tree.fields == nil {
+		return nil
+	}
+	var keys []string
+	for k := range tree.fields {
+		if k == "" || (len(k) > 0 && (k[0] == '@' || k[0] == '.')) {
+			continue
+		}
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
 func emitContextInterfaces(w *codeWriter, templateName string, tree *typeNode) {
 	goName := goIdent(templateName)
 	rootName := goName + "Context"

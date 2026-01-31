@@ -29,6 +29,20 @@ func MissingPartial(name string) error {
 	return fmt.Errorf("partial %q is not defined", name)
 }
 
+// MergePartialContext returns a new map with base keys/values plus additions (additions override).
+// Used for partial context: current/explicit context merged with hash (e.g. note="thanks").
+// If base is nil, returns a copy of additions.
+func MergePartialContext(base, additions map[string]any) map[string]any {
+	out := make(map[string]any, len(base)+len(additions))
+	for k, v := range base {
+		out[k] = v
+	}
+	for k, v := range additions {
+		out[k] = v
+	}
+	return out
+}
+
 // MissingPartialOutput is used for dynamic partials only: when the partial name
 // is not found, it writes the error message (HTML comment) and logs with
 // log.Error; the render continues without failing. If w implements

@@ -51,17 +51,7 @@ func RenderMainString(data MainContext) (string, error) { ... }
    Type-safe accessors for template context paths (inferred from template expressions). The compiler emits interface types (e.g. `MainContext`, `MainContextUser`) and optional `XxxContextFromMap` constructors. Names are derived from the template Go identifier and path (e.g. `MainContextUser`, `MainContextItems`).
 
 3. **Partials map**  
-   ```go
-   var partials map[string]func(any, io.Writer) error
-   func init() {
-       partials = map[string]func(any, io.Writer) error{
-           "main":   func(ctx any, w io.Writer) error { return renderMain(ctx.(MainContext), w) },
-           "header": func(ctx any, w io.Writer) error { return renderHeader(ctx.(HeaderContext), w) },
-           ...
-       }
-   }
-   ```  
-   Keys are template names (as in file names without `.hbs`). Used internally when a template contains `{{> partialName }}`.
+   Keys are template names (as in file names without `.hbs`). Used when a template contains `{{> partialName }}` with explicit context or hash. When the partial is called with **no arguments and no hash** (e.g. `{{> header}}`), the compiler calls `renderXxx(data, w)` with the current context directly; when there is an explicit context or hash, it uses the `partials` map so context is converted via `contextMap` and `XxxContextFromMap`. Partial context rules: no args → current context; only hash → hash plus keys used in the partial (from current scope); explicit context and/or hash → base context merged with hash.
 
 4. **Functions**  
    For each template: `renderXxx`, `RenderXxx`, `RenderXxxString` as above.

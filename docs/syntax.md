@@ -60,23 +60,24 @@ Nested helper calls where the result of one helper is passed as an argument to a
 
 ## Partials
 
-**Basic partial:**
+**Basic partial (current context only):**
 ```handlebars
 {{> header}}
 ```
-Renders the `header` partial template with the current context.
+Renders the `header` partial with the **current context**. The current context is passed only when there are no explicit context argument and no hash.
 
-**Partial with different context:**
+**Partial with explicit context:**
 ```handlebars
 {{> userCard user}}
+{{> footer . note="thanks"}}
 ```
-Renders `userCard` partial with `user` as the context instead of the current context.
+Renders the partial with the given context (e.g. `user` or `.`). Hash arguments are merged with that context (hash overrides same keys).
 
-**Partial with locals:**
+**Partial with only hash (no explicit context):**
 ```handlebars
 {{> footer note="thanks"}}
 ```
-Renders `footer` partial with `note` available as a local variable.
+Renders `footer` with a context built from the **hash** plus **only the keys that the partial template uses** from the current scope. So the partial receives the hash and any other root-level paths it references (e.g. `{{title}}` in the partial), taken from the current context.
 
 **Dynamic partial names:**
 ```handlebars

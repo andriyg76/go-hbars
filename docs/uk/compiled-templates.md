@@ -51,17 +51,7 @@ func RenderMainString(data MainContext) (string, error) { ... }
    Типобезпечні аксесори для шляхів контексту шаблону (виводяться з виразів у шаблоні). Компілятор випромінює інтерфейсні типи (наприклад `MainContext`, `MainContextUser`) та опційні конструктори `XxxContextFromMap`. Імена похідні від Go-ідентифікатора шаблону та шляху (наприклад `MainContextUser`, `MainContextItems`).
 
 3. **Мапа partials**  
-   ```go
-   var partials map[string]func(any, io.Writer) error
-   func init() {
-       partials = map[string]func(any, io.Writer) error{
-           "main":   func(ctx any, w io.Writer) error { return renderMain(ctx.(MainContext), w) },
-           "header": func(ctx any, w io.Writer) error { return renderHeader(ctx.(HeaderContext), w) },
-           ...
-       }
-   }
-   ```  
-   Ключі — імена шаблонів (як у файлах без `.hbs`). Використовується внутрішньо, коли шаблон містить `{{> partialName }}`.
+   Ключі — імена шаблонів (як у файлах без `.hbs`). Використовується, коли шаблон містить `{{> partialName }}` з явним контекстом або хешем. Якщо партіал викликано **без аргументів і без хешу** (наприклад `{{> header}}`), компілятор викликає `renderXxx(data, w)` з поточним контекстом напряму; при наявності явного контексту або хешу використовується мапа `partials`, щоб контекст перетворювався через `contextMap` та `XxxContextFromMap`. Правила контексту партіала: без аргументів → поточний контекст; лише хеш → хеш плюс ключі, які партіал використовує (з поточного scope); явний контекст і/або хеш → базовий контекст, злитий з хешем.
 
 4. **Функції**  
    Для кожного шаблону: `renderXxx`, `RenderXxx`, `RenderXxxString` як вище.
