@@ -316,6 +316,9 @@ func readModulePath(goModPath string) (string, error) {
 			return strings.TrimSpace(m[1]), nil
 		}
 	}
+	if err := sc.Err(); err != nil {
+		return "", fmt.Errorf("reading go.mod: %w", err)
+	}
 	return "", fmt.Errorf("no module directive in go.mod")
 }
 
