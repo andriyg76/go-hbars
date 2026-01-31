@@ -42,7 +42,7 @@ This downloads go-hbars (and hbc) if needed, generates `templates_gen.go`, and u
 
 ## 4. Use the generated API in your program
 
-In your `main.go` (or any package), import the templates package and call the generated render functions:
+In your `main.go` (or any package), import the templates package and call the generated render functions. The compiler emits **typed context** types (e.g. `MainContext`); when your data is `map[string]any` (e.g. from JSON), use the generated `XxxContextFromMap` so it satisfies the context interface:
 
 ```go
 package main
@@ -67,8 +67,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Render to string (template name = file name without .hbs, e.g. main -> RenderMainString)
-	out, err := templates.RenderMainString(data)
+	// Render to string. For map data, use MainContextFromMap so it satisfies MainContext.
+	out, err := templates.RenderMainString(templates.MainContextFromMap(data))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "render: %v\n", err)
 		os.Exit(1)
@@ -79,10 +79,11 @@ func main() {
 
 For each template `name.hbs`, the generated package exposes:
 
-- `RenderName(w io.Writer, data any) error`
-- `RenderNameString(data any) (string, error)`
+- `RenderName(w io.Writer, data NameContext) error`
+- `RenderNameString(data NameContext) (string, error)`
+- `NameContextFromMap(m map[string]any) NameContext` — use this when your data is a map (e.g. from JSON).
 
-(How template file names map to Go function names and what the generated file contains: see [Compiled template file](compiled-templates.md).)
+(How template file names map to Go function names and what the generated file contains: see [Compiled template file](compiled-templates.md). Full API: [Template API](api.md).)
 
 ## 5. Run the program
 
@@ -97,7 +98,7 @@ go run .
 | 1 | New module: `go mod init myapp` |
 | 2 | Add `templates/*.hbs` and `templates/gen.go` with `//go:generate go run github.com/andriyg76/go-hbars/cmd/hbc@latest -in . -out ./templates_gen.go -pkg templates` |
 | 3 | Run `go generate ./...` then `go mod tidy` |
-| 4 | In main: import templates, load data, call `templates.RenderXxxString(data)` |
+| 4 | In main: import templates, load data, call `templates.RenderXxxString(templates.XxxContextFromMap(data))` for map data |
 | 5 | Run with `go run .` |
 
 No `replace` in `go.mod` is required; the dependency is taken from GitHub. To pin a version, use a specific tag instead of `@latest` in the `go:generate` line (e.g. `@v0.1.0` when available).

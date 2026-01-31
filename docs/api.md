@@ -16,8 +16,8 @@ if err := templates.RenderMain(&b, data); err != nil {
 }
 out := b.String()
 
-// Or use the string wrapper
-out, err := templates.RenderMainString(data)
+// Or use the string wrapper. For map data, use MainContextFromMap(data).
+out, err := templates.RenderMainString(templates.MainContextFromMap(data))
 ```
 
 ## Generated Functions
@@ -274,3 +274,9 @@ func IfHelper(args []any) error {
 ```
 
 Note: the built-in `if`/`unless`/`each`/`with` are implemented by the compiler; the above illustrates the runtime API for custom block helpers. When the compiler invokes a block helper it calls `helper(args)`; the writer `w` is in scope in the generated render function. Custom helpers that are called from generated code and need to render the block must receive or capture the writer (e.g. via an adapter).
+
+## See also
+
+- [Compiled template file](compiled-templates.md) — What the compiler generates (context types, RenderXxx, FromMap).
+- [Template Syntax](syntax.md) — Handlebars expressions and blocks.
+- [Built-in Helpers](helpers.md) — Available helpers and how to register custom ones.

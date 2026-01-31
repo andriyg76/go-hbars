@@ -182,3 +182,9 @@ package templates
 - name: Build
   run: go build ./...
 ```
+
+## Див. також
+
+- [init](init.md) — створити проєкт з `processor/templates`, `data/`, `shared/` через `init new -bootstrap`.
+- [Як інтегрувати bootstrap](howto-integrate-bootstrap.md) — покрокова налаштування bootstrap.
+- [Вбудований API](embedded.md) — використання процесора та сервера програмно.

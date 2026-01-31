@@ -189,3 +189,9 @@ Run `go:generate` from the directory that contains the template files (e.g. `pro
   run: go build ./...
 ```
 
+## See also
+
+- [init](init.md) — Create a project with `processor/templates`, `data/`, `shared/` using `init new -bootstrap`.
+- [How to integrate bootstrap](howto-integrate-bootstrap.md) — Step-by-step bootstrap setup.
+- [Embedded API](embedded.md) — Use processor and server programmatically.
+

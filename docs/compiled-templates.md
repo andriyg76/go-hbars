@@ -64,3 +64,20 @@ func RenderMainString(data MainContext) (string, error) { ... }
 - **Template name** = file name without `.hbs`.
 - **Go name** = split by non-alphanumeric, capitalize each part, join; if empty or leading digit, prefix `Template`.
 - **Public API**: `RenderXxx(w, data)` and `RenderXxxString(data)` with typed context (e.g. `MainContext`); internal `renderXxx` and `partials` are for compiler/runtime use.
+
+## hbc command-line flags
+
+| Flag | Description |
+|------|-------------|
+| `-in` | Input template file or directory (required). |
+| `-out` | Output Go file path (default: `templates_gen.go`). |
+| `-pkg` | Package name for generated code (default: derived from output path). |
+| `-bootstrap` | Generate `NewQuickServer()` and `NewQuickProcessor()` for quick server/processor setup. |
+| `-ext` | Comma-separated template extensions (default: `.hbs,.handlebars`). |
+| `-runtime-import` | Override runtime package import path. |
+| `-no-core-helpers` | Disable default core helpers (from `helpers.Registry()`). |
+| `-helper` | Helper mapping: `name=Ident` or `name=import/path:Ident`. |
+| `-import` | Import path for helpers: `path` or `path:alias`. |
+| `-helpers` | Comma-separated helper list: `[alias:]Name` or `[alias:]name=Ident`. |
+
+Example: `hbc -in . -out ./templates_gen.go -pkg templates -bootstrap`

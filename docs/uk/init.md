@@ -70,3 +70,9 @@ go run ./cmd/init new /шлях/до/myapp -bootstrap
 ```
 
 Детальніше: [Робота з локальним чекаутом](howto-integrate-api.md#робота-з-локальним-чекаутом) в гайдах по інтеграції.
+
+## Див. також
+
+- [Як інтегрувати API](howto-integrate-api.md) — ручне налаштування без init (шаблони + go:generate).
+- [Як інтегрувати bootstrap](howto-integrate-bootstrap.md) — ручне налаштування bootstrap (QuickServer, QuickProcessor).
+- [Процесор та веб-сервер](processor-server.md) — CLI-інструменти та формат файлів даних.

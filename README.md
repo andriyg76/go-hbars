@@ -32,15 +32,16 @@ if err := templates.RenderMain(&b, data); err != nil {
 out := b.String()
 ```
 
-Or use the string wrapper:
+Or use the string wrapper. When your data is `map[string]any` (e.g. from JSON), use the generated `MainContextFromMap` so it satisfies the context type:
 
 ```go
-out, err := templates.RenderMainString(data)
+out, err := templates.RenderMainString(templates.MainContextFromMap(data))
 ```
 
 ## Documentation
 
-- **[init: create or add to a project](docs/init.md)** - Scaffold a new go-hbars project or add templates to an existing module
+- **[Documentation index](docs/README.md)** — Overview of all docs (getting started, reference, processor/server).
+- **[init: create or add to a project](docs/init.md)** — Scaffold a new go-hbars project or add templates to an existing module
 - **[Template Syntax](docs/syntax.md)** - Complete Handlebars syntax reference
 - **[Custom Extensions](docs/extensions.md)** - includeZero
 - **[Built-in Helpers](docs/helpers.md)** - Available helpers and how to use them

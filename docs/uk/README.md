@@ -1,22 +1,24 @@
 # Документація go-hbars (українською)
 
-## Інтеграція
+Огляд усієї документації: початок роботи, довідники, процесор та сервер.
+
+## Початок роботи
 
 - [init: створити проєкт або додати до нього](init.md) — scaffold нового проєкту або додати шаблони до існуючого модуля
-- [Як інтегрувати API](howto-integrate-api.md) — шаблони + go:generate
-- [Як інтегрувати bootstrap](howto-integrate-bootstrap.md) — QuickServer + QuickProcessor
-
-## Деталі реалізації
-
-- [Скомпільований файл шаблонів](compiled-templates.md) — згенерований код, імена файлів → функції
-- [Згенерований bootstrap](bootstrap-generated.md) — інтерфейс для розробника
+- [Як інтегрувати API](howto-integrate-api.md) — додати шаблони та go:generate (без bootstrap)
+- [Як інтегрувати bootstrap](howto-integrate-bootstrap.md) — QuickServer + QuickProcessor з файлами даних та `_page`
 
 ## Довідники
 
-- [API шаблонів](api.md) — рантайм API, контекст, хелпери, партіали
-- [Тестування](testing.md) — юніт- та E2E тести
-- [Вбудований процесор та сервер](embedded.md) — QuickProcessor, QuickServer, sitegen API
-- [Процесор та веб-сервер](processor-server.md) — CLI build/server, формат даних, спільні дані
-- [Вбудовані хелпери](helpers.md) — рядкові, порівняння, дати, колекції, власні хелпери
 - [Синтаксис Handlebars](syntax.md) — вирази, партіали, блоки, шляхи, істинність
 - [Власні розширення](extensions.md) — includeZero, універсальна секція
+- [Вбудовані хелпери](helpers.md) — рядкові, порівняння, дати, колекції, власні хелпери
+- [API шаблонів](api.md) — рантайм API для скомпільованих шаблонів (контекст, хелпери, партіали)
+- [Скомпільований файл шаблонів](compiled-templates.md) — що генерує hbc (імена, функції, типи контексту)
+- [Згенерований bootstrap](bootstrap-generated.md) — що додає `-bootstrap` (NewQuickServer, NewQuickProcessor)
+- [Тестування](testing.md) — юніт- та E2E тести
+
+## Процесор та сервер
+
+- [Процесор та веб-сервер](processor-server.md) — CLI build/server, формат даних, спільні дані
+- [Вбудований процесор та сервер](embedded.md) — вбудовування процесора та сервера в застосунок (sitegen, власний рендерер)

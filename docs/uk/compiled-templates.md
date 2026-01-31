@@ -64,3 +64,20 @@ func RenderMainString(data MainContext) (string, error) { ... }
 - **Ім'я шаблону** = ім'я файлу без `.hbs`.
 - **Go-ім'я** = розбити по не-буквоцифровим, з великої літери кожну частину, склеїти; якщо порожньо або починається з цифри — префікс `Template`.
 - **Публічний API**: `RenderXxx(w, data)` та `RenderXxxString(data)` з типізованим контекстом (наприклад `MainContext`); внутрішні `renderXxx` та `partials` — для компілятора/рантайму.
+
+## Прапорці командного рядка hbc
+
+| Прапорець | Опис |
+|-----------|------|
+| `-in` | Вхідний файл або директорія шаблонів (обов’язковий). |
+| `-out` | Шлях до згенерованого Go-файлу (за замовчуванням: `templates_gen.go`). |
+| `-pkg` | Ім’я пакету для згенерованого коду (за замовчуванням: з шляху виводу). |
+| `-bootstrap` | Генерувати `NewQuickServer()` та `NewQuickProcessor()` для швидкого запуску сервера/процесора. |
+| `-ext` | Розширення шаблонів через кому (за замовчуванням: `.hbs,.handlebars`). |
+| `-runtime-import` | Перевизначити імпорт пакету runtime. |
+| `-no-core-helpers` | Вимкнути вбудовані хелпери (з `helpers.Registry()`). |
+| `-helper` | Зіставлення хелпера: `name=Ident` або `name=import/path:Ident`. |
+| `-import` | Шлях імпорту для хелперів: `path` або `path:alias`. |
+| `-helpers` | Список хелперів через кому: `[alias:]Name` або `[alias:]name=Ident`. |
+
+Приклад: `hbc -in . -out ./templates_gen.go -pkg templates -bootstrap`

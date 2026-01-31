@@ -16,8 +16,8 @@ if err := templates.RenderMain(&b, data); err != nil {
 }
 out := b.String()
 
-// Або використати обгортку для рядка
-out, err := templates.RenderMainString(data)
+// Або використати обгортку для рядка. Для даних-мапи використовуйте MainContextFromMap(data).
+out, err := templates.RenderMainString(templates.MainContextFromMap(data))
 ```
 
 ## Згенеровані функції
@@ -197,10 +197,10 @@ type BlockOptions struct {
 - Невірні типи даних
 - Блоковий хелпер не отримав BlockOptions
 
-Завжди перевіряйте помилки:
+Завжди перевіряйте помилки. Коли дані у вигляді `map[string]any` (наприклад з JSON), використовуйте згенерований `XxxContextFromMap`, щоб дані задовольняли тип контексту:
 
 ```go
-out, err := templates.RenderMainString(data)
+out, err := templates.RenderMainString(templates.MainContextFromMap(data))
 if err != nil {
     log.Fatal(err)
 }
@@ -274,3 +274,9 @@ func IfHelper(args []any) error {
 ```
 
 Примітка: вбудовані `if`/`unless`/`each`/`with` реалізовані компілятором; приклад вище ілюструє рантайм API для власних блокових хелперів. Коли компілятор викликає блоковий хелпер, він викликає `helper(args)`; writer `w` є у контексті згенерованої функції рендеру. Власні хелпери, що викликаються зі згенерованого коду та мають рендерити блок, повинні отримувати або захоплювати writer (наприклад через адаптер).
+
+## Див. також
+
+- [Скомпільований файл шаблонів](compiled-templates.md) — що генерує компілятор (типи контексту, RenderXxx, FromMap)
+- [Синтаксис Handlebars](syntax.md) — вирази та блоки
+- [Вбудовані хелпери](helpers.md) — доступні хелпери та реєстрація власних

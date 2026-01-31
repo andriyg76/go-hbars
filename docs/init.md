@@ -70,3 +70,9 @@ go run ./cmd/init new /path/to/myapp -bootstrap
 ```
 
 See [Working with a local checkout](howto-integrate-api.md#working-with-a-local-checkout) in the integration guides.
+
+## See also
+
+- [How to integrate API](howto-integrate-api.md) — Manual setup without init (templates + go:generate).
+- [How to integrate bootstrap](howto-integrate-bootstrap.md) — Manual bootstrap setup (QuickServer, QuickProcessor).
+- [Processor & Server](processor-server.md) — CLI tools and data file format.

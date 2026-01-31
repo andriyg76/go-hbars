@@ -42,7 +42,7 @@ go mod tidy
 
 ## 4. Використати згенерований API у програмі
 
-У `main.go` (або будь-якому пакеті) імпортуйте пакет шаблонів і викликайте згенеровані функції рендеру:
+У `main.go` (або будь-якому пакеті) імпортуйте пакет шаблонів і викликайте згенеровані функції рендеру. Компілятор генерує **типізовані контексти** (наприклад `MainContext`); коли дані у вигляді `map[string]any` (наприклад з JSON), використовуйте згенерований `XxxContextFromMap`, щоб вони задовольняли інтерфейс контексту:
 
 ```go
 package main
@@ -67,8 +67,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Рендер у рядок (ім'я шаблону = ім'я файлу без .hbs, напр. main -> RenderMainString)
-	out, err := templates.RenderMainString(data)
+	// Рендер у рядок. Для даних-мапи використовуйте MainContextFromMap, щоб задовольнити MainContext.
+	out, err := templates.RenderMainString(templates.MainContextFromMap(data))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "render: %v\n", err)
 		os.Exit(1)
@@ -79,10 +79,11 @@ func main() {
 
 Для кожного шаблону `name.hbs` згенерований пакет надає:
 
-- `RenderName(w io.Writer, data any) error`
-- `RenderNameString(data any) (string, error)`
+- `RenderName(w io.Writer, data NameContext) error`
+- `RenderNameString(data NameContext) (string, error)`
+- `NameContextFromMap(m map[string]any) NameContext` — використовуйте для даних-мапи (наприклад з JSON).
 
-(Як імена файлів шаблонів відповідають іменам Go-функцій і що містить згенерований файл: див. [Скомпільований файл шаблонів](compiled-templates.md).)
+(Як імена файлів шаблонів відповідають іменам Go-функцій і що містить згенерований файл: див. [Скомпільований файл шаблонів](compiled-templates.md). Повний API: [API шаблонів](api.md).)
 
 ## 5. Запустити програму
 
@@ -97,7 +98,7 @@ go run .
 | 1 | Новий модуль: `go mod init myapp` |
 | 2 | Додати `templates/*.hbs` та `templates/gen.go` з `//go:generate go run github.com/andriyg76/go-hbars/cmd/hbc@latest -in . -out ./templates_gen.go -pkg templates` |
 | 3 | Виконати `go generate ./...`, потім `go mod tidy` |
-| 4 | У main: імпорт templates, завантажити дані, викликати `templates.RenderXxxString(data)` |
+| 4 | У main: імпорт templates, завантажити дані, викликати `templates.RenderXxxString(templates.XxxContextFromMap(data))` для даних-мапи |
 | 5 | Запуск: `go run .` |
 
 У `go.mod` не потрібен `replace`; залежність береться з GitHub. Щоб зафіксувати версію, використовуйте конкретний тег замість `@latest` у рядку go:generate (наприклад `@v0.1.0`, коли буде доступний).
