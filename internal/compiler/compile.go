@@ -188,9 +188,9 @@ func CompileTemplates(templates map[string]string, opts Options) ([]byte, error)
 		partials.line("m := contextMap(ctx)")
 		partials.line("if m == nil { return nil }")
 		if useLayoutBlocks {
-			partials.line("return render%s(%s(m), w, root, blocks)", goName, fromMapName)
+			partials.line("return render%s(%s(m), w, %s(m), blocks)", goName, fromMapName, fromMapName)
 		} else {
-			partials.line("return render%s(%s(m), w, root)", goName, fromMapName)
+			partials.line("return render%s(%s(m), w, %s(m))", goName, fromMapName, fromMapName)
 		}
 		partials.indentDec()
 		partials.line("},")
@@ -220,9 +220,9 @@ func CompileTemplates(templates map[string]string, opts Options) ([]byte, error)
 			gen.blocksVar = "blocks"
 		}
 		if useLayoutBlocks {
-			functions.line("func render%s(data %s, w io.Writer, root any, blocks *runtime.Blocks) error {", goName, rootContext)
+			functions.line("func render%s(data %s, w io.Writer, root %s, blocks *runtime.Blocks) error {", goName, rootContext, rootContext)
 		} else {
-			functions.line("func render%s(data %s, w io.Writer, root any) error {", goName, rootContext)
+			functions.line("func render%s(data %s, w io.Writer, root %s) error {", goName, rootContext, rootContext)
 		}
 		functions.indentInc()
 		functions.line("if data == nil {")
@@ -722,15 +722,15 @@ func (g *generator) emitPartial(n *ast.Partial) error {
 		}
 		if usePartialsMap {
 			if g.blocksVar != "" {
-				g.w.line("if err := partials[%q](%s, %s, %s, %s); err != nil {", name, partialCtxVar, writerArg, g.rootVar, g.blocksVar)
+				g.w.line("if err := partials[%q](%s, %s, %s, %s); err != nil {", name, partialCtxVar, writerArg, partialCtxVar, g.blocksVar)
 			} else {
-				g.w.line("if err := partials[%q](%s, %s, %s); err != nil {", name, partialCtxVar, writerArg, g.rootVar)
+				g.w.line("if err := partials[%q](%s, %s, %s); err != nil {", name, partialCtxVar, writerArg, partialCtxVar)
 			}
 		} else {
 			if g.blocksVar != "" {
-				g.w.line("if err := render%s(%s, %s, %s, %s); err != nil {", goName, partialCtxVar, writerArg, g.rootVar, g.blocksVar)
+				g.w.line("if err := render%s(%s, %s, %s, %s); err != nil {", goName, partialCtxVar, writerArg, partialCtxVar, g.blocksVar)
 			} else {
-				g.w.line("if err := render%s(%s, %s, %s); err != nil {", goName, partialCtxVar, writerArg, g.rootVar)
+				g.w.line("if err := render%s(%s, %s, %s); err != nil {", goName, partialCtxVar, writerArg, partialCtxVar)
 			}
 		}
 		g.w.indentInc()
@@ -743,15 +743,15 @@ func (g *generator) emitPartial(n *ast.Partial) error {
 		if goName, ok := g.partials[nameExpr.value]; ok {
 			if usePartialsMap {
 				if g.blocksVar != "" {
-					g.w.line("if err := partials[%q](%s, %s, %s, %s); err != nil {", nameExpr.value, partialCtxVar, writerArg, g.rootVar, g.blocksVar)
+					g.w.line("if err := partials[%q](%s, %s, %s, %s); err != nil {", nameExpr.value, partialCtxVar, writerArg, partialCtxVar, g.blocksVar)
 				} else {
-					g.w.line("if err := partials[%q](%s, %s, %s); err != nil {", nameExpr.value, partialCtxVar, writerArg, g.rootVar)
+					g.w.line("if err := partials[%q](%s, %s, %s); err != nil {", nameExpr.value, partialCtxVar, writerArg, partialCtxVar)
 				}
 			} else {
 				if g.blocksVar != "" {
-					g.w.line("if err := render%s(%s, %s, %s, %s); err != nil {", goName, partialCtxVar, writerArg, g.rootVar, g.blocksVar)
+					g.w.line("if err := render%s(%s, %s, %s, %s); err != nil {", goName, partialCtxVar, writerArg, partialCtxVar, g.blocksVar)
 				} else {
-					g.w.line("if err := render%s(%s, %s, %s); err != nil {", goName, partialCtxVar, writerArg, g.rootVar)
+					g.w.line("if err := render%s(%s, %s, %s); err != nil {", goName, partialCtxVar, writerArg, partialCtxVar)
 				}
 			}
 			g.w.indentInc()
@@ -775,9 +775,9 @@ func (g *generator) emitPartial(n *ast.Partial) error {
 	g.w.line("runtime.MissingPartialOutput(%s, %s)", writerArg, nameVar)
 	g.w.indentDec()
 	if g.blocksVar != "" {
-		g.w.line("} else if err := partialFn(%s, %s, %s, %s); err != nil {", partialCtxVar, writerArg, g.rootVar, g.blocksVar)
+		g.w.line("} else if err := partialFn(%s, %s, %s, %s); err != nil {", partialCtxVar, writerArg, partialCtxVar, g.blocksVar)
 	} else {
-		g.w.line("} else if err := partialFn(%s, %s, %s); err != nil {", partialCtxVar, writerArg, g.rootVar)
+		g.w.line("} else if err := partialFn(%s, %s, %s); err != nil {", partialCtxVar, writerArg, partialCtxVar)
 	}
 	g.w.indentInc()
 	g.w.line("return err")

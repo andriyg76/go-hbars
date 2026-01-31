@@ -48,15 +48,21 @@ func TestE2E_UserProject_GoGenerate_CompatShowcase(t *testing.T) {
 	copyFile("templates/userCard.hbs", filepath.Join(examplesCompat, "templates", "userCard.hbs"))
 	copyFile("templates/orderRow.hbs", filepath.Join(examplesShowcase, "templates", "orderRow.hbs"))
 
-	writeFile("templates/gen.go", `//go:generate go run github.com/andriyg76/go-hbars/cmd/hbc@latest -in . -out ./templates_gen.go -pkg templates
+	// go:generate without @latest so replace in go.mod uses local hbc.
+	writeFile("templates/gen.go", `//go:generate go run github.com/andriyg76/go-hbars/cmd/hbc -in . -out ./templates_gen.go -pkg templates
 
 package templates
 `)
+	// Import hbc so go mod tidy keeps the dependency and adds transitive deps to go.sum.
+	writeFile("tools.go", `//go:build tools
 
-	writeFile("go.mod", `module test-e2e-api
+package main
 
-go 1.24
+import _ "github.com/andriyg76/go-hbars/cmd/hbc"
 `)
+
+	// Use local go-hbars so go:generate runs the local hbc (not @latest from network).
+	writeFile("go.mod", "module test-e2e-api\n\ngo 1.24\n\nreplace github.com/andriyg76/go-hbars => "+filepath.ToSlash(root)+"\n")
 
 	if err := os.MkdirAll(filepath.Join(tmpDir, "data"), 0755); err != nil {
 		t.Fatalf("mkdir data: %v", err)
@@ -145,7 +151,19 @@ func main() {
 }
 `)
 
-	cmd := exec.Command("go", "generate", "./...")
+	// Get module so replace applies; tools.go imports hbc so tidy keeps it and adds transitive deps.
+	cmd := exec.Command("go", "get", "github.com/andriyg76/go-hbars")
+	cmd.Dir = tmpDir
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("go get: %v\n%s", err, out)
+	}
+	cmd = exec.Command("go", "mod", "tidy")
+	cmd.Dir = tmpDir
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("go mod tidy: %v\n%s", err, out)
+	}
+
+	cmd = exec.Command("go", "generate", "./...")
 	cmd.Dir = tmpDir
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("go generate: %v\n%s", err, out)
