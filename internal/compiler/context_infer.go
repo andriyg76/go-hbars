@@ -259,9 +259,15 @@ func (c *pathCollector) collectMustache(n *ast.Mustache) error {
 }
 
 func (c *pathCollector) collectPartial(n *ast.Partial) error {
-	parts, _, err := parseParts(n.Expr)
+	parts, hash, err := parseParts(n.Expr)
 	if err != nil {
 		return nil
+	}
+	// Hash keys become partial context fields (e.g. {{> footer note="thanks"}} -> context has "note").
+	for _, h := range hash {
+		if h.key != "" {
+			c.addPath(h.key, "")
+		}
 	}
 	// Merge paths from the partial template so the including template's context has the required methods.
 	if c.parsed != nil && len(parts) >= 1 {

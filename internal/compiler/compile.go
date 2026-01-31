@@ -643,7 +643,7 @@ func (g *generator) emitMustache(n *ast.Mustache) error {
 }
 
 func (g *generator) emitPartial(n *ast.Partial) error {
-	parts, _, err := parseParts(n.Expr)
+	parts, hash, err := parseParts(n.Expr)
 	if err != nil {
 		return err
 	}
@@ -656,8 +656,15 @@ func (g *generator) emitPartial(n *ast.Partial) error {
 	nameExpr := parts[0]
 	scope, _ := g.currentTypedScope()
 	partialCtxVar := scope.varName
-	// Explicit context (e.g. {{> orderRow order}}): pass the given expression (row data).
-	if len(parts) == 2 {
+	// Hash (e.g. {{> footer note="thanks"}}): pass a clean map with only those fields as context.
+	if len(hash) > 0 {
+		mapVar, err := g.emitPartialContextMap(hash)
+		if err != nil {
+			return err
+		}
+		partialCtxVar = mapVar
+	} else if len(parts) == 2 {
+		// Explicit context (e.g. {{> orderRow order}}): pass the given expression (row data).
 		valueExpr, err := g.emitExprValue(parts[1])
 		if err != nil {
 			return err
@@ -669,8 +676,9 @@ func (g *generator) emitPartial(n *ast.Partial) error {
 			g.w.line("%s := %s", partialCtxVar, valueExpr)
 		}
 	}
-	// Hash args (locals) not passed to partial in typed-context mode; omit to avoid unused variable
 
+	// When context is a raw map (hash) or explicit (parts==2), use partials map so contextMap+FromMap convert it.
+	usePartialsMap := len(hash) > 0 || len(parts) == 2
 	writerArg := g.currentWriter()
 	if nameExpr.kind == exprString {
 		name := nameExpr.value
@@ -678,8 +686,7 @@ func (g *generator) emitPartial(n *ast.Partial) error {
 		if !ok {
 			return hexerr.New(fmt.Sprintf("partial %q is not defined", name))
 		}
-		// Explicit context: use partials map so any is accepted; partial keeps its own interface (e.g. OrderRowContext).
-		if len(parts) == 2 {
+		if usePartialsMap {
 			if g.blocksVar != "" {
 				g.w.line("if err := partials[%q](%s, %s, %s); err != nil {", name, partialCtxVar, writerArg, g.blocksVar)
 			} else {
@@ -700,7 +707,7 @@ func (g *generator) emitPartial(n *ast.Partial) error {
 	}
 	if nameExpr.kind == exprPath {
 		if goName, ok := g.partials[nameExpr.value]; ok {
-			if len(parts) == 2 {
+			if usePartialsMap {
 				if g.blocksVar != "" {
 					g.w.line("if err := partials[%q](%s, %s, %s); err != nil {", nameExpr.value, partialCtxVar, writerArg, g.blocksVar)
 				} else {
@@ -1291,6 +1298,26 @@ func (g *generator) emitHashMap(hash []hashArg) (string, error) {
 	g.w.indentDec()
 	g.w.line("}")
 	return hashVar, nil
+}
+
+// emitPartialContextMap emits a clean map[string]any with only the hash keys/values (for partial context).
+func (g *generator) emitPartialContextMap(hash []hashArg) (string, error) {
+	if len(hash) == 0 {
+		return "nil", nil
+	}
+	mapVar := g.nextTemp("partialCtx")
+	g.w.line("%s := map[string]any{", mapVar)
+	g.w.indentInc()
+	for _, h := range hash {
+		valueExpr, err := g.emitExprValue(h.value)
+		if err != nil {
+			return "", err
+		}
+		g.w.line("%q: %s,", h.key, valueExpr)
+	}
+	g.w.indentDec()
+	g.w.line("}")
+	return mapVar, nil
 }
 
 func (g *generator) emitExprValue(value expr) (string, error) {
