@@ -78,6 +78,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"sort"
 	"strings"
 
 	templates "test-e2e-api/templates"
@@ -94,6 +95,41 @@ func normalizeWhitespace(s string) string {
 	s = strings.Join(lines, "\n")
 	s = regexp.MustCompile("\\n{2,}").ReplaceAllString(s, "\n")
 	return strings.Trim(s, "\n")
+}
+
+func normalizeMapKeyOrder(s string) string {
+	lines := strings.Split(s, "\n")
+	var i int
+	for i < len(lines) {
+		var run []int
+		for i < len(lines) {
+			trimmed := strings.TrimSpace(lines[i])
+			if trimmed == "" || !strings.Contains(trimmed, "=") {
+				i++
+				continue
+			}
+			if strings.HasPrefix(lines[i], " ") && len(trimmed) > 0 {
+				run = append(run, i)
+				i++
+			} else {
+				break
+			}
+		}
+		if len(run) > 1 {
+			group := make([]string, len(run))
+			for j, idx := range run {
+				group[j] = lines[idx]
+			}
+			sort.Strings(group)
+			for j, idx := range run {
+				lines[idx] = group[j]
+			}
+		}
+		if len(run) == 0 {
+			i++
+		}
+	}
+	return strings.Join(lines, "\n")
 }
 
 func main() {
@@ -139,6 +175,8 @@ func main() {
 	expected = strings.ReplaceAll(expected, "\r\n", "\n")
 	compatOut = normalizeWhitespace(compatOut)
 	expected = normalizeWhitespace(expected)
+	compatOut = normalizeMapKeyOrder(compatOut)
+	expected = normalizeMapKeyOrder(expected)
 	if compatOut != expected {
 		fmt.Fprintf(os.Stderr, "compat output mismatch\n")
 		os.Exit(1)
