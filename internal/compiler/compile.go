@@ -118,11 +118,6 @@ func CompileTemplates(templates map[string]string, opts Options) ([]byte, error)
 	contextTypeToTemplate := make(map[string]string)
 	for _, name := range names {
 		goName := funcNames[name]
-		ownCtx := goName + "Context"
-		paramType := partialParamTypes[name]
-		if paramType != "" && paramType != ownCtx {
-			continue
-		}
 		tree := typeTrees[name]
 		for _, ctxType := range AllContextTypeNames(goName, tree) {
 			contextTypeToTemplate[ctxType] = name
@@ -132,17 +127,10 @@ func CompileTemplates(templates map[string]string, opts Options) ([]byte, error)
 	contextIfaces := &codeWriter{}
 	contextData := &codeWriter{}
 	for _, name := range names {
-		goName := funcNames[name]
-		ownCtx := goName + "Context"
-		paramType := partialParamTypes[name]
-		if paramType != "" && paramType != ownCtx {
-			continue // partial uses another template's context; don't emit its own root interface or data
-		}
 		tree := typeTrees[name]
 		emitContextInterfaces(contextIfaces, name, tree)
 		emitContextDataTypes(contextData, name, tree)
 	}
-
 	partials := &codeWriter{}
 	if useLayoutBlocks {
 		partials.line("var partials map[string]func(any, io.Writer, any, *runtime.Blocks) error")
@@ -215,7 +203,7 @@ func CompileTemplates(templates map[string]string, opts Options) ([]byte, error)
 			ownerName = name
 		}
 		tree := typeTrees[ownerName]
-		gen := &generator{w: functions, helpers: helperExprs, partials: funcNames, typeTrees: typeTrees, tree: tree, goName: goName, rootVar: "root"}
+		gen := &generator{w: functions, helpers: helperExprs, partials: funcNames, typeTrees: typeTrees, tree: tree, goName: goName, rootVar: "root", rootContextType: rootContext, partialParamTypes: partialParamTypes}
 		if useLayoutBlocks {
 			gen.blocksVar = "blocks"
 		}
@@ -519,17 +507,19 @@ type typedScope struct {
 }
 
 type generator struct {
-	w           *codeWriter
-	helpers     map[string]string
-	partials    map[string]string
-	typeTrees   map[string]*typeNode
-	tempID      int
-	tree        *typeNode
-	goName      string
-	typedStack  []typedScope
-	rootVar     string   // name of root context variable ("root"); same as data in entry, passed in for partials
-	blocksVar   string   // non-empty when layout block/partial are used
-	writerStack []string // when non-empty, currentWriter() returns "&" + top for partial body capture
+	w                 *codeWriter
+	helpers           map[string]string
+	partials          map[string]string
+	typeTrees         map[string]*typeNode
+	tempID             int
+	tree               *typeNode
+	goName             string
+	typedStack         []typedScope
+	rootVar            string            // name of root context variable ("root"); same as data in entry, passed in for partials
+	blocksVar          string            // non-empty when layout block/partial are used
+	writerStack        []string          // when non-empty, currentWriter() returns "&" + top for partial body capture
+	rootContextType    string            // current template's root context type (e.g. FirstpageContext or DefaultRootParam)
+	partialParamTypes  map[string]string // partial name -> param type (caller type or "" for multi-caller)
 }
 
 func (g *generator) currentWriter() string {
@@ -711,7 +701,7 @@ func (g *generator) emitPartial(n *ast.Partial) error {
 		partialCtxVar = baseCtxVar
 	}
 
-	// When context is a merged map (hash) or explicit (parts==2), use partials map so contextMap+FromMap convert it.
+	// When same scope and no hash, pass context directly if types match (no destructuring to map).
 	usePartialsMap := len(hash) > 0 || len(parts) == 2
 	writerArg := g.currentWriter()
 	if nameExpr.kind == exprString {
@@ -720,17 +710,19 @@ func (g *generator) emitPartial(n *ast.Partial) error {
 		if !ok {
 			return hexerr.New(fmt.Sprintf("partial %q is not defined", name))
 		}
-		if usePartialsMap {
-			if g.blocksVar != "" {
-				g.w.line("if err := partials[%q](%s, %s, %s, %s); err != nil {", name, partialCtxVar, writerArg, partialCtxVar, g.blocksVar)
-			} else {
-				g.w.line("if err := partials[%q](%s, %s, %s); err != nil {", name, partialCtxVar, writerArg, partialCtxVar)
-			}
-		} else {
+		// Direct call only when partial expects the same type as current context (single caller); no conversion.
+		useDirectCall := !usePartialsMap && g.partialParamTypes[name] == g.rootContextType
+		if useDirectCall {
 			if g.blocksVar != "" {
 				g.w.line("if err := render%s(%s, %s, %s, %s); err != nil {", goName, partialCtxVar, writerArg, partialCtxVar, g.blocksVar)
 			} else {
 				g.w.line("if err := render%s(%s, %s, %s); err != nil {", goName, partialCtxVar, writerArg, partialCtxVar)
+			}
+		} else {
+			if g.blocksVar != "" {
+				g.w.line("if err := partials[%q](%s, %s, %s, %s); err != nil {", name, partialCtxVar, writerArg, partialCtxVar, g.blocksVar)
+			} else {
+				g.w.line("if err := partials[%q](%s, %s, %s); err != nil {", name, partialCtxVar, writerArg, partialCtxVar)
 			}
 		}
 		g.w.indentInc()
@@ -741,17 +733,19 @@ func (g *generator) emitPartial(n *ast.Partial) error {
 	}
 	if nameExpr.kind == exprPath {
 		if goName, ok := g.partials[nameExpr.value]; ok {
-			if usePartialsMap {
-				if g.blocksVar != "" {
-					g.w.line("if err := partials[%q](%s, %s, %s, %s); err != nil {", nameExpr.value, partialCtxVar, writerArg, partialCtxVar, g.blocksVar)
-				} else {
-					g.w.line("if err := partials[%q](%s, %s, %s); err != nil {", nameExpr.value, partialCtxVar, writerArg, partialCtxVar)
-				}
-			} else {
+			// Direct call only when partial expects the same type as current context (single caller); no conversion.
+			useDirectCall := !usePartialsMap && g.partialParamTypes[nameExpr.value] == g.rootContextType
+			if useDirectCall {
 				if g.blocksVar != "" {
 					g.w.line("if err := render%s(%s, %s, %s, %s); err != nil {", goName, partialCtxVar, writerArg, partialCtxVar, g.blocksVar)
 				} else {
 					g.w.line("if err := render%s(%s, %s, %s); err != nil {", goName, partialCtxVar, writerArg, partialCtxVar)
+				}
+			} else {
+				if g.blocksVar != "" {
+					g.w.line("if err := partials[%q](%s, %s, %s, %s); err != nil {", nameExpr.value, partialCtxVar, writerArg, partialCtxVar, g.blocksVar)
+				} else {
+					g.w.line("if err := partials[%q](%s, %s, %s); err != nil {", nameExpr.value, partialCtxVar, writerArg, partialCtxVar)
 				}
 			}
 			g.w.indentInc()
@@ -943,9 +937,8 @@ func (g *generator) emitEachBlock(n *ast.Block) error {
 	lenExpr := itemsVar
 	useMapAssert := false
 	if collectionExpr == "nil" {
-		// Unresolved path: use typed nil slice so we can range and use len
-		itemType := contextItemInterfaceName(g.goName, pathStr)
-		g.w.line("var %s []%s", itemsVar, itemType)
+		// Unresolved path: use []any so we never reference a type that might not be emitted by context_infer
+		g.w.line("var %s []any", itemsVar)
 	} else {
 		g.w.line("%s := %s", itemsVar, collectionExpr)
 		// When collection is a map (object), use comma-ok so []any at runtime doesn't panic

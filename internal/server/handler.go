@@ -73,6 +73,13 @@ func (h *Handler) handleDataFile(w http.ResponseWriter, r *http.Request) bool {
 	if urlPath == "" {
 		urlPath = "index"
 	}
+	// /index.html → index, /firstpage.html → firstpage (data file name without .html)
+	if strings.HasSuffix(urlPath, ".html") {
+		urlPath = strings.TrimSuffix(urlPath, ".html")
+		if urlPath == "" {
+			urlPath = "index"
+		}
+	}
 
 	// Try to find matching data file
 	dataPath := h.findDataFile(urlPath)
