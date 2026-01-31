@@ -35,7 +35,7 @@ go test ./internal/compiler/e2e/... -v -count=1   # лише E2E
 | `TestE2E_Showcase_NilContext` | Showcase з nil/порожнім контекстом; без паніки; помилка динамічного парціалу у виводі |
 | `TestE2E_UniversalSection` | Блок-хелпер `date` та умова; перевірка виводу |
 | `TestE2E_UserProject_Bootstrap_ServerAndProcessor` | Користувацький проєкт з `-bootstrap`, go generate, `NewQuickProcessor()` |
-| `TestE2E_UserProject_GoGenerate_CompatShowcase` | Користувацький проєкт з go:generate (без bootstrap); compat + showcase, RenderCompatString / RenderShowcaseString з `XxxContextFromMap` |
+| `TestE2E_UserProject_GoGenerate_CompatShowcase` | Користувацький проєкт з go:generate (без bootstrap); compat + showcase, RenderCompatString / RenderShowcaseString з `XxxContextFromMap`; перевіряє, що `{{#each}}` по масиву (наприклад orders) рендерить елементи |
 
 ### Контекст і FromMap
 

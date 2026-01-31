@@ -35,7 +35,7 @@ go test ./internal/compiler/e2e/... -v -count=1   # runs only E2E
 | `TestE2E_Showcase_NilContext` | Showcase templates with nil/empty context; no panic; dynamic partial error in output |
 | `TestE2E_UniversalSection` | Block helper `date` and conditional; asserts output |
 | `TestE2E_UserProject_Bootstrap_ServerAndProcessor` | User-style project with `-bootstrap`, `go generate`, `NewQuickProcessor()`; checks generated HTML |
-| `TestE2E_UserProject_GoGenerate_CompatShowcase` | User-style project with go:generate (no bootstrap); compat + showcase data, RenderCompatString / RenderShowcaseString with `XxxContextFromMap` |
+| `TestE2E_UserProject_GoGenerate_CompatShowcase` | User-style project with go:generate (no bootstrap); compat + showcase data, RenderCompatString / RenderShowcaseString with `XxxContextFromMap`; asserts `{{#each}}` over array (e.g. orders) renders items |
 
 ### Context and `FromMap`
 

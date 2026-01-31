@@ -954,18 +954,39 @@ func (g *generator) emitEachBlock(n *ast.Block) error {
 		}
 	}
 	if useMapAssert {
-		// Type tree says map; at runtime value may be []any (e.g. JSON array). Use comma-ok to avoid panic.
+		// Type tree says map; at runtime value may be []any (JSON array) or map[string]any. Try both.
+		sliceVar := g.nextTemp("sl")
 		mapVar := g.nextTemp("m")
-		g.w.line("%s, _eachOk := %s.(map[string]any)", mapVar, itemsVar)
-		g.w.line("if _eachOk && len(%s) > 0 {", mapVar)
+		g.w.line("%s, _eachSliceOk := %s.([]any)", sliceVar, itemsVar)
+		g.w.line("if _eachSliceOk && len(%s) > 0 {", sliceVar)
 		g.w.indentInc()
-		g.w.line("for %s, %s := range %s {", keyVar, itemVar, mapVar)
+		g.w.line("for %s, %s := range %s {", keyVar, itemVar, sliceVar)
 		g.w.indentInc()
 		g.w.line("_, _ = %s, %s", keyVar, itemVar)
 		itemPathPrefix := pathStr
 		if len(n.Params) > 0 {
 			itemPathPrefix = n.Params[0]
 		}
+		g.pushTypedScope(itemVar, itemPathPrefix, itemNode)
+		g.typedStack[len(g.typedStack)-1].eachKeyVar = keyVar
+		if len(n.Params) > 1 {
+			g.pushTypedScope(keyVar, n.Params[1], nil)
+		}
+		if err := g.emitNodes(n.Body); err != nil {
+			return err
+		}
+		if len(n.Params) > 1 {
+			g.popTypedScope()
+		}
+		g.popTypedScope()
+		g.w.indentDec()
+		g.w.line("}")
+		g.w.indentDec()
+		g.w.line("} else if %s, _eachMapOk := %s.(map[string]any); _eachMapOk && len(%s) > 0 {", mapVar, itemsVar, mapVar)
+		g.w.indentInc()
+		g.w.line("for %s, %s := range %s {", keyVar, itemVar, mapVar)
+		g.w.indentInc()
+		g.w.line("_, _ = %s, %s", keyVar, itemVar)
 		g.pushTypedScope(itemVar, itemPathPrefix, itemNode)
 		g.typedStack[len(g.typedStack)-1].eachKeyVar = keyVar
 		if len(n.Params) > 1 {

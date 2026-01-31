@@ -185,6 +185,11 @@ func main() {
 		fmt.Fprintf(os.Stderr, "showcase output empty\n")
 		os.Exit(1)
 	}
+	// Showcase data has orders (JSON array); ensure {{#each orders}} with FromMap renders items
+	if !strings.Contains(showcaseOut, "Order #A100") {
+		fmt.Fprintf(os.Stderr, "showcase output missing Order #A100 from {{#each orders}}\n")
+		os.Exit(1)
+	}
 	fmt.Println("OK")
 }
 `)

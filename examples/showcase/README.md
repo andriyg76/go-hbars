@@ -16,3 +16,5 @@ Generate Go code (optional)
 
 2) Use the generated RenderMain/RenderMainString with data.json.
 
+When using map-backed context (`MainContextFromMap(data)` from JSON), `{{#each}}` works with both JSON arrays (e.g. `orders`, `users`) and objects (e.g. `settings`): the compiler generates code that tries slice iteration first, then map iteration.
+

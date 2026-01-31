@@ -176,6 +176,23 @@ func TestCompileTemplates_BlockParams(t *testing.T) {
 	}
 }
 
+func TestCompileTemplates_EachOverCollection(t *testing.T) {
+	// {{#each orders}} with block params: compiler emits iteration (range or []any/map fallback)
+	code, err := CompileTemplates(map[string]string{
+		"main": "{{#each orders as |order idx|}}{{order.id}}{{/each}}",
+	}, Options{PackageName: "templates"})
+	if err != nil {
+		t.Fatalf("CompileTemplates error: %v", err)
+	}
+	src := string(code)
+	if !strings.Contains(src, "range") {
+		t.Fatalf("expected range (or slice/map iteration) for each block")
+	}
+	if !strings.Contains(src, "Orders()") && !strings.Contains(src, "orders") {
+		t.Fatalf("expected Orders() or orders access for each collection")
+	}
+}
+
 func TestCompileTemplates_DynamicPartial(t *testing.T) {
 	code, err := CompileTemplates(map[string]string{
 		"main":   "{{> (lookup . \"partial\")}}",

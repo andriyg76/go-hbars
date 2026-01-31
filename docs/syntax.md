@@ -150,6 +150,8 @@ Changes the context to the specified value inside the block. If the value is fal
 ```
 Iterates over arrays, slices, or maps. Inside the block, `{{this}}` or `{{.}}` refers to the current item. If the collection is empty, renders the `{{else}}` block.
 
+When using map-backed context (e.g. `XxxContextFromMap(data)` from JSON), `{{#each}}` works with both **JSON arrays** (`[]any`) and **objects** (`map[string]any`): the generated code tries slice iteration first, then map iteration, so the same template works for lists and key-value data.
+
 **Block parameters:**
 ```handlebars
 {{#each users as |person idx|}}
