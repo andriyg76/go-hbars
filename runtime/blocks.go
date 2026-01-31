@@ -3,7 +3,6 @@ package runtime
 import (
 	"encoding/json"
 	"reflect"
-	"sort"
 )
 
 // IsNumericZero reports whether v is a numeric type with value zero.
@@ -113,61 +112,5 @@ func IsTruthy(value any) bool {
 		return v.Len() > 0
 	default:
 		return true
-	}
-}
-
-// IterItem represents a single {{#each}} iteration value.
-type IterItem struct {
-	Value any
-	Key   string
-	Index int
-}
-
-// Iterate returns items for {{#each}} blocks, or nil when not iterable.
-func Iterate(value any) []IterItem {
-	if value == nil {
-		return nil
-	}
-	v := reflect.ValueOf(value)
-	for v.Kind() == reflect.Interface || v.Kind() == reflect.Pointer {
-		if v.IsNil() {
-			return nil
-		}
-		v = v.Elem()
-	}
-	switch v.Kind() {
-	case reflect.Slice, reflect.Array:
-		if v.Len() == 0 {
-			return nil
-		}
-		items := make([]IterItem, v.Len())
-		for i := 0; i < v.Len(); i++ {
-			items[i] = IterItem{Value: v.Index(i).Interface(), Index: i}
-		}
-		return items
-	case reflect.Map:
-		if v.Type().Key().Kind() != reflect.String {
-			return nil
-		}
-		keys := v.MapKeys()
-		if len(keys) == 0 {
-			return nil
-		}
-		names := make([]string, len(keys))
-		for i, key := range keys {
-			names[i] = key.String()
-		}
-		sort.Strings(names)
-		items := make([]IterItem, len(names))
-		for i, key := range names {
-			items[i] = IterItem{
-				Value: v.MapIndex(reflect.ValueOf(key)).Interface(),
-				Key:   key,
-				Index: i,
-			}
-		}
-		return items
-	default:
-		return nil
 	}
 }

@@ -8,7 +8,7 @@ import (
 )
 
 // FormatNumber formats a number with optional precision and separator.
-func FormatNumber(ctx *runtime.Context, args []any) (any, error) {
+func FormatNumber(args []any) (any, error) {
 	n, err := helpers.GetNumberArg(args, 0)
 	if err != nil {
 		return "0", nil
@@ -52,7 +52,7 @@ func FormatNumber(ctx *runtime.Context, args []any) (any, error) {
 }
 
 // ToInt converts a value to an integer.
-func ToInt(ctx *runtime.Context, args []any) (any, error) {
+func ToInt(args []any) (any, error) {
 	n, err := helpers.GetNumberArg(args, 0)
 	if err != nil {
 		return 0, nil
@@ -61,7 +61,7 @@ func ToInt(ctx *runtime.Context, args []any) (any, error) {
 }
 
 // ToFloat converts a value to a float.
-func ToFloat(ctx *runtime.Context, args []any) (any, error) {
+func ToFloat(args []any) (any, error) {
 	n, err := helpers.GetNumberArg(args, 0)
 	if err != nil {
 		return 0.0, nil
@@ -70,7 +70,7 @@ func ToFloat(ctx *runtime.Context, args []any) (any, error) {
 }
 
 // Random generates a random number between min and max.
-func Random(ctx *runtime.Context, args []any) (any, error) {
+func Random(args []any) (any, error) {
 	min := 0.0
 	max := 100.0
 	
@@ -101,7 +101,7 @@ func Random(ctx *runtime.Context, args []any) (any, error) {
 }
 
 // ToFixed formats a number with a fixed number of decimal places.
-func ToFixed(ctx *runtime.Context, args []any) (any, error) {
+func ToFixed(args []any) (any, error) {
 	n, err := helpers.GetNumberArg(args, 0)
 	if err != nil {
 		return "0", nil
@@ -119,13 +119,13 @@ func ToFixed(ctx *runtime.Context, args []any) (any, error) {
 }
 
 // ToString converts a value to a string.
-func ToString(ctx *runtime.Context, args []any) (any, error) {
+func ToString(args []any) (any, error) {
 	arg := helpers.GetArg(args, 0)
 	return runtime.Stringify(arg), nil
 }
 
 // ToNumber converts a string to a number.
-func ToNumber(ctx *runtime.Context, args []any) (any, error) {
+func ToNumber(args []any) (any, error) {
 	n, err := helpers.GetNumberArg(args, 0)
 	if err != nil {
 		return 0, nil

@@ -28,7 +28,7 @@ Root year: {{@root.site.year}}
 Raw HTML stripped: {{stripTags rawHtml}}
 
 Dynamic card:
-{{> (lookup . "cardPartial")}}
+{{> (lookup . "cardPartial") user}}
 
 {{> footer}}
 

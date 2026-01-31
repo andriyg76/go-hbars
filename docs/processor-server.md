@@ -21,9 +21,9 @@ project/
 
 2. **Add go:generate directive to compile templates:**
 
-Create `.processor/templates_gen.go`:
+Create `.processor/templates_gen.go` (run `go generate` from the project root; the directive runs with `.processor` as the current directory):
 ```go
-//go:generate hbc -in .processor/templates -out .processor/templates_gen.go -pkg templates -bootstrap
+//go:generate hbc -in templates -out templates_gen.go -pkg templates -bootstrap
 
 package templates
 ```
@@ -32,7 +32,7 @@ The `-bootstrap` flag generates helper functions for quick server/processor setu
 
 3. **Generate templates:**
 ```bash
-go generate ./processor/templates_gen.go
+go generate ./.processor/...
 # or
 go generate ./...
 ```
@@ -159,12 +159,14 @@ shared/
 
 The recommended workflow uses `go:generate` to automatically compile templates:
 
-**In your template package file (`.processor/templates_gen.go`):**
+**In your template package file (e.g. `.processor/templates_gen.go` or `processor/templates/gen.go`):**
 ```go
-//go:generate hbc -in .processor/templates -out .processor/templates_gen.go -pkg templates -bootstrap
+//go:generate hbc -in . -out ./templates_gen.go -pkg templates -bootstrap
 
 package templates
 ```
+
+Run `go:generate` from the directory that contains the template files (e.g. `processor/templates/` or `.processor/templates/`); use `-in .` and `-out ./templates_gen.go` so the generated file lives next to the templates.
 
 **Benefits:**
 - Templates are automatically recompiled when you run `go generate ./...`
@@ -186,4 +188,10 @@ package templates
 - name: Build
   run: go build ./...
 ```
+
+## See also
+
+- [init](init.md) — Create a project with `processor/templates`, `data/`, `shared/` using `init new -bootstrap`.
+- [How to integrate bootstrap](howto-integrate-bootstrap.md) — Step-by-step bootstrap setup.
+- [Embedded API](embedded.md) — Use processor and server programmatically.
 

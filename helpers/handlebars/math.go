@@ -4,11 +4,10 @@ import (
 	"math"
 
 	"github.com/andriyg76/go-hbars/helpers"
-	"github.com/andriyg76/go-hbars/runtime"
 )
 
 // Add adds two numbers.
-func Add(ctx *runtime.Context, args []any) (any, error) {
+func Add(args []any) (any, error) {
 	a, err := helpers.GetNumberArg(args, 0)
 	if err != nil {
 		return 0, nil
@@ -21,7 +20,7 @@ func Add(ctx *runtime.Context, args []any) (any, error) {
 }
 
 // Subtract subtracts the second number from the first.
-func Subtract(ctx *runtime.Context, args []any) (any, error) {
+func Subtract(args []any) (any, error) {
 	a, err := helpers.GetNumberArg(args, 0)
 	if err != nil {
 		return 0, nil
@@ -34,7 +33,7 @@ func Subtract(ctx *runtime.Context, args []any) (any, error) {
 }
 
 // Multiply multiplies two numbers.
-func Multiply(ctx *runtime.Context, args []any) (any, error) {
+func Multiply(args []any) (any, error) {
 	a, err := helpers.GetNumberArg(args, 0)
 	if err != nil {
 		return 0, nil
@@ -47,7 +46,7 @@ func Multiply(ctx *runtime.Context, args []any) (any, error) {
 }
 
 // Divide divides the first number by the second.
-func Divide(ctx *runtime.Context, args []any) (any, error) {
+func Divide(args []any) (any, error) {
 	a, err := helpers.GetNumberArg(args, 0)
 	if err != nil {
 		return 0, nil
@@ -63,7 +62,7 @@ func Divide(ctx *runtime.Context, args []any) (any, error) {
 }
 
 // Modulo returns the remainder of dividing the first number by the second.
-func Modulo(ctx *runtime.Context, args []any) (any, error) {
+func Modulo(args []any) (any, error) {
 	a, err := helpers.GetNumberArg(args, 0)
 	if err != nil {
 		return 0, nil
@@ -79,7 +78,7 @@ func Modulo(ctx *runtime.Context, args []any) (any, error) {
 }
 
 // Floor returns the floor of a number.
-func Floor(ctx *runtime.Context, args []any) (any, error) {
+func Floor(args []any) (any, error) {
 	n, err := helpers.GetNumberArg(args, 0)
 	if err != nil {
 		return 0, nil
@@ -88,7 +87,7 @@ func Floor(ctx *runtime.Context, args []any) (any, error) {
 }
 
 // Ceil returns the ceiling of a number.
-func Ceil(ctx *runtime.Context, args []any) (any, error) {
+func Ceil(args []any) (any, error) {
 	n, err := helpers.GetNumberArg(args, 0)
 	if err != nil {
 		return 0, nil
@@ -97,7 +96,7 @@ func Ceil(ctx *runtime.Context, args []any) (any, error) {
 }
 
 // Round rounds a number to the nearest integer.
-func Round(ctx *runtime.Context, args []any) (any, error) {
+func Round(args []any) (any, error) {
 	n, err := helpers.GetNumberArg(args, 0)
 	if err != nil {
 		return 0, nil
@@ -106,7 +105,7 @@ func Round(ctx *runtime.Context, args []any) (any, error) {
 }
 
 // Abs returns the absolute value of a number.
-func Abs(ctx *runtime.Context, args []any) (any, error) {
+func Abs(args []any) (any, error) {
 	n, err := helpers.GetNumberArg(args, 0)
 	if err != nil {
 		return 0, nil
@@ -115,7 +114,7 @@ func Abs(ctx *runtime.Context, args []any) (any, error) {
 }
 
 // Min returns the minimum of two numbers.
-func Min(ctx *runtime.Context, args []any) (any, error) {
+func Min(args []any) (any, error) {
 	a, err := helpers.GetNumberArg(args, 0)
 	if err != nil {
 		return 0, nil
@@ -128,7 +127,7 @@ func Min(ctx *runtime.Context, args []any) (any, error) {
 }
 
 // Max returns the maximum of two numbers.
-func Max(ctx *runtime.Context, args []any) (any, error) {
+func Max(args []any) (any, error) {
 	a, err := helpers.GetNumberArg(args, 0)
 	if err != nil {
 		return 0, nil

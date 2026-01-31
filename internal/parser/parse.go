@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/andriyg76/go-hbars/internal/ast"
+	"github.com/andriyg76/hexerr"
 )
 
 // Parse turns a template string into a list of nodes.
@@ -30,7 +31,7 @@ func parseUntil(input string, start int, endBlock string) ([]ast.Node, int, erro
 		return nil, 0, err
 	}
 	if stop != stopNone {
-		return nil, 0, fmt.Errorf("parser: unexpected %s", stopLabel(stop, endBlock))
+		return nil, 0, hexerr.New(fmt.Sprintf("parser: unexpected %s", stopLabel(stop, endBlock)))
 	}
 	return nodes, next, nil
 }
@@ -45,7 +46,7 @@ func parseUntilStop(input string, start int, endBlock string) ([]ast.Node, int, 
 				nodes = append(nodes, &ast.Text{Value: input[i:]})
 			}
 			if endBlock != "" {
-				return nil, 0, stopNone, fmt.Errorf("parser: unclosed block %q", endBlock)
+				return nil, 0, stopNone, hexerr.New(fmt.Sprintf("parser: unclosed block %q", endBlock))
 			}
 			return nodes, len(input), stopNone, nil
 		}
@@ -72,7 +73,7 @@ func parseUntilStop(input string, start int, endBlock string) ([]ast.Node, int, 
 			}
 			end := strings.Index(input[start:], "--}}")
 			if end < 0 {
-				return nil, 0, stopNone, fmt.Errorf("parser: unclosed comment")
+				return nil, 0, stopNone, hexerr.New("parser: unclosed comment")
 			}
 			endPos := start + end
 			trimRight := false
@@ -105,7 +106,7 @@ func parseUntilStop(input string, start int, endBlock string) ([]ast.Node, int, 
 		}
 		end := strings.Index(input[open+startLen:], endDelim)
 		if end < 0 {
-			return nil, 0, stopNone, fmt.Errorf("parser: unclosed mustache")
+			return nil, 0, stopNone, hexerr.New("parser: unclosed mustache")
 		}
 		content := input[open+startLen : open+startLen+end]
 		trimRight := false
@@ -131,46 +132,25 @@ func parseUntilStop(input string, start int, endBlock string) ([]ast.Node, int, 
 		}
 		if content == "else" {
 			if endBlock == "" {
-				return nil, 0, stopNone, fmt.Errorf("parser: unexpected else")
+				return nil, 0, stopNone, hexerr.New("parser: unexpected else")
 			}
 			return nodes, i, stopElse, nil
 		}
 		if strings.HasPrefix(content, "/") {
 			name := strings.TrimSpace(content[1:])
 			if name == "" {
-				return nil, 0, stopNone, fmt.Errorf("parser: empty block name")
+				return nil, 0, stopNone, hexerr.New("parser: empty block name")
 			}
 			if endBlock == "" {
-				return nil, 0, stopNone, fmt.Errorf("parser: unexpected closing block %q", name)
+				return nil, 0, stopNone, hexerr.New(fmt.Sprintf("parser: unexpected closing block %q", name))
 			}
 			if name != endBlock {
-				return nil, 0, stopNone, fmt.Errorf("parser: expected /%s, got /%s", endBlock, name)
+				return nil, 0, stopNone, hexerr.New(fmt.Sprintf("parser: expected /%s, got /%s", endBlock, name))
 			}
 			return nodes, i, stopEnd, nil
 		}
 		if strings.HasPrefix(content, "#>") {
-			// Partial block: {{#> partial}}...{{/partial}}
-			name, args, params, err := splitBlockStart(content[2:])
-			if err != nil {
-				return nil, 0, stopNone, err
-			}
-			if name == "" {
-				return nil, 0, stopNone, fmt.Errorf("parser: empty partial block name")
-			}
-			body, elseBody, next, err := parseBlock(input, i, name)
-			if err != nil {
-				return nil, 0, stopNone, err
-			}
-			// Partial blocks use the else body for the fallback content
-			nodes = append(nodes, &ast.PartialBlock{
-				Name:     name,
-				Args:     args,
-				Params:   params,
-				Body:     body,
-				Fallback: elseBody,
-			})
-			i = next
-			continue
+			return nil, 0, stopNone, hexerr.New("parser: partial blocks ({{#>}}) are not supported")
 		}
 		if strings.HasPrefix(content, "#") {
 			name, args, params, err := splitBlockStart(content[1:])
@@ -178,7 +158,7 @@ func parseUntilStop(input string, start int, endBlock string) ([]ast.Node, int, 
 				return nil, 0, stopNone, err
 			}
 			if name == "" {
-				return nil, 0, stopNone, fmt.Errorf("parser: empty block name")
+				return nil, 0, stopNone, hexerr.New("parser: empty block name")
 			}
 			body, elseBody, next, err := parseBlock(input, i, name)
 			if err != nil {
@@ -197,7 +177,7 @@ func parseUntilStop(input string, start int, endBlock string) ([]ast.Node, int, 
 		if strings.HasPrefix(content, ">") {
 			rest := strings.TrimSpace(content[1:])
 			if rest == "" {
-				return nil, 0, stopNone, fmt.Errorf("parser: empty partial name")
+				return nil, 0, stopNone, hexerr.New("parser: empty partial name")
 			}
 			nodes = append(nodes, &ast.Partial{Expr: rest})
 			continue
@@ -205,7 +185,7 @@ func parseUntilStop(input string, start int, endBlock string) ([]ast.Node, int, 
 		nodes = append(nodes, &ast.Mustache{Expr: content, Raw: raw})
 	}
 	if endBlock != "" {
-		return nil, 0, stopNone, fmt.Errorf("parser: unclosed block %q", endBlock)
+		return nil, 0, stopNone, hexerr.New(fmt.Sprintf("parser: unclosed block %q", endBlock))
 	}
 	return nodes, i, stopNone, nil
 }
@@ -222,12 +202,12 @@ func parseBlock(input string, start int, name string) ([]ast.Node, []ast.Node, i
 			return nil, nil, 0, err
 		}
 		if stop != stopEnd {
-			return nil, nil, 0, fmt.Errorf("parser: unclosed block %q", name)
+			return nil, nil, 0, hexerr.New(fmt.Sprintf("parser: unclosed block %q", name))
 		}
 		return body, elseBody, next, nil
 	}
 	if stop != stopEnd {
-		return nil, nil, 0, fmt.Errorf("parser: unclosed block %q", name)
+		return nil, nil, 0, hexerr.New(fmt.Sprintf("parser: unclosed block %q", name))
 	}
 	return body, nil, next, nil
 }
@@ -241,24 +221,24 @@ func parseElseBranch(input string, start int, endBlock string) ([]ast.Node, int,
 			if i < len(input) {
 				nodes = append(nodes, &ast.Text{Value: input[i:]})
 			}
-			return nodes, len(input), stopNone, fmt.Errorf("parser: unclosed else branch in block %q", endBlock)
+			return nodes, len(input), stopNone, hexerr.New(fmt.Sprintf("parser: unclosed else branch in block %q", endBlock))
 		}
 		open += i
 		if open > i {
 			nodes = append(nodes, &ast.Text{Value: input[i:open]})
 		}
-		
+
 		contentStart := open + 2
 		if contentStart >= len(input) {
-			return nil, 0, stopNone, fmt.Errorf("parser: unclosed mustache")
+			return nil, 0, stopNone, hexerr.New("parser: unclosed mustache")
 		}
-		
+
 		// Check for else if shorthand
 		if strings.HasPrefix(input[contentStart:], "else if ") {
 			condStart := contentStart + len("else if ")
 			end := strings.Index(input[condStart:], "}}")
 			if end < 0 {
-				return nil, 0, stopNone, fmt.Errorf("parser: unclosed else if")
+				return nil, 0, stopNone, hexerr.New("parser: unclosed else if")
 			}
 			cond := strings.TrimSpace(input[condStart : condStart+end])
 			blockStart := condStart + end + 2
@@ -274,7 +254,7 @@ func parseElseBranch(input string, start int, endBlock string) ([]ast.Node, int,
 					return nil, 0, stopNone, err
 				}
 				if ifStop != stopEnd {
-					return nil, 0, stopNone, fmt.Errorf("parser: unclosed else if block")
+					return nil, 0, stopNone, hexerr.New("parser: unclosed else if block")
 				}
 				nodes = append(nodes, &ast.Block{
 					Name: "if",
@@ -286,7 +266,7 @@ func parseElseBranch(input string, start int, endBlock string) ([]ast.Node, int,
 				continue
 			}
 			if ifStop != stopEnd {
-				return nil, 0, stopNone, fmt.Errorf("parser: unclosed else if block")
+				return nil, 0, stopNone, hexerr.New("parser: unclosed else if block")
 			}
 			nodes = append(nodes, &ast.Block{
 				Name: "if",
@@ -300,7 +280,7 @@ func parseElseBranch(input string, start int, endBlock string) ([]ast.Node, int,
 			condStart := contentStart + len("elseif ")
 			end := strings.Index(input[condStart:], "}}")
 			if end < 0 {
-				return nil, 0, stopNone, fmt.Errorf("parser: unclosed elseif")
+				return nil, 0, stopNone, hexerr.New("parser: unclosed elseif")
 			}
 			cond := strings.TrimSpace(input[condStart : condStart+end])
 			blockStart := condStart + end + 2
@@ -315,7 +295,7 @@ func parseElseBranch(input string, start int, endBlock string) ([]ast.Node, int,
 					return nil, 0, stopNone, err
 				}
 				if ifStop != stopEnd {
-					return nil, 0, stopNone, fmt.Errorf("parser: unclosed elseif block")
+					return nil, 0, stopNone, hexerr.New("parser: unclosed elseif block")
 				}
 				nodes = append(nodes, &ast.Block{
 					Name: "if",
@@ -327,7 +307,7 @@ func parseElseBranch(input string, start int, endBlock string) ([]ast.Node, int,
 				continue
 			}
 			if ifStop != stopEnd {
-				return nil, 0, stopNone, fmt.Errorf("parser: unclosed elseif block")
+				return nil, 0, stopNone, hexerr.New("parser: unclosed elseif block")
 			}
 			nodes = append(nodes, &ast.Block{
 				Name: "if",
@@ -337,7 +317,7 @@ func parseElseBranch(input string, start int, endBlock string) ([]ast.Node, int,
 			i = ifNext
 			continue
 		}
-		
+
 		// Regular parsing
 		rest, next, stop, err := parseUntilStop(input, open, endBlock)
 		if err != nil {
@@ -349,11 +329,11 @@ func parseElseBranch(input string, start int, endBlock string) ([]ast.Node, int,
 		}
 		if stop == stopElse {
 			// Another else - this shouldn't happen in else branch
-			return nil, 0, stopNone, fmt.Errorf("parser: unexpected else in else branch")
+			return nil, 0, stopNone, hexerr.New("parser: unexpected else in else branch")
 		}
 		i = next
 	}
-	return nodes, i, stopNone, fmt.Errorf("parser: unclosed else branch in block %q", endBlock)
+	return nodes, i, stopNone, hexerr.New(fmt.Sprintf("parser: unclosed else branch in block %q", endBlock))
 }
 
 func splitBlockStart(expr string) (string, string, []string, error) {
@@ -397,11 +377,11 @@ func extractBlockParams(expr string) (string, []string, error) {
 	}
 	paramsPart := strings.TrimSpace(expr[pipeStart+1 : pipeEnd])
 	if paramsPart == "" {
-		return "", nil, fmt.Errorf("parser: empty block params")
+		return "", nil, hexerr.New("parser: empty block params")
 	}
 	params := strings.Fields(paramsPart)
 	if len(params) == 0 {
-		return "", nil, fmt.Errorf("parser: empty block params")
+		return "", nil, hexerr.New("parser: empty block params")
 	}
 	args := strings.TrimSpace(before[:asIdx])
 	return args, params, nil
@@ -489,11 +469,11 @@ func parseRawBlock(input string, open int, nodes *[]ast.Node) (int, error) {
 	}
 	end := strings.Index(input[start:], "}}}}")
 	if end < 0 {
-		return 0, fmt.Errorf("parser: unclosed raw block")
+		return 0, hexerr.New("parser: unclosed raw block")
 	}
 	name := strings.TrimSpace(input[start : start+end])
 	if name == "" {
-		return 0, fmt.Errorf("parser: empty raw block name")
+		return 0, hexerr.New("parser: empty raw block name")
 	}
 	if trimLeft {
 		trimRightText(nodes)
@@ -501,13 +481,13 @@ func parseRawBlock(input string, open int, nodes *[]ast.Node) (int, error) {
 	bodyStart := start + end + len("}}}}")
 	closeStart := strings.Index(input[bodyStart:], "{{{{/")
 	if closeStart < 0 {
-		return 0, fmt.Errorf("parser: unclosed raw block %q", name)
+		return 0, hexerr.New(fmt.Sprintf("parser: unclosed raw block %q", name))
 	}
 	closeStart += bodyStart
 	closeTagStart := closeStart + len("{{{{/")
 	closeEnd := strings.Index(input[closeTagStart:], "}}}}")
 	if closeEnd < 0 {
-		return 0, fmt.Errorf("parser: unclosed raw block %q", name)
+		return 0, hexerr.New(fmt.Sprintf("parser: unclosed raw block %q", name))
 	}
 	closeContent := strings.TrimSpace(input[closeTagStart : closeTagStart+closeEnd])
 	trimRight := false
@@ -516,7 +496,7 @@ func parseRawBlock(input string, open int, nodes *[]ast.Node) (int, error) {
 		closeContent = strings.TrimSpace(strings.TrimSuffix(closeContent, "~"))
 	}
 	if closeContent != name {
-		return 0, fmt.Errorf("parser: expected /%s, got /%s", name, closeContent)
+		return 0, hexerr.New(fmt.Sprintf("parser: expected /%s, got /%s", name, closeContent))
 	}
 	if closeStart > bodyStart {
 		*nodes = append(*nodes, &ast.Text{Value: input[bodyStart:closeStart]})

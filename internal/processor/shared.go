@@ -1,10 +1,11 @@
 package processor
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/andriyg76/hexerr"
 )
 
 // LoadSharedData recursively loads shared data files from a directory.
@@ -19,10 +20,10 @@ func LoadSharedData(dirPath string) (map[string]any, error) {
 		if os.IsNotExist(err) {
 			return make(map[string]any), nil
 		}
-		return nil, fmt.Errorf("failed to stat shared directory %q: %w", dirPath, err)
+		return nil, hexerr.Wrapf(err, "failed to stat shared directory %q", dirPath)
 	}
 	if !info.IsDir() {
-		return nil, fmt.Errorf("shared path %q is not a directory", dirPath)
+		return nil, hexerr.Newf("shared path %q is not a directory", dirPath)
 	}
 
 	result := make(map[string]any)
@@ -36,7 +37,7 @@ func LoadSharedData(dirPath string) (map[string]any, error) {
 func loadSharedRecursive(basePath, currentPath string, result map[string]any) error {
 	entries, err := os.ReadDir(currentPath)
 	if err != nil {
-		return fmt.Errorf("failed to read directory %q: %w", currentPath, err)
+		return hexerr.Wrapf(err, "failed to read directory %q", currentPath)
 	}
 
 	for _, entry := range entries {
@@ -62,7 +63,7 @@ func loadSharedRecursive(basePath, currentPath string, result map[string]any) er
 		filePath := filepath.Join(currentPath, entry.Name())
 		data, err := LoadDataFile(filePath)
 		if err != nil {
-			return fmt.Errorf("failed to load shared file %q: %w", filePath, err)
+			return hexerr.Wrapf(err, "failed to load shared file %q", filePath)
 		}
 
 		// Remove _page section if present (shared files shouldn't have it)

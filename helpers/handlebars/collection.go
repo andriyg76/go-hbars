@@ -7,15 +7,21 @@ import (
 	"github.com/andriyg76/go-hbars/runtime"
 )
 
+// rawGetter is implemented by typed context interfaces (e.g. MainContext).
+type rawGetter interface{ Raw() any }
+
 // Lookup looks up a value from the context or data by key.
-func Lookup(ctx *runtime.Context, args []any) (any, error) {
+func Lookup(args []any) (any, error) {
 	obj := helpers.GetArg(args, 0)
 	key := helpers.GetStringArg(args, 1)
 	
 	if key == "" {
 		return nil, nil
 	}
-	
+	// Typed context interfaces expose Raw(); use it for map lookup
+	if r, ok := obj.(rawGetter); ok {
+		obj = r.Raw()
+	}
 	switch v := obj.(type) {
 	case map[string]any:
 		if val, ok := v[key]; ok {
@@ -27,18 +33,11 @@ func Lookup(ctx *runtime.Context, args []any) (any, error) {
 		}
 	}
 	
-	// Try to resolve as a path in the context
-	if ctx != nil {
-		if val, ok := runtime.ResolvePath(ctx, key); ok {
-			return val, nil
-		}
-	}
-	
 	return nil, nil
 }
 
 // Default returns the first argument if it's truthy, otherwise returns the default value.
-func Default(ctx *runtime.Context, args []any) (any, error) {
+func Default(args []any) (any, error) {
 	value := helpers.GetArg(args, 0)
 	defaultVal := helpers.GetArg(args, 1)
 	
@@ -59,7 +58,7 @@ func Default(ctx *runtime.Context, args []any) (any, error) {
 }
 
 // Length returns the length of a string, array, or object.
-func Length(ctx *runtime.Context, args []any) (any, error) {
+func Length(args []any) (any, error) {
 	arg := helpers.GetArg(args, 0)
 	if arg == nil {
 		return 0, nil
@@ -88,7 +87,7 @@ func Length(ctx *runtime.Context, args []any) (any, error) {
 }
 
 // First returns the first element of an array.
-func First(ctx *runtime.Context, args []any) (any, error) {
+func First(args []any) (any, error) {
 	arg := helpers.GetArg(args, 0)
 	switch v := arg.(type) {
 	case []any:
@@ -104,7 +103,7 @@ func First(ctx *runtime.Context, args []any) (any, error) {
 }
 
 // Last returns the last element of an array.
-func Last(ctx *runtime.Context, args []any) (any, error) {
+func Last(args []any) (any, error) {
 	arg := helpers.GetArg(args, 0)
 	switch v := arg.(type) {
 	case []any:
@@ -120,7 +119,7 @@ func Last(ctx *runtime.Context, args []any) (any, error) {
 }
 
 // InArray checks if a value is in an array.
-func InArray(ctx *runtime.Context, args []any) (any, error) {
+func InArray(args []any) (any, error) {
 	value := helpers.GetArg(args, 0)
 	arr := helpers.GetArg(args, 1)
 	

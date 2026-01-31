@@ -1,7 +1,6 @@
 package compiler
 
 import (
-	"regexp"
 	"strings"
 	"testing"
 )
@@ -19,9 +18,9 @@ func TestCompileTemplates_GenerateBootstrap(t *testing.T) {
 	}
 	src := string(code)
 
-	// Check for bootstrap imports
-	if !strings.Contains(src, "github.com/andriyg76/go-hbars/internal/processor") {
-		t.Fatalf("missing processor import in bootstrap code")
+	// Check for bootstrap imports (public packages only so user modules can use -bootstrap)
+	if !strings.Contains(src, "github.com/andriyg76/go-hbars/pkg/renderer") {
+		t.Fatalf("missing renderer import in bootstrap code")
 	}
 	if !strings.Contains(src, "github.com/andriyg76/go-hbars/pkg/sitegen") {
 		t.Fatalf("missing sitegen import in bootstrap code")
@@ -31,15 +30,15 @@ func TestCompileTemplates_GenerateBootstrap(t *testing.T) {
 	if !strings.Contains(src, "var rendererFuncs = map[string]func(io.Writer, any) error") {
 		t.Fatalf("missing rendererFuncs map")
 	}
-	if !regexp.MustCompile(`"main":\s+RenderMain`).MatchString(src) {
+	if !strings.Contains(src, `"main":`) || !strings.Contains(src, "RenderMain(w, c)") {
 		t.Fatalf("missing main in rendererFuncs")
 	}
-	if !regexp.MustCompile(`"header":\s+RenderHeader`).MatchString(src) {
+	if !strings.Contains(src, `"header":`) || !strings.Contains(src, "RenderHeader(w, c)") {
 		t.Fatalf("missing header in rendererFuncs")
 	}
 
 	// Check for NewRenderer function
-	if !strings.Contains(src, "func NewRenderer() processor.TemplateRenderer") {
+	if !strings.Contains(src, "func NewRenderer() renderer.TemplateRenderer") {
 		t.Fatalf("missing NewRenderer function")
 	}
 

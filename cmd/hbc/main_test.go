@@ -269,7 +269,7 @@ func TestBuildHelpers(t *testing.T) {
 			importFlags:     importFlag{},
 			helpersFlags:    helpersFlag{},
 			legacyFlags:     helperFlag{},
-			wantHelperCount: 59, // All helpers from registry (includes block, partial)
+			wantHelperCount: 57, // All helpers from registry
 			wantErr:         false,
 			checkHelpers: map[string]compiler.HelperRef{
 				"upper": {ImportPath: "github.com/andriyg76/go-hbars/helpers/handlebars", Ident: "Upper"},
@@ -291,7 +291,7 @@ func TestBuildHelpers(t *testing.T) {
 			importFlags:     importFlag{"github.com/example/extra"},
 			helpersFlags:    helpersFlag{"CustomHelper"},
 			legacyFlags:     helperFlag{},
-			wantHelperCount: 60, // 59 core + 1 custom
+			wantHelperCount: 58, // 57 core + 1 custom
 			wantErr:         false,
 			checkHelpers: map[string]compiler.HelperRef{
 				"upper":        {ImportPath: "github.com/andriyg76/go-hbars/helpers/handlebars", Ident: "Upper"},
@@ -304,7 +304,7 @@ func TestBuildHelpers(t *testing.T) {
 			importFlags:     importFlag{},
 			helpersFlags:    helpersFlag{},
 			legacyFlags:     helperFlag{"upper=github.com/example/custom:MyUpper"},
-			wantHelperCount: 59, // Same count, but upper is overridden
+			wantHelperCount: 57, // Same count, but upper is overridden
 			wantErr:         false,
 			checkHelpers: map[string]compiler.HelperRef{
 				"upper": {ImportPath: "github.com/example/custom", Ident: "MyUpper"},
@@ -316,7 +316,7 @@ func TestBuildHelpers(t *testing.T) {
 			importFlags:     importFlag{"github.com/example/custom"},
 			helpersFlags:    helpersFlag{"upper=MyUpper"},
 			legacyFlags:     helperFlag{},
-			wantHelperCount: 59, // Same count, but upper is overridden
+			wantHelperCount: 57, // Same count, but upper is overridden
 			wantErr:         false,
 			checkHelpers: map[string]compiler.HelperRef{
 				"upper": {ImportPath: "github.com/example/custom", Ident: "MyUpper"},
@@ -328,7 +328,7 @@ func TestBuildHelpers(t *testing.T) {
 			importFlags:     importFlag{"github.com/example/custom"},
 			helpersFlags:    helpersFlag{"upper=MyUpper"},
 			legacyFlags:     helperFlag{"upper=github.com/example/legacy:LegacyUpper"},
-			wantHelperCount: 59,
+			wantHelperCount: 57,
 			wantErr:         false,
 			checkHelpers: map[string]compiler.HelperRef{
 				"upper": {ImportPath: "github.com/example/legacy", Ident: "LegacyUpper"},

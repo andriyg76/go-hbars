@@ -5,13 +5,20 @@ import (
 	"io"
 	"reflect"
 	"strings"
+
+	"github.com/andriyg76/hexerr"
 )
 
 // CompiledTemplateRenderer renders templates using compiled template functions.
-// It uses reflection to call Render* functions from compiled template packages.
+// When created from a map[string]func(io.Writer, any) error (e.g. bootstrap rendererFuncs),
+// it calls functions directly without reflection. When created from a struct with Render*
+// methods, it uses reflection for discovery and for calling.
 type CompiledTemplateRenderer struct {
 	templatePackage reflect.Value
-	renderFuncs     map[string]reflect.Value
+	// funcs is set when using a map or RegisterRenderFunc; used for direct calls (no reflection).
+	funcs map[string]func(io.Writer, any) error
+	// renderFuncs is set when using struct reflection; calls use reflect.Value.Call.
+	renderFuncs map[string]reflect.Value
 }
 
 // NewCompiledTemplateRenderer creates a new renderer that uses compiled templates.
@@ -20,32 +27,33 @@ type CompiledTemplateRenderer struct {
 //   - A package-level function registry (map[string]func(io.Writer, any) error)
 //   - nil, in which case you must register functions manually
 func NewCompiledTemplateRenderer(templatePackage any) (*CompiledTemplateRenderer, error) {
-	renderer := &CompiledTemplateRenderer{
+	r := &CompiledTemplateRenderer{
 		renderFuncs: make(map[string]reflect.Value),
 	}
 
 	if templatePackage == nil {
-		return renderer, nil
+		return r, nil
 	}
 
 	// Try to extract functions from the package
 	switch v := templatePackage.(type) {
 	case map[string]func(io.Writer, any) error:
-		// Direct function map
+		// Direct function map (e.g. bootstrap rendererFuncs): no reflection at call time
+		r.funcs = make(map[string]func(io.Writer, any) error, len(v))
 		for name, fn := range v {
-			renderer.renderFuncs[normalizeTemplateName(name)] = reflect.ValueOf(fn)
+			r.funcs[normalizeTemplateName(name)] = fn
 		}
 	default:
 		// Try reflection on struct/interface
 		pkgValue := reflect.ValueOf(templatePackage)
 		if pkgValue.Kind() == reflect.Ptr {
 			if pkgValue.IsNil() {
-				return renderer, nil
+				return r, nil
 			}
 			pkgValue = pkgValue.Elem()
 		}
 
-		renderer.templatePackage = pkgValue
+		r.templatePackage = pkgValue
 
 		// Find all Render* functions in the package
 		pkgType := pkgValue.Type()
@@ -57,13 +65,13 @@ func NewCompiledTemplateRenderer(templatePackage any) (*CompiledTemplateRenderer
 				if len(templateName) > 0 {
 					// Convert to lowercase for consistency
 					templateName = strings.ToLower(templateName[:1]) + templateName[1:]
-					renderer.renderFuncs[templateName] = pkgValue.Method(i)
+					r.renderFuncs[templateName] = pkgValue.Method(i)
 				}
 			}
 		}
 	}
 
-	return renderer, nil
+	return r, nil
 }
 
 // Render renders a template by name.
@@ -71,27 +79,32 @@ func (r *CompiledTemplateRenderer) Render(templateName string, w io.Writer, data
 	// Find matching template name
 	actualName, ok := r.findTemplateName(templateName)
 	if !ok {
-		return fmt.Errorf("template %q not found in compiled templates (available: %v)", templateName, r.getAvailableTemplates())
+		return hexerr.New(fmt.Sprintf("template %q not found in compiled templates (available: %v)", templateName, r.getAvailableTemplates()))
+	}
+
+	if fn := r.funcs[actualName]; fn != nil {
+		if err := fn(w, data); err != nil {
+			return hexerr.Wrapf(err, "failed to render template %q", templateName)
+		}
+		return nil
 	}
 
 	renderFunc, ok := r.renderFuncs[actualName]
 	if !ok {
-		return fmt.Errorf("template %q not found in compiled templates", templateName)
+		return hexerr.New(fmt.Sprintf("template %q not found in compiled templates", templateName))
 	}
 
-	// Call the render function: RenderTemplateName(w io.Writer, data any) error
+	// Reflection path: struct methods
 	args := []reflect.Value{
 		reflect.ValueOf(w),
 		reflect.ValueOf(data),
 	}
-
 	results := renderFunc.Call(args)
 	if len(results) > 0 {
 		if err, ok := results[0].Interface().(error); ok && err != nil {
-			return fmt.Errorf("failed to render template %q: %w", templateName, err)
+			return hexerr.Wrapf(err, "failed to render template %q", templateName)
 		}
 	}
-
 	return nil
 }
 
@@ -105,6 +118,15 @@ func normalizeTemplateName(name string) string {
 	return name
 }
 
+// hasTemplate returns true if name exists in funcs or renderFuncs.
+func (r *CompiledTemplateRenderer) hasTemplate(name string) bool {
+	if r.funcs != nil && r.funcs[name] != nil {
+		return true
+	}
+	_, ok := r.renderFuncs[name]
+	return ok
+}
+
 // findTemplateName tries to find a matching template name in the render funcs map.
 // It tries multiple variations:
 // 1. Exact match (with path separators removed)
@@ -112,56 +134,58 @@ func normalizeTemplateName(name string) string {
 // 3. All path separators removed
 func (r *CompiledTemplateRenderer) findTemplateName(templateName string) (string, bool) {
 	normalized := normalizeTemplateName(templateName)
-	
-	// Try exact normalized match
-	if _, ok := r.renderFuncs[normalized]; ok {
+
+	if r.hasTemplate(normalized) {
 		return normalized, true
 	}
-	
-	// Try with path separators removed
+
 	noPath := strings.ReplaceAll(normalized, "/", "")
 	noPath = strings.ReplaceAll(noPath, "\\", "")
-	if _, ok := r.renderFuncs[noPath]; ok {
+	if r.hasTemplate(noPath) {
 		return noPath, true
 	}
-	
-	// Try base name only (last component)
+
 	parts := strings.Split(normalized, "/")
 	if len(parts) > 1 {
 		baseName := parts[len(parts)-1]
-		if _, ok := r.renderFuncs[baseName]; ok {
+		if r.hasTemplate(baseName) {
 			return baseName, true
 		}
-	}
-	
-	// Try camelCase version (e.g., "blog/post" -> "blogPost")
-	if len(parts) > 1 {
 		camelCase := parts[0]
 		for i := 1; i < len(parts); i++ {
 			if len(parts[i]) > 0 {
 				camelCase += strings.ToUpper(parts[i][:1]) + parts[i][1:]
 			}
 		}
-		if _, ok := r.renderFuncs[camelCase]; ok {
+		if r.hasTemplate(camelCase) {
 			return camelCase, true
 		}
 	}
-	
+
 	return "", false
 }
 
-// RegisterRenderFunc registers a render function manually.
-// This is useful when you want to register functions directly without reflection.
+// RegisterRenderFunc registers a render function manually (direct call, no reflection).
 func (r *CompiledTemplateRenderer) RegisterRenderFunc(templateName string, renderFunc func(io.Writer, any) error) {
-	r.renderFuncs[normalizeTemplateName(templateName)] = reflect.ValueOf(renderFunc)
+	name := normalizeTemplateName(templateName)
+	if r.funcs == nil {
+		r.funcs = make(map[string]func(io.Writer, any) error)
+	}
+	r.funcs[name] = renderFunc
 }
 
 // getAvailableTemplates returns a list of available template names.
 func (r *CompiledTemplateRenderer) getAvailableTemplates() []string {
-	names := make([]string, 0, len(r.renderFuncs))
+	seen := make(map[string]struct{})
+	for name := range r.funcs {
+		seen[name] = struct{}{}
+	}
 	for name := range r.renderFuncs {
+		seen[name] = struct{}{}
+	}
+	names := make([]string, 0, len(seen))
+	for name := range seen {
 		names = append(names, name)
 	}
 	return names
 }
-

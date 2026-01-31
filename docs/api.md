@@ -4,56 +4,35 @@ This document describes the runtime API for working with compiled Handlebars tem
 
 ## Basic Usage
 
-After compiling templates with `hbc`, you get generated functions for each template:
+After compiling templates with `hbc`, you get generated functions for each template. The compiler emits **typed context** types (e.g. `MainContext`) inferred from your template expressions:
 
 ```go
 import "github.com/your/project/templates"
 
-// Render to a writer
+// Render to a writer (data must satisfy the template's context type, e.g. MainContext)
 var b strings.Builder
 if err := templates.RenderMain(&b, data); err != nil {
     // handle error
 }
 out := b.String()
 
-// Or use the string wrapper
-out, err := templates.RenderMainString(data)
+// Or use the string wrapper. For map data, use MainContextFromMap(data).
+out, err := templates.RenderMainString(templates.MainContextFromMap(data))
 ```
 
 ## Generated Functions
 
-For each template file (e.g., `main.hbs`), the compiler generates:
+For each template file (e.g. `main.hbs`), the compiler generates:
 
-1. **Internal render function**: `renderMain(ctx *runtime.Context, w io.Writer) error`
-2. **Public render function**: `RenderMain(w io.Writer, data any) error`
-3. **String wrapper**: `RenderMainString(data any) (string, error)`
+1. **Internal render function**: `renderMain(data MainContext, w io.Writer, root any) error` (used by partials; `root` is the caller’s root context for `@root`)
+2. **Public render function**: `RenderMain(w io.Writer, data MainContext) error`
+3. **String wrapper**: `RenderMainString(data MainContext) (string, error)`
+
+The context type (e.g. `MainContext`) is an interface inferred from paths used in the template; you can pass a struct or `map[string]any` that provides the required fields.
 
 ## Runtime Package
 
-The `runtime` package provides the core functionality for template execution.
-
-### Context
-
-```go
-// NewContext creates a new rendering context
-ctx := runtime.NewContext(data)
-
-// WithData creates a child context with new data
-childCtx := ctx.WithData(newData)
-
-// WithScope creates a child context with new data and optional locals/data vars
-childCtx := ctx.WithScope(data, locals, dataVars)
-```
-
-### Path Resolution
-
-```go
-// ResolvePath looks up a dotted path in the current context
-value, ok := runtime.ResolvePath(ctx, "user.name")
-
-// ResolvePathParsed resolves a pre-parsed path expression
-value, ok := runtime.ResolvePathParsed(ctx, parsedPath)
-```
+The `runtime` package provides types and utilities used by generated code and by custom helpers.
 
 ### Output
 
@@ -71,15 +50,10 @@ str := runtime.Stringify(value)
 ### Helper Arguments
 
 ```go
-// EvalArg evaluates an argument expression
-value := runtime.EvalArg(ctx, runtime.ArgPath, "user.name")
-value := runtime.EvalArg(ctx, runtime.ArgString, "literal")
-value := runtime.EvalArg(ctx, runtime.ArgNumber, "42")
-
 // HashArg extracts hash arguments from helper arguments
 hash, ok := runtime.HashArg(args)
 
-// GetBlockOptions extracts block options from helper arguments
+// GetBlockOptions extracts block options from helper arguments (for block helpers)
 opts, ok := runtime.GetBlockOptions(args)
 ```
 
@@ -99,19 +73,30 @@ if runtime.IsTruthy(value) {
 safe := runtime.SafeString("<b>bold</b>")
 ```
 
-## Helper Functions
-
-Helper functions must match this signature:
+### Context and partials
 
 ```go
-func MyHelper(ctx *runtime.Context, args []any) (any, error)
+// LookupPath returns the value at a dot-separated path from root (e.g. "title", "user.name").
+// Root can be map[string]any or implement Raw() any returning a map.
+// Used by generated code for @root.xxx inside partials when root comes from another template.
+val := runtime.LookupPath(root, "title")
 ```
+
+## Helper Functions
+
+Simple helpers (non-block) must match this signature:
+
+```go
+func MyHelper(args []any) (any, error)
+```
+
+Arguments are **resolved by the compiler** before being passed; you receive the evaluated values. No context is passed—the compiler bakes in the needed lookups.
 
 ### Accessing Arguments
 
 ```go
-func MyHelper(ctx *runtime.Context, args []any) (any, error) {
-    // Positional arguments
+func MyHelper(args []any) (any, error) {
+    // Positional arguments (already evaluated)
     if len(args) == 0 {
         return nil, fmt.Errorf("missing argument")
     }
@@ -129,56 +114,61 @@ func MyHelper(ctx *runtime.Context, args []any) (any, error) {
 
 ### Block Helpers
 
+Block helpers are invoked by the compiler with a single argument: the full `args` slice, whose **last element** is the block options. Use signature `func(args []any) error` and extract options with `runtime.GetBlockOptions(args)`:
+
 ```go
-func MyBlockHelper(ctx *runtime.Context, args []any) (any, error) {
+func MyBlockHelper(args []any) error {
     opts, ok := runtime.GetBlockOptions(args)
     if !ok {
-        // Not used as a block
-        return "default", nil
+        return fmt.Errorf("block helper did not receive BlockOptions")
     }
-    
-    // Render the main block
+    // Render the main block (opts.Fn(w) requires w from caller scope)
     if opts.Fn != nil {
-        var b strings.Builder
-        if err := opts.Fn(ctx, &b); err != nil {
-            return nil, err
+        if err := opts.Fn(w); err != nil {
+            return err
         }
-        return b.String(), nil
     }
-    
     // Render the inverse/else block
     if opts.Inverse != nil {
-        var b strings.Builder
-        if err := opts.Inverse(ctx, &b); err != nil {
-            return nil, err
+        if err := opts.Inverse(w); err != nil {
+            return err
         }
-        return b.String(), nil
     }
-    
-    return "", nil
+    return nil
 }
 ```
+
+`BlockOptions` provides:
+
+```go
+type BlockOptions struct {
+    Fn      func(io.Writer) error  // main block body
+    Inverse func(io.Writer) error   // else block body
+}
+```
+
+The runtime also defines `BlockHelper` as `func(args []any, options BlockOptions) error` for use when you call a block helper manually with two arguments. When invoked from generated code, only `args` is passed (with options as the last element).
 
 ## Partials
 
 Partials are automatically registered in the generated code:
 
 ```go
-// Access partials map (internal)
-partials["header"](ctx, w)
-
-// Partials are used automatically in templates via {{> header}}
+// partials map (internal): template name -> func(data any, w io.Writer) error
+partials["header"](data, w)
 ```
+
+Templates use them via `{{> header}}` or `{{> (lookup ...) }}`.
 
 ## Data Types
 
 ### Context Data
 
-The context data can be any Go type:
+The context data for a template satisfies the generated context interface (e.g. `MainContext`). In practice you can pass:
+
 - Maps (`map[string]any`)
 - Structs (with exported fields or JSON tags)
-- Slices/arrays
-- Primitives (string, int, float, bool, etc.)
+- The compiler also generates `XxxContextFromMap` constructors to build context from `map[string]any`.
 
 ### Hash Arguments
 
@@ -192,8 +182,8 @@ type Hash map[string]any
 
 ```go
 type BlockOptions struct {
-    Fn      func(*Context, io.Writer) error
-    Inverse func(*Context, io.Writer) error
+    Fn      func(io.Writer) error
+    Inverse func(io.Writer) error
 }
 ```
 
@@ -205,12 +195,12 @@ All render functions return errors. Common error scenarios:
 - Missing helper (compile-time error)
 - Runtime errors in helpers
 - Invalid data types
-- Path resolution failures
+- Block helper did not receive BlockOptions
 
-Always check errors:
+Always check errors. When using a `map[string]any` (e.g. from JSON), use the generated `XxxContextFromMap` so data satisfies the context type:
 
 ```go
-out, err := templates.RenderMainString(data)
+out, err := templates.RenderMainString(templates.MainContextFromMap(data))
 if err != nil {
     log.Fatal(err)
 }
@@ -220,9 +210,7 @@ if err != nil {
 
 - Templates are compiled to Go code, so execution is fast
 - No runtime template parsing
-- Context creation is lightweight
-- Path resolution is optimized
-- Use `ResolvePathParsed` for frequently accessed paths
+- Context types are resolved at compile time; helpers receive pre-evaluated arguments
 
 ## Examples
 
@@ -235,14 +223,15 @@ data := map[string]any{
         "name": "Alice",
     },
 }
-
-out, err := templates.RenderMainString(data)
+// If your template uses these paths, the generated MainContext will allow map or struct.
+// Use MainContextFromMap(data) if the compiler generated it, or pass a struct.
+out, err := templates.RenderMainString(templates.MainContextFromMap(data))
 ```
 
 ### Custom Helper
 
 ```go
-func FormatCurrency(ctx *runtime.Context, args []any) (any, error) {
+func FormatCurrency(args []any) (any, error) {
     if len(args) == 0 {
         return "", nil
     }
@@ -264,32 +253,30 @@ func FormatCurrency(ctx *runtime.Context, args []any) (any, error) {
 ### Block Helper
 
 ```go
-func IfHelper(ctx *runtime.Context, args []any) (any, error) {
+func IfHelper(args []any) error {
     opts, ok := runtime.GetBlockOptions(args)
     if !ok {
-        return nil, fmt.Errorf("if must be used as block")
+        return fmt.Errorf("if: no block options")
     }
-    
+    if len(args) < 1 {
+        return fmt.Errorf("if requires a condition")
+    }
     condition := args[0]
     if runtime.IsTruthy(condition) {
         if opts.Fn != nil {
-            var b strings.Builder
-            if err := opts.Fn(ctx, &b); err != nil {
-                return nil, err
-            }
-            return b.String(), nil
+            return opts.Fn(w) // w is the template output writer (in scope in generated code)
         }
-    } else {
-        if opts.Inverse != nil {
-            var b strings.Builder
-            if err := opts.Inverse(ctx, &b); err != nil {
-                return nil, err
-            }
-            return b.String(), nil
-        }
+    } else if opts.Inverse != nil {
+        return opts.Inverse(w)
     }
-    
-    return "", nil
+    return nil
 }
 ```
 
+Note: the built-in `if`/`unless`/`each`/`with` are implemented by the compiler; the above illustrates the runtime API for custom block helpers. When the compiler invokes a block helper it calls `helper(args)`; the writer `w` is in scope in the generated render function. Custom helpers that are called from generated code and need to render the block must receive or capture the writer (e.g. via an adapter).
+
+## See also
+
+- [Compiled template file](compiled-templates.md) — What the compiler generates (context types, RenderXxx, FromMap).
+- [Template Syntax](syntax.md) — Handlebars expressions and blocks.
+- [Built-in Helpers](helpers.md) — Available helpers and how to register custom ones.

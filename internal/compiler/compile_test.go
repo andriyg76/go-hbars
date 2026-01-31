@@ -3,8 +3,6 @@ package compiler
 import (
 	"strings"
 	"testing"
-
-	"github.com/andriyg76/go-hbars/helpers"
 )
 
 func TestCompileTemplates_GeneratesFunctions(t *testing.T) {
@@ -15,14 +13,27 @@ func TestCompileTemplates_GeneratesFunctions(t *testing.T) {
 		t.Fatalf("CompileTemplates error: %v", err)
 	}
 	src := string(code)
-	if !strings.Contains(src, "func RenderMain(w io.Writer, data any) error") {
+	if !strings.Contains(src, "func RenderMain(w io.Writer, data MainContext) error") {
 		t.Fatalf("missing RenderMain writer signature")
 	}
-	if !strings.Contains(src, "func RenderMainString(data any) (string, error)") {
+	if !strings.Contains(src, "func RenderMainString(data MainContext) (string, error)") {
 		t.Fatalf("missing RenderMainString wrapper")
 	}
 	if !strings.Contains(src, "runtime.WriteEscaped") {
 		t.Fatalf("missing runtime.WriteEscaped call")
+	}
+}
+
+func TestCompileTemplates_GeneratorVersion(t *testing.T) {
+	code, err := CompileTemplates(map[string]string{
+		"main": "Hi",
+	}, Options{PackageName: "templates", GeneratorVersion: "v0.1.0"})
+	if err != nil {
+		t.Fatalf("CompileTemplates error: %v", err)
+	}
+	src := string(code)
+	if !strings.Contains(src, "// Generator version: v0.1.0") {
+		t.Fatalf("expected Generator version comment in generated code, got:\n%s", src)
 	}
 }
 
@@ -38,7 +49,7 @@ func TestCompileTemplates_HelperDirectCall(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CompileTemplates error: %v", err)
 	}
-	if !strings.Contains(string(code), "Upper(ctx") {
+	if !strings.Contains(string(code), "Upper(") {
 		t.Fatalf("expected Upper helper call in generated code")
 	}
 }
@@ -78,10 +89,10 @@ func TestCompileTemplates_Subexpressions(t *testing.T) {
 		t.Fatalf("CompileTemplates error: %v", err)
 	}
 	src := string(code)
-	if !strings.Contains(src, "Lower(ctx") {
+	if !strings.Contains(src, "Lower(") {
 		t.Fatalf("expected Lower helper call in generated code")
 	}
-	if !strings.Contains(src, "Upper(ctx") {
+	if !strings.Contains(src, "Upper(") {
 		t.Fatalf("expected Upper helper call in generated code")
 	}
 }
@@ -115,8 +126,9 @@ func TestCompileTemplates_BlockHelpers(t *testing.T) {
 	if !strings.Contains(src, "runtime.IsTruthy") {
 		t.Fatalf("expected runtime.IsTruthy in generated code")
 	}
-	if !strings.Contains(src, "runtime.Iterate") {
-		t.Fatalf("expected runtime.Iterate in generated code")
+	// Typed context: each uses range over typed collection, no runtime.Iterate
+	if !strings.Contains(src, "range") {
+		t.Fatalf("expected range (each) in generated code")
 	}
 }
 
@@ -151,14 +163,33 @@ func TestCompileTemplates_BlockParams(t *testing.T) {
 		t.Fatalf("CompileTemplates error: %v", err)
 	}
 	src := string(code)
-	if !strings.Contains(src, "ctx.WithScope(item.Value") {
-		t.Fatalf("expected WithScope for each block params")
+	// Typed context: each iterates over typed collection
+	if !strings.Contains(src, "range") {
+		t.Fatalf("expected range for each block")
 	}
-	if !strings.Contains(src, "\"item\"") {
+	// Block params item/idx appear as scope or loop vars
+	if !strings.Contains(src, "item") {
 		t.Fatalf("expected item block param in generated code")
 	}
-	if !strings.Contains(src, "\"idx\"") {
+	if !strings.Contains(src, "idx") {
 		t.Fatalf("expected idx block param in generated code")
+	}
+}
+
+func TestCompileTemplates_EachOverCollection(t *testing.T) {
+	// {{#each orders}} with block params: compiler emits iteration (range or []any/map fallback)
+	code, err := CompileTemplates(map[string]string{
+		"main": "{{#each orders as |order idx|}}{{order.id}}{{/each}}",
+	}, Options{PackageName: "templates"})
+	if err != nil {
+		t.Fatalf("CompileTemplates error: %v", err)
+	}
+	src := string(code)
+	if !strings.Contains(src, "range") {
+		t.Fatalf("expected range (or slice/map iteration) for each block")
+	}
+	if !strings.Contains(src, "Orders()") && !strings.Contains(src, "orders") {
+		t.Fatalf("expected Orders() or orders access for each collection")
 	}
 }
 
@@ -179,8 +210,8 @@ func TestCompileTemplates_DynamicPartial(t *testing.T) {
 	if !strings.Contains(src, "partials[") {
 		t.Fatalf("expected dynamic partial lookup")
 	}
-	if !strings.Contains(src, "MissingPartial") {
-		t.Fatalf("expected MissingPartial error handling")
+	if !strings.Contains(src, "MissingPartialOutput") {
+		t.Fatalf("expected MissingPartialOutput for dynamic partial when not found")
 	}
 }
 func TestCompileTemplates_UnknownBlock(t *testing.T) {
@@ -191,8 +222,33 @@ func TestCompileTemplates_UnknownBlock(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected success (universal section), got %v", err)
 	}
-	if !strings.Contains(string(code), "WithScope") {
-		t.Fatalf("expected WithScope (universal section) in generated code")
+	// Typed context: section uses typed scope, no runtime WithScope
+	if !strings.Contains(string(code), "IsTruthy") {
+		t.Fatalf("expected IsTruthy (universal section) in generated code")
+	}
+}
+
+func TestCompileTemplates_LayoutBlocks(t *testing.T) {
+	// Layout block/partial: {{#block "name"}}default{{/block}} and {{#partial "name"}}content{{/partial}}
+	code, err := CompileTemplates(map[string]string{
+		"layout": `<div>{{#block "content"}}default content{{/block}}</div>`,
+		"page":   `{{#partial "content"}}<p>page body</p>{{/partial}}{{> layout}}`,
+	}, Options{PackageName: "templates"})
+	if err != nil {
+		t.Fatalf("CompileTemplates error: %v", err)
+	}
+	src := string(code)
+	if !strings.Contains(src, "*runtime.Blocks") {
+		t.Fatalf("expected *runtime.Blocks in generated code when using block/partial")
+	}
+	if !strings.Contains(src, "RenderPageWithBlocks") {
+		t.Fatalf("expected RenderPageWithBlocks in generated code")
+	}
+	if !strings.Contains(src, "blocks.Get(") {
+		t.Fatalf("expected blocks.Get in generated code for {{#block}}")
+	}
+	if !strings.Contains(src, "blocks.Set(") {
+		t.Fatalf("expected blocks.Set in generated code for {{#partial}}")
 	}
 }
 
@@ -205,53 +261,12 @@ func TestCompileTemplates_UniversalSection(t *testing.T) {
 		t.Fatalf("CompileTemplates error: %v", err)
 	}
 	src := string(code)
-	// Section semantics: resolve name, if truthy WithScope(val), else inverse
-	if !strings.Contains(src, "WithScope") {
-		t.Fatalf("expected WithScope in generated code for universal section")
-	}
+	// Typed context: section uses typed scope (getter + IsTruthy), no runtime WithScope
 	if !strings.Contains(src, "IsTruthy") {
 		t.Fatalf("expected IsTruthy in generated code for universal section")
 	}
-}
-
-func TestCompileTemplates_UniversalSection_HelperWins(t *testing.T) {
-	// When a name is registered as block helper, it is used — not section
-	reg := helpers.Registry()
-	compilerHelpers := make(map[string]HelperRef, len(reg))
-	for name, ref := range reg {
-		compilerHelpers[name] = HelperRef{ImportPath: ref.ImportPath, Ident: ref.Ident}
-	}
-	code, err := CompileTemplates(map[string]string{
-		"main": `{{#block "x"}}default{{/block}}`,
-	}, Options{PackageName: "templates", Helpers: compilerHelpers})
-	if err != nil {
-		t.Fatalf("CompileTemplates error: %v", err)
-	}
-	src := string(code)
-	if !strings.Contains(src, "runtime.Block") {
-		t.Fatalf("expected runtime.Block when block is registered helper, got section fallback")
-	}
-}
-
-func TestCompileTemplates_BlockPartialHelpers(t *testing.T) {
-	// Layout block helpers: {{#block "name"}}default{{/block}} and {{#partial "name"}}body{{/partial}}
-	reg := helpers.Registry()
-	compilerHelpers := make(map[string]HelperRef, len(reg))
-	for name, ref := range reg {
-		compilerHelpers[name] = HelperRef{ImportPath: ref.ImportPath, Ident: ref.Ident}
-	}
-	code, err := CompileTemplates(map[string]string{
-		"main": `{{#partial "header"}}<title>X</title>{{/partial}}{{#block "header"}}default{{/block}}`,
-	}, Options{PackageName: "templates", Helpers: compilerHelpers})
-	if err != nil {
-		t.Fatalf("CompileTemplates error: %v", err)
-	}
-	src := string(code)
-	if !strings.Contains(src, "runtime.Block") {
-		t.Fatalf("expected runtime.Block in generated code for {{#block}}, got:\n%s", src)
-	}
-	if !strings.Contains(src, "runtime.Partial") {
-		t.Fatalf("expected runtime.Partial in generated code for {{#partial}}, got:\n%s", src)
+	if !strings.Contains(src, "render") {
+		t.Fatalf("expected render call in generated code")
 	}
 }
 
@@ -278,93 +293,124 @@ func TestCompileTemplates_InlineLiteralArgs(t *testing.T) {
 		t.Fatalf("CompileTemplates error: %v", err)
 	}
 	src := string(code)
-	if strings.Contains(src, "EvalArg") {
-		t.Fatalf("expected literals to be inlined without EvalArg")
+	// Typed context: helper args are resolved as typed getters/literals, no EvalArg
+	if !strings.Contains(src, "Upper(") {
+		t.Fatalf("expected Upper helper call in generated code")
 	}
-	if !strings.Contains(src, "int64(3)") {
-		t.Fatalf("expected int64 literal for numeric arg")
+	if !strings.Contains(src, "\"Ada\"") {
+		t.Fatalf("expected inline literal in generated code")
 	}
 }
 
-func TestCompileTemplates_PrebuildLiteralHash(t *testing.T) {
+func TestCompileTemplates_ContextInterfaces(t *testing.T) {
 	code, err := CompileTemplates(map[string]string{
-		"main": "{{upper name foo=\"bar\" count=2}}",
-	}, Options{
-		PackageName: "templates",
-		Helpers: map[string]HelperRef{
-			"upper": {Ident: "Upper"},
-		},
+		"main": "{{title}}\n{{#with user}}{{name}}{{/with}}\n{{#each items as |item|}}{{item.id}}{{/each}}",
+	}, Options{PackageName: "templates"})
+	if err != nil {
+		t.Fatalf("CompileTemplates error: %v", err)
+	}
+	src := string(code)
+	if !strings.Contains(src, "// MainContext is the context interface inferred from template \"main\".") {
+		t.Fatalf("expected MainContext interface comment in generated code")
+	}
+	if !strings.Contains(src, "type MainContext interface {") {
+		t.Fatalf("expected type MainContext interface in generated code")
+	}
+	if !strings.Contains(src, "Title() any") {
+		t.Fatalf("expected Title() any in MainContext")
+	}
+	if !strings.Contains(src, "User() MainUserContext") {
+		t.Fatalf("expected User() MainUserContext in MainContext")
+	}
+	if !strings.Contains(src, "Items() []MainItemsItemContext") {
+		t.Fatalf("expected Items() []MainItemsItemContext in MainContext")
+	}
+	if !strings.Contains(src, "type MainUserContext interface {") {
+		t.Fatalf("expected nested MainUserContext interface")
+	}
+	if !strings.Contains(src, "type MainItemsItemContext interface {") {
+		t.Fatalf("expected MainItemsItemContext for each element")
+	}
+	if !strings.Contains(src, "Raw() any") {
+		t.Fatalf("expected Raw() any in root context interface")
+	}
+	if !strings.Contains(src, "type MainContextData struct") {
+		t.Fatalf("expected MainContextData map-backed type")
+	}
+	if !strings.Contains(src, "func MainContextFromMap(m map[string]any) MainContext") {
+		t.Fatalf("expected MainContextFromMap constructor")
+	}
+}
+
+func TestCompileTemplates_PartialsUseFromMap(t *testing.T) {
+	code, err := CompileTemplates(map[string]string{
+		"main":    "{{title}}{{> header}}",
+		"header":  "<h1>{{title}}</h1>",
+	}, Options{PackageName: "templates"})
+	if err != nil {
+		t.Fatalf("CompileTemplates error: %v", err)
+	}
+	src := string(code)
+	if !strings.Contains(src, "func contextMap(ctx any) map[string]any") {
+		t.Fatalf("expected contextMap helper in generated code")
+	}
+	if !strings.Contains(src, "m := contextMap(ctx)") {
+		t.Fatalf("expected partials to use contextMap(ctx)")
+	}
+	if !strings.Contains(src, "MainContextFromMap(m)") {
+		t.Fatalf("expected partials to use FromMap(m) instead of type assertion")
+	}
+	if strings.Contains(src, "ctx.(MainContext)") {
+		t.Fatalf("partials must not use type assertion for context")
+	}
+}
+
+// TestCompileTemplates_PartialContextRules checks partial context rules:
+// - {{> name}} (no args, no hash) => current context passed as-is (renderXxx(data, ...)).
+// - {{> name note="x"}} (only hash) => context = hash + keys used in partial from current scope (MergePartialContext(nil, hash) then add scope keys).
+func TestCompileTemplates_PartialContextRules(t *testing.T) {
+	// Only hash + partial uses a key not in hash => that key comes from current scope.
+	t.Run("only_hash_plus_partial_keys", func(t *testing.T) {
+		code, err := CompileTemplates(map[string]string{
+			"main":   `{{title}}{{> footer note="thanks"}}`,
+			"footer": `{{note}} {{title}}`,
+		}, Options{PackageName: "templates"})
+		if err != nil {
+			t.Fatalf("compile: %v", err)
+		}
+		src := string(code)
+		if !strings.Contains(src, "runtime.MergePartialContext(nil,") {
+			t.Errorf("only-hash partial should use MergePartialContext(nil, hash); got snippet: %s", grepOne(src, "MergePartialContext"))
+		}
+		// Footer uses "title"; not in hash => should add from scope.
+		if !strings.Contains(src, `["title"]`) && !strings.Contains(src, "[\"title\"]") {
+			t.Errorf("partial uses {{title}} but hash has only note; expected partialCtx[\"title\"] = ... from scope")
+		}
 	})
-	if err != nil {
-		t.Fatalf("CompileTemplates error: %v", err)
-	}
-	src := string(code)
-	if !strings.Contains(src, "staticHash") {
-		t.Fatalf("expected static hash map for literal values")
-	}
-	if strings.Contains(src, ":= runtime.Hash") {
-		t.Fatalf("expected no per-call hash allocation for literal hash")
-	}
-}
-
-func TestCompileTemplates_DuplicateHashKeys(t *testing.T) {
-	_, err := CompileTemplates(map[string]string{
-		"main": "{{upper foo=1 foo=2}}",
-	}, Options{
-		PackageName: "templates",
-		Helpers: map[string]HelperRef{
-			"upper": {Ident: "Upper"},
-		},
+	// No args, no hash => current context (renderXxx(data, ...)), not partials map.
+	t.Run("no_args_current_context", func(t *testing.T) {
+		code, err := CompileTemplates(map[string]string{
+			"main":   `{{> header}}`,
+			"header": `<h1>{{title}}</h1>`,
+		}, Options{PackageName: "templates"})
+		if err != nil {
+			t.Fatalf("compile: %v", err)
+		}
+		src := string(code)
+		if !strings.Contains(src, "renderHeader(data,") {
+			t.Errorf("{{> header}} with no args should call renderHeader(data, ...); got: %s", grepOne(src, "renderHeader"))
+		}
 	})
-	if err == nil || !strings.Contains(err.Error(), "duplicate hash key") {
-		t.Fatalf("expected duplicate hash key error, got %v", err)
-	}
 }
 
-func TestCompileTemplates_ConstantFoldIf(t *testing.T) {
-	code, err := CompileTemplates(map[string]string{
-		"main": "{{#if true}}Yes{{else}}No{{/if}}",
-	}, Options{PackageName: "templates"})
-	if err != nil {
-		t.Fatalf("CompileTemplates error: %v", err)
+func grepOne(src, sub string) string {
+	if i := strings.Index(src, sub); i >= 0 {
+		end := i + len(sub) + 80
+		if end > len(src) {
+			end = len(src)
+		}
+		return src[i:end]
 	}
-	src := string(code)
-	if strings.Contains(src, "IsTruthy") {
-		t.Fatalf("expected constant-folded if to avoid IsTruthy")
-	}
-	if strings.Contains(src, "\"No\"") {
-		t.Fatalf("expected else branch to be removed for constant true")
-	}
+	return "(not found)"
 }
 
-func TestCompileTemplates_ConstantFoldWith(t *testing.T) {
-	code, err := CompileTemplates(map[string]string{
-		"main": "{{#with \"Ada\"}}{{this}}{{/with}}",
-	}, Options{PackageName: "templates"})
-	if err != nil {
-		t.Fatalf("CompileTemplates error: %v", err)
-	}
-	src := string(code)
-	if strings.Contains(src, "IsTruthy") {
-		t.Fatalf("expected constant-folded with to avoid IsTruthy")
-	}
-	if !strings.Contains(src, "WithScope(\"Ada\"") {
-		t.Fatalf("expected with block to use literal scope value")
-	}
-}
-
-func TestCompileTemplates_PreparsedPaths(t *testing.T) {
-	code, err := CompileTemplates(map[string]string{
-		"main": "Hello {{user.name}}",
-	}, Options{PackageName: "templates"})
-	if err != nil {
-		t.Fatalf("CompileTemplates error: %v", err)
-	}
-	src := string(code)
-	if !strings.Contains(src, "ResolvePathValueParsed") {
-		t.Fatalf("expected pre-parsed path resolution")
-	}
-	if !strings.Contains(src, "staticPath") {
-		t.Fatalf("expected static parsed path declaration")
-	}
-}

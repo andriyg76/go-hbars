@@ -1,12 +1,12 @@
 package helpers
 
 import (
-	"fmt"
 	"reflect"
 	"strconv"
 	"time"
 
 	"github.com/andriyg76/go-hbars/runtime"
+	"github.com/andriyg76/hexerr"
 )
 
 // GetArg returns the argument at index, or nil if out of bounds.
@@ -64,7 +64,7 @@ func GetNumberArg(args []any, idx int) (float64, error) {
 		}
 		return f, nil
 	default:
-		return 0, fmt.Errorf("cannot convert %T to number", arg)
+		return 0, hexerr.Newf("cannot convert %T to number", arg)
 	}
 }
 
@@ -149,6 +149,6 @@ func ParseTime(s string) (time.Time, error) {
 			return t, nil
 		}
 	}
-	return time.Time{}, fmt.Errorf("unable to parse time: %q", s)
+	return time.Time{}, hexerr.Newf("unable to parse time: %q", s)
 }
 

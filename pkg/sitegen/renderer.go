@@ -1,7 +1,7 @@
 package sitegen
 
 import (
-	"github.com/andriyg76/go-hbars/internal/processor"
+	"github.com/andriyg76/go-hbars/pkg/renderer"
 )
 
 // LoadRenderer creates a renderer from a compiled template package.
@@ -24,7 +24,7 @@ import (
 //	renderer := sitegen.NewRendererFromFunctions(map[string]sitegen.RenderFunc{
 //	    "main": templates.RenderMain,
 //	})
-func LoadRenderer(templatePackage any) (processor.TemplateRenderer, error) {
+func LoadRenderer(templatePackage any) (renderer.TemplateRenderer, error) {
 	return AutoLoadRenderer(templatePackage)
 }
 

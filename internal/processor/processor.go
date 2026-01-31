@@ -1,48 +1,42 @@
 package processor
 
 import (
-	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
-)
 
-// TemplateRenderer is an interface for rendering compiled templates.
-type TemplateRenderer interface {
-	Render(templateName string, w io.Writer, data any) error
-}
+	"github.com/andriyg76/go-hbars/pkg/renderer"
+	"github.com/andriyg76/hexerr"
+)
 
 // Config holds processor configuration.
 type Config struct {
-	RootPath      string
-	DataPath      string
-	SharedPath    string
-	TemplatesPath string
-	OutputPath    string
+	RootPath   string
+	DataPath   string
+	SharedPath string
+	OutputPath string
 }
 
 // DefaultConfig returns a default configuration.
 func DefaultConfig() *Config {
 	return &Config{
-		DataPath:      "data",
-		SharedPath:    "shared",
-		TemplatesPath: ".processor/templates",
-		OutputPath:    "pages",
+		DataPath:   "data",
+		SharedPath: "shared",
+		OutputPath: "pages",
 	}
 }
 
 // Processor processes data files and renders them using templates.
 type Processor struct {
 	config   *Config
-	renderer TemplateRenderer
+	renderer renderer.TemplateRenderer
 }
 
 // NewProcessor creates a new processor with the given configuration and renderer.
-func NewProcessor(config *Config, renderer TemplateRenderer) *Processor {
+func NewProcessor(config *Config, r renderer.TemplateRenderer) *Processor {
 	return &Processor{
 		config:   config,
-		renderer: renderer,
+		renderer: r,
 	}
 }
 
@@ -57,13 +51,13 @@ func (p *Processor) Process() error {
 	sharedPath := p.resolvePath(p.config.SharedPath)
 	sharedData, err := LoadSharedData(sharedPath)
 	if err != nil {
-		return fmt.Errorf("failed to load shared data: %w", err)
+		return hexerr.Wrapf(err, "failed to load shared data")
 	}
 
 	// Process data files
 	dataPath := p.resolvePath(p.config.DataPath)
 	if err := p.processDirectory(dataPath, sharedData, ""); err != nil {
-		return fmt.Errorf("failed to process data files: %w", err)
+		return hexerr.Wrapf(err, "failed to process data files")
 	}
 
 	return nil
@@ -95,7 +89,7 @@ func (p *Processor) ProcessFile(dataFilePath string, sharedData map[string]any) 
 	// Render template
 	var buf strings.Builder
 	if err := p.renderer.Render(pageConfig.Template, &buf, pageData); err != nil {
-		return "", nil, fmt.Errorf("failed to render template %q: %w", pageConfig.Template, err)
+		return "", nil, hexerr.Wrapf(err, "failed to render template %q", pageConfig.Template)
 	}
 
 	// Determine output path
@@ -107,7 +101,7 @@ func (p *Processor) ProcessFile(dataFilePath string, sharedData map[string]any) 
 func (p *Processor) processDirectory(dirPath string, sharedData map[string]any, relPath string) error {
 	entries, err := os.ReadDir(dirPath)
 	if err != nil {
-		return fmt.Errorf("failed to read directory %q: %w", dirPath, err)
+		return hexerr.Wrapf(err, "failed to read directory %q", dirPath)
 	}
 
 	for _, entry := range entries {
@@ -130,7 +124,7 @@ func (p *Processor) processDirectory(dirPath string, sharedData map[string]any, 
 
 		outputPath, content, err := p.ProcessFile(fullPath, sharedData)
 		if err != nil {
-			return fmt.Errorf("failed to process file %q: %w", fullPath, err)
+			return hexerr.Wrapf(err, "failed to process file %q", fullPath)
 		}
 		if outputPath == "" {
 			continue // File should be ignored
@@ -138,7 +132,7 @@ func (p *Processor) processDirectory(dirPath string, sharedData map[string]any, 
 
 		// Write output file
 		if err := p.writeOutputFile(outputPath, content); err != nil {
-			return fmt.Errorf("failed to write output file %q: %w", outputPath, err)
+			return hexerr.Wrapf(err, "failed to write output file %q", outputPath)
 		}
 	}
 
@@ -178,12 +172,12 @@ func (p *Processor) writeOutputFile(outputPath string, content []byte) error {
 	dir := filepath.Dir(outputPath)
 	if dir != "." && dir != "" {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
-			return fmt.Errorf("failed to create output directory %q: %w", dir, err)
+			return hexerr.Wrapf(err, "failed to create output directory %q", dir)
 		}
 	}
 
 	if err := os.WriteFile(outputPath, content, 0o644); err != nil {
-		return fmt.Errorf("failed to write file %q: %w", outputPath, err)
+		return hexerr.Wrapf(err, "failed to write file %q", outputPath)
 	}
 
 	return nil
@@ -199,4 +193,3 @@ func (p *Processor) resolvePath(parts ...string) string {
 	}
 	return path
 }
-

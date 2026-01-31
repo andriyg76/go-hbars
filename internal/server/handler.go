@@ -7,12 +7,15 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/andriyg76/glog"
 	"github.com/andriyg76/go-hbars/internal/processor"
 )
 
+var serverLog = glog.Create(glog.INFO)
+
 // Handler handles HTTP requests for the semi-static server.
 type Handler struct {
-	processor   *processor.Processor
+	processor  *processor.Processor
 	sharedData map[string]any
 	staticDir  string
 }
@@ -20,9 +23,9 @@ type Handler struct {
 // NewHandler creates a new HTTP handler.
 func NewHandler(proc *processor.Processor, sharedData map[string]any, staticDir string) *Handler {
 	return &Handler{
-		processor:   proc,
-		sharedData:  sharedData,
-		staticDir:   staticDir,
+		processor:  proc,
+		sharedData: sharedData,
+		staticDir:  staticDir,
 	}
 }
 
@@ -80,6 +83,7 @@ func (h *Handler) handleDataFile(w http.ResponseWriter, r *http.Request) bool {
 	// Process the file
 	outputPath, content, err := h.processor.ProcessFile(dataPath, h.sharedData)
 	if err != nil {
+		serverLog.Error("Failed to process file: %+v", err)
 		http.Error(w, fmt.Sprintf("Failed to process file: %v", err), http.StatusInternalServerError)
 		return true
 	}
@@ -128,4 +132,3 @@ func (h *Handler) findDataFile(urlPath string) string {
 
 	return ""
 }
-

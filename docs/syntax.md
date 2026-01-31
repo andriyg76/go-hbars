@@ -2,7 +2,7 @@
 
 This document describes the Handlebars template syntax supported by go-hbars.
 
-**Custom extensions** (includeZero for `{{#if}}`/`{{#unless}}`, layout blocks via `{{#partial}}`/`{{#block}}`) are covered in [Custom Extensions](extensions.md).
+**Custom extensions** (includeZero for `{{#if}}`/`{{#unless}}`) are covered in [Custom Extensions](extensions.md).
 
 ## Values and Expressions
 
@@ -60,40 +60,30 @@ Nested helper calls where the result of one helper is passed as an argument to a
 
 ## Partials
 
-**Basic partial:**
+**Basic partial (current context only):**
 ```handlebars
 {{> header}}
 ```
-Renders the `header` partial template with the current context.
+Renders the `header` partial with the **current context**. The current context is passed only when there are no explicit context argument and no hash.
 
-**Partial with different context:**
+**Partial with explicit context:**
 ```handlebars
 {{> userCard user}}
+{{> footer . note="thanks"}}
 ```
-Renders `userCard` partial with `user` as the context instead of the current context.
+Renders the partial with the given context (e.g. `user` or `.`). Hash arguments are merged with that context (hash overrides same keys).
 
-**Partial with locals:**
+**Partial with only hash (no explicit context):**
 ```handlebars
 {{> footer note="thanks"}}
 ```
-Renders `footer` partial with `note` available as a local variable.
+Renders `footer` with a context built from the **hash** plus **only the keys that the partial template uses** from the current scope. So the partial receives the hash and any other root-level paths it references (e.g. `{{title}}` in the partial), taken from the current context.
 
 **Dynamic partial names:**
 ```handlebars
 {{> (lookup . "cardPartial") user}}
 ```
 Uses a helper to determine the partial name at runtime.
-
-**Partial blocks (fallback content):**
-```handlebars
-{{#> header}}
-  <h1>Default Header</h1>
-{{/header}}
-```
-Partial blocks render the partial if it exists, otherwise render the fallback block content. Useful for providing default content when a partial is missing.
-
-**Layout blocks (`{{#partial}}` / `{{#block}}`):**  
-Pages can define slot content with `{{#partial "name"}}...{{/partial}}`; layouts render it with `{{#block "name"}}default{{/block}}`. Supports **Direction A** (page calls layout; one pass) and **Direction B** (layout calls content; lazy slots, use `RenderWithLayout`). See [Custom Extensions — Layout blocks](extensions.md#layout-blocks-partial--block).
 
 ## Block Helpers
 
@@ -160,6 +150,8 @@ Changes the context to the specified value inside the block. If the value is fal
 ```
 Iterates over arrays, slices, or maps. Inside the block, `{{this}}` or `{{.}}` refers to the current item. If the collection is empty, renders the `{{else}}` block.
 
+When using map-backed context (e.g. `XxxContextFromMap(data)` from JSON), `{{#each}}` works with both **JSON arrays** (`[]any`) and **objects** (`map[string]any`): the generated code tries slice iteration first, then map iteration, so the same template works for lists and key-value data.
+
 **Block parameters:**
 ```handlebars
 {{#each users as |person idx|}}
@@ -212,13 +204,13 @@ Special variables available in certain contexts:
 - `@last` - `true` if this is the last item
 - `@root` - The root context (top-level data)
 
-**Root access:**
+**Root access (`@root`):**
 ```handlebars
 {{#with user}}
   {{name}} - {{@root.title}}
 {{/with}}
 ```
-Access the root context from anywhere using `@root`.
+`@root` refers to the **root context** (the top-level data passed to the template). Use `@root` or `@root.path` (e.g. `@root.title`, `@root.user.name`) to read from the root from any nested block or **partial**. When a partial is rendered, the caller passes its root context so that `{{@root.xxx}}` inside the partial resolves to the same root data (e.g. the main template’s data).
 
 ## Truthiness
 
@@ -306,4 +298,4 @@ Dynamic partials:
 
 ## See also
 
-- **[Custom Extensions](extensions.md)** — includeZero for `{{#if}}`/`{{#unless}}`, layout blocks (`{{#partial}}`/`{{#block}}`), Direction A (page→layout) and Direction B (layout→page, lazy slots)
+- **[Custom Extensions](extensions.md)** — includeZero for `{{#if}}`/`{{#unless}}`

@@ -1,10 +1,11 @@
 package sitegen
 
 import (
-	"fmt"
 	"io"
 
 	"github.com/andriyg76/go-hbars/internal/processor"
+	"github.com/andriyg76/go-hbars/pkg/renderer"
+	"github.com/andriyg76/hexerr"
 )
 
 // RenderFunc is a function that renders a template.
@@ -21,9 +22,11 @@ type RenderFunc func(io.Writer, any) error
 //	    "header": templates.RenderHeader,
 //	    "footer": templates.RenderFooter,
 //	})
-func NewRendererFromFunctions(funcs map[string]RenderFunc) processor.TemplateRenderer {
-	renderer, _ := processor.NewCompiledTemplateRenderer(funcs)
-	return renderer
+// NewRendererFromFunctions accepts map[string]func(io.Writer, any) error so that
+// generated bootstrap code (rendererFuncs) can be passed without type conversion.
+func NewRendererFromFunctions(funcs map[string]func(io.Writer, any) error) renderer.TemplateRenderer {
+	r, _ := processor.NewCompiledTemplateRenderer(funcs)
+	return r
 }
 
 // LoadRendererFromPackage attempts to load render functions from a package using reflection.
@@ -31,12 +34,12 @@ func NewRendererFromFunctions(funcs map[string]RenderFunc) processor.TemplateRen
 // a map of functions.
 //
 // For packages with standalone Render* functions, use NewRendererFromFunctions instead.
-func LoadRendererFromPackage(templatePackage any) (processor.TemplateRenderer, error) {
-	renderer, err := processor.NewCompiledTemplateRenderer(templatePackage)
+func LoadRendererFromPackage(templatePackage any) (renderer.TemplateRenderer, error) {
+	r, err := processor.NewCompiledTemplateRenderer(templatePackage)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create renderer: %w", err)
+		return nil, hexerr.Wrap(err, "failed to create renderer")
 	}
-	return renderer, nil
+	return r, nil
 }
 
 // AutoLoadRenderer attempts to automatically discover and load render functions.
@@ -44,17 +47,20 @@ func LoadRendererFromPackage(templatePackage any) (processor.TemplateRenderer, e
 // 1. If templatePackage is a map[string]RenderFunc, uses it directly
 // 2. If templatePackage is a struct with Render* methods, uses reflection
 // 3. Otherwise returns an error
-func AutoLoadRenderer(templatePackage any) (processor.TemplateRenderer, error) {
+func AutoLoadRenderer(templatePackage any) (renderer.TemplateRenderer, error) {
 	if templatePackage == nil {
-		return nil, fmt.Errorf("templatePackage cannot be nil")
+		return nil, hexerr.New("templatePackage cannot be nil")
 	}
 
-	// Check if it's already a map of functions
+	// Check if it's already a map of functions (convert to unnamed type for NewRendererFromFunctions)
 	if funcMap, ok := templatePackage.(map[string]RenderFunc); ok {
-		return NewRendererFromFunctions(funcMap), nil
+		m := make(map[string]func(io.Writer, any) error, len(funcMap))
+		for k, v := range funcMap {
+			m[k] = v
+		}
+		return NewRendererFromFunctions(m), nil
 	}
 
 	// Try reflection-based loading
 	return LoadRendererFromPackage(templatePackage)
 }
-

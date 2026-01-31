@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/andriyg76/hexerr"
 	"github.com/pelletier/go-toml/v2"
 	"gopkg.in/yaml.v3"
 )
@@ -15,7 +16,7 @@ import (
 func LoadDataFile(path string) (map[string]any, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read file %q: %w", path, err)
+		return nil, hexerr.Wrapf(err, "failed to read file %q", path)
 	}
 
 	ext := strings.ToLower(filepath.Ext(path))
@@ -24,18 +25,18 @@ func LoadDataFile(path string) (map[string]any, error) {
 	switch ext {
 	case ".json", ".json5":
 		if err := json.Unmarshal(data, &result); err != nil {
-			return nil, fmt.Errorf("failed to parse JSON file %q: %w", path, err)
+			return nil, hexerr.Wrapf(err, "failed to parse JSON file %q", path)
 		}
 	case ".yaml", ".yml":
 		if err := yaml.Unmarshal(data, &result); err != nil {
-			return nil, fmt.Errorf("failed to parse YAML file %q: %w", path, err)
+			return nil, hexerr.Wrapf(err, "failed to parse YAML file %q", path)
 		}
 	case ".toml":
 		if err := toml.Unmarshal(data, &result); err != nil {
-			return nil, fmt.Errorf("failed to parse TOML file %q: %w", path, err)
+			return nil, hexerr.Wrapf(err, "failed to parse TOML file %q", path)
 		}
 	default:
-		return nil, fmt.Errorf("unsupported file format: %q (supported: .json, .yaml, .yml, .toml)", ext)
+		return nil, hexerr.New(fmt.Sprintf("unsupported file format: %q (supported: .json, .yaml, .yml, .toml)", ext))
 	}
 
 	return result, nil
@@ -57,7 +58,7 @@ func ExtractPageConfig(data map[string]any) (*PageConfig, error) {
 	// Convert to map for easier handling
 	pageMap, ok := pageRaw.(map[string]any)
 	if !ok {
-		return nil, fmt.Errorf("_page section must be an object")
+		return nil, hexerr.New("_page section must be an object")
 	}
 
 	config := &PageConfig{}
@@ -65,7 +66,7 @@ func ExtractPageConfig(data map[string]any) (*PageConfig, error) {
 	if template, ok := pageMap["template"].(string); ok {
 		config.Template = template
 	} else {
-		return nil, fmt.Errorf("_page.template is required and must be a string")
+		return nil, hexerr.New("_page.template is required and must be a string")
 	}
 
 	if output, ok := pageMap["output"].(string); ok {
@@ -79,4 +80,3 @@ func ExtractPageConfig(data map[string]any) (*PageConfig, error) {
 func RemovePageConfig(data map[string]any) {
 	delete(data, "_page")
 }
-

@@ -87,36 +87,3 @@ func TestIsTruthy(t *testing.T) {
 	}
 }
 
-func TestIterate(t *testing.T) {
-	items := Iterate([]int{1, 2})
-	if len(items) != 2 {
-		t.Fatalf("expected 2 items, got %d", len(items))
-	}
-	if items[0].Value.(int) != 1 || items[1].Value.(int) != 2 {
-		t.Fatalf("unexpected items: %v", items)
-	}
-	if items[0].Index != 0 || items[1].Index != 1 {
-		t.Fatalf("unexpected indexes: %v", items)
-	}
-
-	items = Iterate([]int{})
-	if items != nil {
-		t.Fatalf("expected nil for empty slice, got %v", items)
-	}
-
-	items = Iterate(map[string]int{"b": 2, "a": 1})
-	if len(items) != 2 {
-		t.Fatalf("expected 2 items from map, got %d", len(items))
-	}
-	if items[0].Value.(int) != 1 || items[1].Value.(int) != 2 {
-		t.Fatalf("unexpected map items order: %v", items)
-	}
-	if items[0].Key != "a" || items[1].Key != "b" {
-		t.Fatalf("unexpected map keys: %v", items)
-	}
-
-	items = Iterate(map[int]int{1: 1})
-	if items != nil {
-		t.Fatalf("expected nil for non-string key map, got %v", items)
-	}
-}

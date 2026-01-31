@@ -1,13 +1,14 @@
 package sitegen
 
 import (
-	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
 
 	"github.com/andriyg76/go-hbars/internal/processor"
 	"github.com/andriyg76/go-hbars/internal/server"
+	"github.com/andriyg76/go-hbars/pkg/renderer"
+	"github.com/andriyg76/hexerr"
 )
 
 // Server is a semi-static web server that generates pages on the fly.
@@ -20,7 +21,7 @@ type Server struct {
 }
 
 // NewServer creates a new server with the given configuration and renderer.
-func NewServer(config *Config, renderer processor.TemplateRenderer) (*Server, error) {
+func NewServer(config *Config, r renderer.TemplateRenderer) (*Server, error) {
 	if config == nil {
 		config = DefaultConfig()
 	}
@@ -31,7 +32,7 @@ func NewServer(config *Config, renderer processor.TemplateRenderer) (*Server, er
 		var err error
 		root, err = os.Getwd()
 		if err != nil {
-			return nil, fmt.Errorf("failed to get working directory: %w", err)
+			return nil, hexerr.Wrap(err, "failed to get working directory")
 		}
 	}
 
@@ -39,7 +40,6 @@ func NewServer(config *Config, renderer processor.TemplateRenderer) (*Server, er
 		RootPath:      root,
 		DataPath:      config.DataPath,
 		SharedPath:    config.SharedPath,
-		TemplatesPath: config.TemplatesPath,
 		OutputPath:    "", // Not used for server
 	}
 
@@ -47,11 +47,11 @@ func NewServer(config *Config, renderer processor.TemplateRenderer) (*Server, er
 	sharedPath := filepath.Join(root, config.SharedPath)
 	sharedData, err := processor.LoadSharedData(sharedPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to load shared data: %w", err)
+		return nil, hexerr.Wrap(err, "failed to load shared data")
 	}
 
 	// Create processor
-	proc := processor.NewProcessor(procConfig, renderer)
+	proc := processor.NewProcessor(procConfig, r)
 
 	// Create handler
 	staticDir := ""
@@ -107,4 +107,3 @@ func (s *Server) Address() string {
 func (s *Server) Config() *Config {
 	return s.config
 }
-

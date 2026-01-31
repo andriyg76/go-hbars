@@ -32,20 +32,23 @@ if err := templates.RenderMain(&b, data); err != nil {
 out := b.String()
 ```
 
-Or use the string wrapper:
+Or use the string wrapper. When your data is `map[string]any` (e.g. from JSON), use the generated `MainContextFromMap` so it satisfies the context type:
 
 ```go
-out, err := templates.RenderMainString(data)
+out, err := templates.RenderMainString(templates.MainContextFromMap(data))
 ```
 
 ## Documentation
 
+- **[Documentation index](docs/README.md)** — Overview of all docs (getting started, reference, processor/server).
+- **[init: create or add to a project](docs/init.md)** — Scaffold a new go-hbars project or add templates to an existing module
 - **[Template Syntax](docs/syntax.md)** - Complete Handlebars syntax reference
-- **[Custom Extensions](docs/extensions.md)** - includeZero, layout blocks (partial/block), Direction A & B
+- **[Custom Extensions](docs/extensions.md)** - includeZero
 - **[Built-in Helpers](docs/helpers.md)** - Available helpers and how to use them
 - **[Processor & Server](docs/processor-server.md)** - CLI tools for static site generation
 - **[Embedded API](docs/embedded.md)** - Embedding processor and server in your applications
 - **[Template API](docs/api.md)** - Runtime API for compiled templates
+- **[Testing](docs/testing.md)** - Unit and E2E tests
 
 ## Features
 
@@ -75,6 +78,8 @@ go install github.com/andriyg76/go-hbars/cmd/hbc@latest
 ```
 
 ### Use Compiled Templates
+
+Data must satisfy the generated context type (e.g. `MainContext`); use a struct or `map[string]any`, or the generated `XxxContextFromMap` if available.
 
 ```go
 import "github.com/your/project/templates"
@@ -118,16 +123,20 @@ All core Handlebars syntax features are now implemented:
 - ✅ Custom block helpers
 - ✅ Block params for `if`/`unless`
 - ✅ `else if` shorthand
-- ✅ Partial blocks (`{{#> partial}}...{{/partial}}`)
 
-## Compile-time Optimization Plan
+## Testing
 
-- Constant-fold `if`/`unless`/`with` when the condition is a literal
-- Inline literal arguments directly (avoid `EvalArg`)
-- Prebuild hash maps when all values are literals
-- Detect duplicate hash keys at compile time
-- Pre-resolve static partial names from string literals
-- Pre-parse path segments for faster runtime lookup
+```bash
+go test ./...
+```
+
+E2E tests (compile templates, run generated code in a temp module) are in `internal/compiler/e2e/`. They are skipped in short mode:
+
+```bash
+go test ./internal/compiler/e2e/... -v -count=1
+```
+
+Use `-short` to skip E2E tests for a faster run.
 
 ## Compatibility
 
