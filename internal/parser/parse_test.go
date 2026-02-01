@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/andriyg76/go-hbars/internal/ast"
@@ -136,6 +137,25 @@ func TestParseErrors(t *testing.T) {
 	}
 	if _, err := Parse("{{#each items as ||}}{{/each}}"); err == nil {
 		t.Fatalf("expected invalid block params error")
+	}
+}
+
+func TestParseErrorsIncludeLineNumber(t *testing.T) {
+	// Parser errors should include " (line N)" for the position of the error.
+	_, err := Parse("{{!--")
+	if err == nil {
+		t.Fatalf("expected unclosed comment error")
+	}
+	if !strings.Contains(err.Error(), " (line ") {
+		t.Fatalf("expected error to include line number, got: %s", err.Error())
+	}
+	// Multi-line: error on line 3
+	_, err = Parse("line1\nline2\n{{name")
+	if err == nil {
+		t.Fatalf("expected unclosed mustache error")
+	}
+	if !strings.Contains(err.Error(), " (line 3)") {
+		t.Fatalf("expected error to include line 3, got: %s", err.Error())
 	}
 }
 

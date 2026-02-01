@@ -1,0 +1,12 @@
+{
+  "_page": {
+    "template": "default",
+    "output": "index.html"
+  },
+  "title": "Partial Inheritance",
+  "_shared": {
+    "menu": {
+      "title": "Shared Menu"
+    }
+  }
+}

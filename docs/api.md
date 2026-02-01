@@ -160,11 +160,13 @@ partials["header"](data, w)
 
 Templates use them via `{{> header}}` or `{{> (lookup ...) }}`.
 
+When **multiple root templates** include the same partial (e.g. `{{> menu}}`), the compiler emits a **single canonical context type** for that partial (e.g. `MenuContext`). All such pages use that type in their method signatures; no primary-embedding types are emitted. Root contexts that include a single layout embed that layout’s context and only add template-specific methods. See [Compiled template file → Canonical partial context](compiled-templates.md#canonical-partial-context).
+
 ## Data Types
 
 ### Context Data
 
-The context data for a template satisfies the generated context interface (e.g. `MainContext`). In practice you can pass:
+The context data for a template satisfies the generated context interface (e.g. `MainContext`). When multiple templates share a partial, that partial has one **canonical** context type (e.g. `MenuContext`), so you can pass data that implements that interface from any page. In practice you can pass:
 
 - Maps (`map[string]any`)
 - Structs (with exported fields or JSON tags)
