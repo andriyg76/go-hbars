@@ -1,0 +1,103 @@
+# Manual release: bump level → next version, update compiler Version constant, tag, build, publish.
+# Run from Actions tab on main or release/v* only; input = bump level (patch | minor | major).
+
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      level:
+        description: 'Bump level'
+        required: true
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+        default: patch
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Ensure main or release/v* branch
+        run: |
+          ref="${{ github.ref }}"
+          if [ "$ref" = "refs/heads/main" ]; then
+            echo "Branch is main"
+          elif [[ "$ref" =~ ^refs/heads/release/v ]]; then
+            echo "Branch is $ref"
+          else
+            echo "::error::Release runs only on main or release/v* branches (current: $ref)"
+            exit 1
+          fi
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.24'
+
+      - name: Compute next version from bump level
+        id: ver
+        run: |
+          level="${{ github.event.inputs.level }}"
+          latest=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          latest="${latest#v}"
+          major=$(echo "$latest" | cut -d. -f1)
+          minor=$(echo "$latest" | cut -d. -f2)
+          patch=$(echo "$latest" | cut -d. -f3)
+          case "$level" in
+            patch) patch=$((patch + 1)) ;;
+            minor) minor=$((minor + 1)); patch=0 ;;
+            major) major=$((major + 1)); minor=0; patch=0 ;;
+            *) echo "::error::Invalid level $level"; exit 1 ;;
+          esac
+          v="${major}.${minor}.${patch}"
+          echo "version=${v}" >> "$GITHUB_OUTPUT"
+          echo "tag=v${v}" >> "$GITHUB_OUTPUT"
+          echo "Next version: v${v} (was ${latest}, bump: ${level})"
+
+      - name: Update compiler Version constant
+        run: |
+          sed -i 's/const Version = ".*"/const Version = "${{ steps.ver.outputs.version }}"/' internal/compiler/compile.go
+          grep -n 'const Version' internal/compiler/compile.go
+
+      - name: Commit and push compiler version
+        uses: ./.github/actions/commit-push
+        with:
+          message: "Release ${{ steps.ver.outputs.tag }}: bump compiler version to ${{ steps.ver.outputs.version }}"
+          path: internal/compiler/compile.go
+
+      - name: Create and push tag
+        run: |
+          git tag "${{ steps.ver.outputs.tag }}"
+          git push origin "${{ steps.ver.outputs.tag }}"
+
+      - name: Build binaries
+        run: |
+          mkdir -p dist
+          for dir in cmd/*/; do
+            name=$(basename "$dir")
+            CGO_ENABLED=0 go build -ldflags "-X github.com/andriyg76/go-hbars/internal/compiler.Version=${{ steps.ver.outputs.tag }}" -o "dist/${name}" "./${dir}"
+          done
+          ls -la dist/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.ver.outputs.tag }}
+          name: ${{ steps.ver.outputs.tag }}
+          draft: false
+          generate_release_notes: true
+          files: dist/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
