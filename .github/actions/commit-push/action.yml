@@ -1,0 +1,32 @@
+# Composite action: commit changed files and push to the current branch.
+# Use after modifying files (e.g. compiler Version constant).
+
+name: 'Commit and push'
+description: 'Commit given paths with message and push to current branch'
+
+inputs:
+  message:
+    description: 'Commit message'
+    required: true
+  path:
+    description: 'Path(s) to add (space-separated); default internal/compiler/compile.go'
+    required: false
+    default: 'internal/compiler/compile.go'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Commit and push
+      shell: bash
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        for p in ${{ inputs.path }}; do
+          git add "$p"
+        done
+        if git diff --staged --quiet; then
+          echo "No change (nothing to commit)"
+        else
+          git commit -m "${{ inputs.message }}"
+          git push
+        fi
