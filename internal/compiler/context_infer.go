@@ -177,6 +177,11 @@ func (c *pathCollector) resolvePathAt(pathStr string, scopeIdx int) (fullPath st
 			return base + "." + strings.Join(parts[1:], "."), ""
 		}
 	}
+	// Inside {{#each col}} without named param: paths are element fields of the collection.
+	// e.g. {{#each items}}{{label}}{{/each}} -> ("items", "label")
+	if top.eachCollection != "" && top.eachParam == "" {
+		return top.eachCollection, pathStr
+	}
 	if top.dataPath != "" {
 		return top.dataPath + "." + pathStr, ""
 	}
@@ -305,15 +310,28 @@ func (c *pathCollector) collectPartial(n *ast.Partial) error {
 		if partialName != "" {
 			sameScope := len(parts) == 1
 			if sameScope {
-				// Same-scope partial ({{> partial}}): add partial name as path so caller's type tree
-				// has a node for it, and caller will EMBED the partial's context type.
-				c.addPath(partialName, "")
-				if partialNodes, ok := c.parsed[partialName]; ok {
-					c.pushWith(partialName, nil)
-					err := c.collectNodes(partialNodes)
-					c.pop()
-					if err != nil {
-						return err
+				// Check if we're currently inside an #each scope
+				top := c.scopeStack[len(c.scopeStack)-1]
+				if top.eachCollection != "" {
+					// Inside {{#each col}}{{> partial}}{{/each}}: the partial's context IS the element.
+					// Collect partial's paths as element fields of the collection (don't push a new scope).
+					if partialNodes, ok := c.parsed[partialName]; ok {
+						err := c.collectNodes(partialNodes)
+						if err != nil {
+							return err
+						}
+					}
+				} else {
+					// Same-scope partial ({{> partial}}): add partial name as path so caller's type tree
+					// has a node for it, and caller will EMBED the partial's context type.
+					c.addPath(partialName, "")
+					if partialNodes, ok := c.parsed[partialName]; ok {
+						c.pushWith(partialName, nil)
+						err := c.collectNodes(partialNodes)
+						c.pop()
+						if err != nil {
+							return err
+						}
 					}
 				}
 			}
