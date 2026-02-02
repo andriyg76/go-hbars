@@ -50,10 +50,10 @@ func RenderMainString(data MainContext) (string, error) { ... }
    Generated package name (from `-pkg`), imports for `io`, `strings`, `runtime`, and any helper packages.
 
 2. **Context interfaces and types**  
-   Type-safe accessors for template context paths (inferred from template expressions). The compiler emits interface types (e.g. `MainContext`, `MainContextUser`) and optional `XxxContextFromMap` constructors. Names are derived from the template Go identifier and path (e.g. `MainContextUser`, `MainContextItems`). When multiple root templates include the **same partial** with the same scope, the compiler emits a **single canonical context interface** for that partial (e.g. `MenuContext`); all callers use that canonical type in their method signatures (no primary-embedding types). When a root template has exactly one root-level shared partial (a layout), its context interface **embeds** that layout’s context and only declares template-specific methods; see [Canonical partial context](#canonical-partial-context) below. When using map-backed context (FromMap), `{{#each}}` in the template is compiled to code that iterates over both JSON arrays (`[]any`) and objects (`map[string]any`), so the same template works for lists and key-value data.
+   Type-safe accessors for template context paths (inferred from template expressions). The compiler emits interface types (e.g. `MainContext`, `MainContextUser`) and optional `XxxContextFromMap` constructors. Names are derived from the template Go identifier and path (e.g. `MainContextUser`, `MainContextItems`). When multiple root templates include the **same partial** with the same scope, the compiler emits a **single canonical context interface** for that partial (e.g. `LayoutContext`); root contexts that include this partial **embed** the canonical type. See [Canonical partial context and embedding](#canonical-partial-context-and-embedding) below. When using map-backed context (FromMap), `{{#each}}` in the template is compiled to code that iterates over both JSON arrays (`[]any`) and objects (`map[string]any`), so the same template works for lists and key-value data.
 
 3. **Partials map**  
-   Keys are template names (as in file names without `.hbs`). Values are functions `func(ctx any, w io.Writer, root any) error` (or with `*runtime.Blocks` when using layout blocks). Used when a template contains `{{> partialName }}` with explicit context or hash. When the partial is called with **no arguments and no hash** (e.g. `{{> header}}`), the compiler calls `renderXxx(data, w, root)` with the current context and the caller’s root; when there is an explicit context or hash, it uses the `partials` map so context is converted via `contextMap` and `XxxContextFromMap`. The `root` argument ensures `@root` inside partials resolves to the top-level data (e.g. the main template’s data). Partial context rules: no args → current context; only hash → hash plus keys used in the partial (from current scope); explicit context and/or hash → base context merged with hash.
+   Keys are template names (as in file names without `.hbs`). Values are functions `func(ctx any, w io.Writer, root any) error` (or with `*runtime.Blocks` when using layout blocks). Used when a template contains `{{> partialName }}` with explicit context or hash. When the partial is called with **no arguments and no hash** (e.g. `{{> header}}`), the compiler calls `renderXxx(data, w, root)` with the current context and the caller's root; when there is an explicit context or hash, it uses the `partials` map so context is converted via `contextMap` and `XxxContextFromMap`. The `root` argument ensures `@root` inside partials resolves to the top-level data (e.g. the main template's data). Partial context rules: no args → current context; only hash → hash plus keys used in the partial (from current scope); explicit context and/or hash → base context merged with hash.
 
 4. **Functions**  
    For each template: `renderXxx`, `RenderXxx`, `RenderXxxString` as above.
@@ -61,25 +61,73 @@ func RenderMainString(data MainContext) (string, error) { ... }
 5. **Bootstrap block** (only with `-bootstrap`)  
    See [Bootstrap-generated code](bootstrap-generated.md).
 
-## Canonical partial context
+## Canonical partial context and embedding
 
-When multiple root templates include the **same partial** with the same scope (e.g. `{{> menu}}` from both `default.hbs` and `firstpage.hbs`), the compiler used to emit one nested context interface per template (`DefaultMenuContext`, `FirstpageMenuContext`, …). Those types are different Go interfaces and are not interchangeable, which breaks shared “has a menu” abstractions and generic page handling.
+When multiple root templates include the **same partial** with the same scope (e.g. `{{> layout}}` from `default.hbs`, `firstpage.hbs`, and `news.hbs`), the compiler emits a single **canonical context interface** for that partial. The behavior depends on how the partial is included:
 
-The compiler now emits:
+### Same-scope inclusion (`{{> partial}}`)
 
-- **One canonical context interface per partial** (e.g. `MenuContext`) — the single contract for that partial’s context. All callers that are not the “primary” use this type in their context (e.g. `FirstpageContext.Menu() MenuContext`).
-- **One primary caller per partial** — one template (e.g. the first alphabetically, such as `default`) keeps a **template-prefixed** nested interface that embeds the canonical type (e.g. `type DefaultMenuContext interface { MenuContext }`). The root context for that template still has a rich, template-specific type for the partial.
-- **Same rules for nested partials** — if `menu` includes `menuItem`, there is one canonical `MenuContextItemsItemContext` (or similar) for the inner partial, and one primary caller with an embedding type.
-- **Same rules for generated data types** — the `*ContextData` structs and `FromMap` constructors follow the same canonical/primary split so that typed data and interfaces stay aligned.
+When a partial is included without an explicit context argument, the caller's context **embeds** the partial's context interface:
 
-This allows a single “has a menu” interface (e.g. `MenuContext`) to be used across all pages that include that partial, while the primary template’s context type remains consistent.
+```go
+// layout.hbs included by default.hbs, firstpage.hbs, news.hbs with {{> layout}}
+type LayoutContext interface {
+    Shared() LayoutSharedContext
+    Raw() any
+}
+
+type DefaultContext interface {
+    LayoutContext  // embeds the shared layout context
+    Title() any
+    Raw() any
+}
+
+type FirstpageContext interface {
+    LayoutContext  // embeds the shared layout context
+    Title() any
+    Raw() any
+}
+```
+
+This enables generic page handling: any context that embeds `LayoutContext` can be used where a layout is expected.
+
+### Different-context inclusion (`{{> partial ctx}}`)
+
+When a partial is included with an explicit context argument (e.g. `{{> menu _shared.menu}}`), the caller does **not** embed the partial's context. Instead, the caller provides access to the context path:
+
+```go
+// layout.hbs contains {{> menu _shared.menu}}
+type LayoutContext interface {
+    Shared() LayoutSharedContext  // provides access to _shared path
+    Raw() any
+}
+
+type LayoutSharedContext interface {
+    Menu() any  // the context passed to the menu partial
+    Raw() any
+}
+
+// menu.hbs has its own independent context
+type MenuContext interface {
+    Title() any
+    Raw() any
+}
+```
+
+The partial's fields are not merged into the caller's type tree — each partial maintains its own context interface.
+
+### Benefits
+
+- **No wrapper types** — no `DefaultMenuContext` or similar per-caller wrappers
+- **Clean embedding** — same-scope partials result in interface embedding
+- **Separation of concerns** — different-context partials keep their own interface
 
 ## Summary
 
 - **Template name** = file name without `.hbs`.
 - **Go name** = split by non-alphanumeric, capitalize each part, join; if empty or leading digit, prefix `Template`.
 - **Public API**: `RenderXxx(w, data)` and `RenderXxxString(data)` with typed context (e.g. `MainContext`); internal `renderXxx` and `partials` are for compiler/runtime use.
-- **Shared partials**: when multiple roots include the same partial (same scope), one **canonical** context interface per partial (e.g. `MenuContext`) is emitted; all callers use that type (no primary-embedding types). Root contexts that include a single layout embed that layout’s context and only add template-specific methods.
+- **Shared partials**: when multiple roots include the same partial (same scope), one **canonical** context interface per partial (e.g. `LayoutContext`) is emitted; root contexts **embed** this type. Different-context partials keep their own interface.
 - **Error messages**: when `Options.TemplateFiles` (template name → source file path) is set, compiler and parser errors include file path and line number, e.g. `main.hbs:5: parser: unclosed block` or `main.hbs: partial "header" is not defined`. This allows editors and tools to jump to the problematic template and line.
 - **Generated code references**: when `Options.TemplateFiles` is set, the generated file includes `// from path:1` comments above the context types, context data types, and render functions for each template, so you can trace from generated code back to the source template file.
 

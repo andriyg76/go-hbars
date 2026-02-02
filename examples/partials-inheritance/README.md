@@ -1,14 +1,42 @@
 # Partials inheritance (canonical partial context)
 
-Example where multiple root templates include the same partial with the same scope (e.g. `{{> menu}}`). The compiler emits one canonical context interface per partial (e.g. `MenuContext`); all callers use that type (no primary-embedding types). Root contexts that include a single layout embed that layout’s context and only add template-specific methods.
+Example demonstrating how the compiler handles shared partials and context embedding.
+
+## Key concepts
+
+- **Same-scope partial inclusion** (`{{> layout}}`): When multiple root templates include the same partial without an explicit context, the compiler emits a single canonical context interface (e.g., `LayoutContext`) and all callers **embed** this type.
+- **Different-context partial inclusion** (`{{> menu _shared.menu}}`): When a partial is included with an explicit context, the partial has its own independent interface; the caller just provides access to the context path.
 
 ## Templates
 
-- **default** – page that includes `{{> layout}}`
-- **firstpage** – page that includes `{{> layout}}`
-- **news** – page that includes `{{> layout}}`
-- **layout** – includes menu with explicit context: `{{> menu _shared.menu}}`
-- **menu** – partial (nav with title), used only by layout
+- **default.hbs** – page that includes `{{> layout}}` (same scope)
+- **firstpage.hbs** – page that includes `{{> layout}}` (same scope)
+- **news.hbs** – page that includes `{{> layout}}` (same scope)
+- **layout.hbs** – includes menu with explicit context: `{{> menu _shared.menu}}`
+- **menu.hbs** – partial (nav with title), used only by layout
+
+## Generated context structure
+
+```go
+// LayoutContext is the canonical context for layout.hbs
+type LayoutContext interface {
+    Shared() LayoutSharedContext
+    Raw() any
+}
+
+// DefaultContext embeds LayoutContext (same-scope inclusion)
+type DefaultContext interface {
+    LayoutContext  // embedded
+    Title() any
+    Raw() any
+}
+
+// MenuContext is independent (different-context inclusion)
+type MenuContext interface {
+    Title() any
+    Raw() any
+}
+```
 
 ## Data
 
