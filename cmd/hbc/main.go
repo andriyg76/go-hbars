@@ -1,385 +1,139 @@
 package main
 
 import (
-	"errors"
 	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 
-	helperspkg "github.com/andriyg76/go-hbars/helpers"
+	"github.com/andriyg76/go-hbars/helpers"
 	"github.com/andriyg76/go-hbars/internal/compiler"
 )
 
 func main() {
-	var inPath string
-	var outPath string
-	var pkgName string
-	var runtimeImport string
-	var extList string
-	var helperFlags helperFlag
-	var importFlags importFlag
-	var helpersFlags helpersFlag
-	var noCoreHelpers bool
-	var generateBootstrap bool
-
-	flag.StringVar(&inPath, "in", "", "input template file or directory")
-	flag.StringVar(&outPath, "out", "templates_gen.go", "output Go file path")
-	flag.StringVar(&pkgName, "pkg", "", "package name for generated code")
-	flag.StringVar(&runtimeImport, "runtime-import", "", "override runtime import path")
-	flag.StringVar(&extList, "ext", ".hbs,.handlebars", "comma-separated template extensions")
-	flag.Var(&helperFlags, "helper", "helper mapping name=Ident or name=import/path:Ident (legacy)")
-	flag.Var(&importFlags, "import", "import path for helpers: path or path:alias")
-	flag.Var(&helpersFlags, "helpers", "comma-separated helper list: [alias:]Name or [alias:]name=Ident")
-	flag.BoolVar(&noCoreHelpers, "no-core-helpers", false, "disable default core helpers registry")
-	flag.BoolVar(&generateBootstrap, "bootstrap", false, "generate bootstrap code for quick server/processor setup")
+	in := flag.String("in", "", "input template file or directory (required)")
+	out := flag.String("out", "", "output Go file path (default: templates_gen.go)")
+	pkg := flag.String("pkg", "", "package name for generated code (default: derived from output path)")
+	bootstrap := flag.Bool("bootstrap", false, "generate NewQuickServer and NewQuickProcessor")
+	ext := flag.String("ext", ".hbs,.handlebars", "comma-separated template extensions")
 	flag.Parse()
 
-	if inPath == "" {
-		fatal(errors.New("missing -in path"))
-	}
-	if pkgName == "" {
-		pkgName = defaultPackage(outPath)
+	if *in == "" {
+		fmt.Fprintln(os.Stderr, "hbc: -in is required")
+		os.Exit(1)
 	}
 
-	exts := parseExts(extList)
-	templates, err := loadTemplates(inPath, exts)
+	templates, templateFiles, err := loadTemplates(*in, strings.Split(*ext, ","))
 	if err != nil {
-		fatal(err)
+		fmt.Fprintf(os.Stderr, "hbc: load templates: %v\n", err)
+		os.Exit(1)
 	}
+
 	if len(templates) == 0 {
-		fatal(fmt.Errorf("no templates found under %q", inPath))
+		fmt.Fprintln(os.Stderr, "hbc: no templates found in", *in)
+		os.Exit(1)
 	}
-	helpers, err := buildHelpers(noCoreHelpers, importFlags, helpersFlags, helperFlags)
+
+	outPath := *out
+	if outPath == "" {
+		outPath = "templates_gen.go"
+	}
+	pkgName := *pkg
+	if pkgName == "" {
+		pkgName = filepath.Base(filepath.Dir(outPath))
+		if pkgName == "." {
+			pkgName = "templates"
+		}
+	}
+
+	helperRegistry := helpers.Registry()
+	compilerHelpers := make(map[string]compiler.HelperRef, len(helperRegistry))
+	for name, ref := range helperRegistry {
+		compilerHelpers[name] = compiler.HelperRef{
+			ImportPath: ref.ImportPath,
+			Ident:      ref.Ident,
+		}
+	}
+
+	opts := compiler.Options{
+		PackageName:       pkgName,
+		GenerateBootstrap: *bootstrap,
+		Helpers:           compilerHelpers,
+		TemplateFiles:     templateFiles,
+	}
+
+	code, err := compiler.CompileTemplates(templates, opts)
 	if err != nil {
-		fatal(err)
+		fmt.Fprintf(os.Stderr, "hbc: compile: %v\n", err)
+		os.Exit(1)
 	}
 
-	code, err := compiler.CompileTemplates(templates, compiler.Options{
-		PackageName:      pkgName,
-		RuntimeImport:    runtimeImport,
-		Helpers:           helpers,
-		GenerateBootstrap: generateBootstrap,
-	})
+	if err := os.WriteFile(outPath, code, 0644); err != nil {
+		fmt.Fprintf(os.Stderr, "hbc: write %s: %v\n", outPath, err)
+		os.Exit(1)
+	}
+}
+
+func loadTemplates(in string, exts []string) (map[string]string, map[string]string, error) {
+	info, err := os.Stat(in)
 	if err != nil {
-		fatal(err)
+		return nil, nil, err
 	}
-
-	if err := writeOutput(outPath, code); err != nil {
-		fatal(err)
+	if info.IsDir() {
+		return loadTemplatesDir(in, in, exts)
 	}
-}
-
-func fatal(err error) {
-	fmt.Fprintln(os.Stderr, "hbc:", err)
-	os.Exit(1)
-}
-
-func parseExts(input string) map[string]bool {
-	exts := make(map[string]bool)
-	for _, raw := range strings.Split(input, ",") {
-		ext := strings.ToLower(strings.TrimSpace(raw))
-		if ext == "" {
-			continue
-		}
-		if !strings.HasPrefix(ext, ".") {
-			ext = "." + ext
-		}
-		exts[ext] = true
-	}
-	return exts
-}
-
-type helperFlag []string
-
-func (h *helperFlag) String() string {
-	if h == nil {
-		return ""
-	}
-	return strings.Join(*h, ",")
-}
-
-func (h *helperFlag) Set(value string) error {
-	if h == nil {
-		return nil
-	}
-	*h = append(*h, value)
-	return nil
-}
-
-type importFlag []string
-
-func (i *importFlag) String() string {
-	if i == nil {
-		return ""
-	}
-	return strings.Join(*i, ",")
-}
-
-func (i *importFlag) Set(value string) error {
-	if i == nil {
-		return nil
-	}
-	*i = append(*i, value)
-	return nil
-}
-
-type helpersFlag []string
-
-func (h *helpersFlag) String() string {
-	if h == nil {
-		return ""
-	}
-	return strings.Join(*h, ",")
-}
-
-func (h *helpersFlag) Set(value string) error {
-	if h == nil {
-		return nil
-	}
-	*h = append(*h, value)
-	return nil
-}
-
-// buildHelpers merges helpers from multiple sources with proper precedence:
-// 1. Core helpers registry (unless -no-core-helpers)
-// 2. -import/-helpers flags
-// 3. Legacy -helper flags (highest precedence, can override)
-func buildHelpers(noCoreHelpers bool, importFlags importFlag, helpersFlags helpersFlag, legacyHelperFlags helperFlag) (map[string]compiler.HelperRef, error) {
-	helperMap := make(map[string]compiler.HelperRef)
-
-	// Step 1: Add core helpers unless disabled
-	if !noCoreHelpers {
-		coreRegistry := helperspkg.Registry()
-		for name, ref := range coreRegistry {
-			helperMap[name] = compiler.HelperRef{
-				ImportPath: ref.ImportPath,
-				Ident:      ref.Ident,
-			}
-		}
-	}
-
-	// Step 2: Parse imports and build import map
-	importMap, defaultImport, err := parseImports(importFlags)
+	content, err := os.ReadFile(in)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-
-	// Step 3: Parse -helpers flags and add to helpers map
-	if err := parseHelpersFlags(helpersFlags, importMap, defaultImport, helperMap); err != nil {
-		return nil, err
+	name := filepath.Base(in)
+	for _, e := range exts {
+		name = strings.TrimSuffix(name, strings.TrimSpace(e))
 	}
-
-	// Step 4: Parse legacy -helper flags (highest precedence)
-	if err := parseLegacyHelpers(legacyHelperFlags, helperMap); err != nil {
-		return nil, err
-	}
-
-	return helperMap, nil
+	templates := map[string]string{name: string(content)}
+	files := map[string]string{name: in}
+	return templates, files, nil
 }
 
-// parseImports parses -import flags and returns:
-// - importMap: map of alias -> import path (only aliased imports)
-// - defaultImport: the import path without alias (empty if none)
-func parseImports(importFlags importFlag) (map[string]string, string, error) {
-	importMap := make(map[string]string)
-	var defaultImport string
-
-	for _, raw := range importFlags {
-		raw = strings.TrimSpace(raw)
-		if raw == "" {
-			continue
-		}
-		var importPath, alias string
-		if strings.Contains(raw, ":") {
-			parts := strings.SplitN(raw, ":", 2)
-			alias = strings.TrimSpace(parts[0])
-			importPath = strings.TrimSpace(parts[1])
-			if alias == "" || importPath == "" {
-				return nil, "", fmt.Errorf("invalid import flag %q", raw)
-			}
-			if _, exists := importMap[alias]; exists {
-				return nil, "", fmt.Errorf("duplicate import alias %q", alias)
-			}
-			importMap[alias] = importPath
-		} else {
-			importPath = raw
-			if defaultImport != "" {
-				return nil, "", fmt.Errorf("multiple default imports specified (only one import without alias allowed)")
-			}
-			defaultImport = importPath
-		}
-	}
-
-	return importMap, defaultImport, nil
-}
-
-// parseHelpersFlags parses -helpers flags and adds helpers to the map.
-// Format: [alias:]Name or [alias:]name=Ident
-// If name= is omitted, template name defaults to strings.ToLower(Ident)
-func parseHelpersFlags(helpersFlags helpersFlag, importMap map[string]string, defaultImport string, helpers map[string]compiler.HelperRef) error {
-	for _, raw := range helpersFlags {
-		raw = strings.TrimSpace(raw)
-		if raw == "" {
-			continue
-		}
-		// Split by comma to support multiple helpers per flag
-		helperList := strings.Split(raw, ",")
-		for _, helperSpec := range helperList {
-			helperSpec = strings.TrimSpace(helperSpec)
-			if helperSpec == "" {
-				continue
-			}
-			var alias, name, ident string
-			var importPath string
-
-			// Check if it has alias prefix (alias:...)
-			if strings.Contains(helperSpec, ":") {
-				parts := strings.SplitN(helperSpec, ":", 2)
-				alias = strings.TrimSpace(parts[0])
-				helperSpec = strings.TrimSpace(parts[1])
-			}
-
-			// Check if it has name=Ident format
-			if strings.Contains(helperSpec, "=") {
-				parts := strings.SplitN(helperSpec, "=", 2)
-				name = strings.TrimSpace(parts[0])
-				ident = strings.TrimSpace(parts[1])
-			} else {
-				// No name=, use the spec as Ident and default name to lowercase
-				ident = helperSpec
-				name = strings.ToLower(ident)
-			}
-
-			if name == "" || ident == "" {
-				return fmt.Errorf("invalid helper spec %q", helperSpec)
-			}
-
-			// Determine import path
-			if alias != "" {
-				var ok bool
-				importPath, ok = importMap[alias]
-				if !ok {
-					return fmt.Errorf("unknown import alias %q", alias)
-				}
-			} else if defaultImport != "" {
-				importPath = defaultImport
-			} else {
-				return fmt.Errorf("helper %q requires an import alias or default import", helperSpec)
-			}
-
-			helpers[name] = compiler.HelperRef{
-				ImportPath: importPath,
-				Ident:      ident,
-			}
-		}
-	}
-	return nil
-}
-
-// parseLegacyHelpers parses the legacy -helper flags (for backward compatibility)
-func parseLegacyHelpers(values []string, helpers map[string]compiler.HelperRef) error {
-	for _, raw := range values {
-		parts := strings.SplitN(raw, "=", 2)
-		if len(parts) != 2 {
-			return fmt.Errorf("invalid helper mapping %q", raw)
-		}
-		name := strings.TrimSpace(parts[0])
-		ref := strings.TrimSpace(parts[1])
-		if name == "" || ref == "" {
-			return fmt.Errorf("invalid helper mapping %q", raw)
-		}
-		var importPath, ident string
-		if strings.Contains(ref, ":") {
-			refParts := strings.SplitN(ref, ":", 2)
-			importPath = strings.TrimSpace(refParts[0])
-			ident = strings.TrimSpace(refParts[1])
-			if importPath == "" || ident == "" {
-				return fmt.Errorf("invalid helper mapping %q", raw)
-			}
-		} else {
-			ident = ref
-		}
-		// Legacy flags can override existing helpers
-		helpers[name] = compiler.HelperRef{ImportPath: importPath, Ident: ident}
-	}
-	return nil
-}
-
-func loadTemplates(path string, exts map[string]bool) (map[string]string, error) {
-	info, err := os.Stat(path)
-	if err != nil {
-		return nil, err
-	}
-	if !info.IsDir() {
-		content, err := os.ReadFile(path)
-		if err != nil {
-			return nil, err
-		}
-		name := templateName(path)
-		return map[string]string{name: string(content)}, nil
-	}
+func loadTemplatesDir(root, dir string, exts []string) (map[string]string, map[string]string, error) {
 	templates := make(map[string]string)
-	root := path
-	err = filepath.WalkDir(path, func(full string, d os.DirEntry, errWalk error) error {
-		if errWalk != nil {
-			return errWalk
-		}
-		if d.IsDir() {
-			return nil
-		}
-		ext := strings.ToLower(filepath.Ext(d.Name()))
-		if len(exts) > 0 && !exts[ext] {
-			return nil
-		}
-		content, errRead := os.ReadFile(full)
-		if errRead != nil {
-			return errRead
-		}
-		rel, errRel := filepath.Rel(root, full)
-		if errRel != nil {
-			return errRel
-		}
-		name := templateNameFromRel(rel)
-		if _, exists := templates[name]; exists {
-			return fmt.Errorf("duplicate template name %q", name)
-		}
-		templates[name] = string(content)
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return templates, nil
-}
-
-func templateName(path string) string {
-	base := filepath.Base(path)
-	return strings.TrimSuffix(base, filepath.Ext(base))
-}
-
-// templateNameFromRel builds a template name from a path relative to root:
-// "parts/header.hbs" -> "parts/header", so {{> parts/header}} resolves.
-func templateNameFromRel(rel string) string {
-	normalized := filepath.ToSlash(rel)
-	return strings.TrimSuffix(normalized, filepath.Ext(normalized))
-}
-
-func defaultPackage(outPath string) string {
-	dir := filepath.Dir(outPath)
-	if dir == "." || dir == "" {
-		return "templates"
-	}
-	return filepath.Base(dir)
-}
-
-func writeOutput(outPath string, code []byte) error {
-	dir := filepath.Dir(outPath)
-	if dir != "." && dir != "" {
-		if err := os.MkdirAll(dir, 0o755); err != nil {
+	templateFiles := make(map[string]string)
+	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
 			return err
 		}
-	}
-	return os.WriteFile(outPath, code, 0o644)
+		if info.IsDir() {
+			return nil
+		}
+		base := info.Name()
+		var hasExt bool
+		for _, e := range exts {
+			e = strings.TrimSpace(e)
+			if strings.HasSuffix(base, e) {
+				hasExt = true
+				break
+			}
+		}
+		if !hasExt {
+			return nil
+		}
+		rel, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		name := filepath.ToSlash(rel)
+		for _, e := range exts {
+			e = strings.TrimSpace(e)
+			name = strings.TrimSuffix(name, e)
+		}
+		content, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		templates[name] = string(content)
+		templateFiles[name] = path
+		return nil
+	})
+	return templates, templateFiles, err
 }

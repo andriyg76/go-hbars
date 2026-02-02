@@ -12,7 +12,7 @@
 - **[Custom Extensions](extensions.md)** — includeZero, universal section.
 - **[Built-in Helpers](helpers.md)** — String, comparison, date, collection, math, object, URL helpers.
 - **[Template API](api.md)** — Runtime API for compiled templates (context types, helpers, partials).
-- **[Compiled template file](compiled-templates.md)** — What `hbc` generates (names, functions, context types).
+- **[Compiled template file](compiled-templates.md)** — What `hbc` generates (names, functions, context types, canonical partial context).
 - **[Bootstrap-generated code](bootstrap-generated.md)** — What `-bootstrap` adds (NewQuickServer, NewQuickProcessor).
 
 ## Static site and server
