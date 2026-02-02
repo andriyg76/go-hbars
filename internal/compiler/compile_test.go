@@ -629,6 +629,60 @@ func TestCompileTemplates_CanonicalPartialContext(t *testing.T) {
 	})
 }
 
+// TestLayoutPartialWithDifferentContext verifies that when:
+// - multiple templates (default, firstpage) include {{> layout}} (same scope)
+// - layout includes {{> menu _shared.menu}} (different context)
+// The generated code should:
+// - Have DefaultContext and FirstpageContext embed LayoutContext
+// - Have a shared LayoutContext with _shared() inline interface
+// - NOT have per-template wrapper types like DefaultMenuContext
+func TestLayoutPartialWithDifferentContext(t *testing.T) {
+	tmpls := map[string]string{
+		"default":   `Page: {{title}}{{> layout}}`,
+		"firstpage": `First: {{title}}{{> layout}}`,
+		"layout":    `{{> menu _shared.menu}}`,
+		"menu":      `<nav>{{title}}</nav>`,
+	}
+	code, err := CompileTemplates(tmpls, Options{PackageName: "templates"})
+	if err != nil {
+		t.Fatalf("compile: %v", err)
+	}
+	src := string(code)
+
+	// Print the source for debugging
+	t.Log("Generated source:\n", src)
+
+	// Should have canonical LayoutContext (shared by multiple callers)
+	if !strings.Contains(src, "type LayoutContext interface") {
+		t.Errorf("expected canonical LayoutContext interface for shared layout partial")
+	}
+
+	// DefaultContext should embed LayoutContext, not have a Layout() method
+	defaultIdx := strings.Index(src, "type DefaultContext interface")
+	if defaultIdx >= 0 {
+		blockEnd := strings.Index(src[defaultIdx:], "}")
+		if blockEnd >= 0 {
+			defaultBlock := src[defaultIdx : defaultIdx+blockEnd]
+			if strings.Contains(defaultBlock, "Layout()") {
+				t.Errorf("DefaultContext should embed LayoutContext, not have Layout() method; got:\n%s", defaultBlock)
+			}
+			if !strings.Contains(defaultBlock, "LayoutContext") {
+				t.Errorf("DefaultContext should embed LayoutContext; got:\n%s", defaultBlock)
+			}
+		}
+	}
+
+	// Should NOT have wrapper type DefaultMenuContext
+	if strings.Contains(src, "type DefaultMenuContext interface") {
+		t.Errorf("should not generate wrapper type DefaultMenuContext")
+	}
+
+	// Should NOT have wrapper type FirstpageMenuContext
+	if strings.Contains(src, "type FirstpageMenuContext interface") {
+		t.Errorf("should not generate wrapper type FirstpageMenuContext")
+	}
+}
+
 func grepOne(src, sub string) string {
 	if i := strings.Index(src, sub); i >= 0 {
 		end := i + len(sub) + 80

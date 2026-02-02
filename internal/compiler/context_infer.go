@@ -303,18 +303,25 @@ func (c *pathCollector) collectPartial(n *ast.Partial) error {
 			partialName = ""
 		}
 		if partialName != "" {
-			// Same-scope partial: add partial name as path so caller's type tree has a node for it (e.g. Menu()).
-			c.addPath(partialName, "")
-			if partialNodes, ok := c.parsed[partialName]; ok {
-				c.pushWith(partialName, nil)
-				err := c.collectNodes(partialNodes)
-				c.pop()
-				if err != nil {
-					return err
+			sameScope := len(parts) == 1
+			if sameScope {
+				// Same-scope partial ({{> partial}}): add partial name as path so caller's type tree
+				// has a node for it, and caller will EMBED the partial's context type.
+				c.addPath(partialName, "")
+				if partialNodes, ok := c.parsed[partialName]; ok {
+					c.pushWith(partialName, nil)
+					err := c.collectNodes(partialNodes)
+					c.pop()
+					if err != nil {
+						return err
+					}
 				}
 			}
+			// Different-context partial ({{> partial ctx}}): do NOT merge partial's paths.
+			// The partial has its own context interface; caller just needs the context path to exist.
 		}
 	}
+	// For different-context partials, add the context path to the type tree.
 	if len(parts) >= 2 {
 		for _, pathStr := range pathsFromExpr(parts[1]) {
 			full, elem := c.resolvePath(pathStr)
