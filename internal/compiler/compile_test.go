@@ -783,3 +783,138 @@ func TestCompileTemplates_GeneratedCodeCompiles(t *testing.T) {
 	})
 }
 
+// --- BuildBundle (phase 1 IR) tests: structure without generating Go ---
+
+func TestBuildBundle_TypeTree_SimplePath(t *testing.T) {
+	bundle, err := BuildBundle(map[string]string{
+		"main": "Hello {{name}}",
+	}, BuildOptions{})
+	if err != nil {
+		t.Fatalf("BuildBundle: %v", err)
+	}
+	if !bundle.HasField("main", "name") {
+		t.Errorf("expected main type tree to have field name")
+	}
+	if len(bundle.Names) != 1 || bundle.Names[0] != TemplateName("main") {
+		t.Errorf("expected Names [main], got %v", bundle.Names)
+	}
+	mainT := bundle.Templates[TemplateName("main")]
+	if mainT == nil || mainT.FuncName != GoIdent("Main") {
+		t.Errorf("expected Templates[main].FuncName=Main, got %v", mainT)
+	}
+}
+
+func TestBuildBundle_TypeTree_NestedPath(t *testing.T) {
+	bundle, err := BuildBundle(map[string]string{
+		"main": "{{user.name}}",
+	}, BuildOptions{})
+	if err != nil {
+		t.Fatalf("BuildBundle: %v", err)
+	}
+	if !bundle.HasField("main", "user") {
+		t.Errorf("expected main type tree to have field user")
+	}
+	mainT := bundle.Templates[TemplateName("main")]
+	if mainT == nil || mainT.TypeTree == nil || mainT.TypeTree.Fields == nil || mainT.TypeTree.Fields["user"] == nil {
+		t.Fatalf("expected main template with TypeTree.Fields[user]")
+	}
+	userNode := mainT.TypeTree.Fields["user"]
+	if userNode.Fields == nil || userNode.Fields["name"] == nil {
+		t.Errorf("expected user.name in type tree")
+	}
+}
+
+func TestBuildBundle_TypeTree_Each(t *testing.T) {
+	bundle, err := BuildBundle(map[string]string{
+		"main": "{{#each items}}{{name}}{{/each}}",
+	}, BuildOptions{})
+	if err != nil {
+		t.Fatalf("BuildBundle: %v", err)
+	}
+	mainT := bundle.Templates[TemplateName("main")]
+	if mainT == nil || mainT.TypeTree == nil || mainT.TypeTree.Fields == nil || mainT.TypeTree.Fields["items"] == nil {
+		t.Fatalf("expected main to have items field")
+	}
+	itemsNode := mainT.TypeTree.Fields["items"]
+	if !itemsNode.IsSlice || itemsNode.SliceElem == nil {
+		t.Errorf("expected items to be slice with SliceElem")
+	}
+	if itemsNode.SliceElem.Fields == nil || itemsNode.SliceElem.Fields["name"] == nil {
+		t.Errorf("expected items element to have name field")
+	}
+}
+
+func TestBuildBundle_PartialParamTypes_SameScope(t *testing.T) {
+	bundle, err := BuildBundle(map[string]string{
+		"main":   `{{title}}{{> header}}`,
+		"header": `<h1>{{title}}</h1>`,
+	}, BuildOptions{})
+	if err != nil {
+		t.Fatalf("BuildBundle: %v", err)
+	}
+	// Same-scope partial ({{> header}}): header gets caller's context type.
+	if bundle.PartialParamTypes[TemplateName("header")] != ContextTypeName("MainContext") {
+		t.Errorf("expected PartialParamTypes[header]=MainContext (same-scope), got %q", bundle.PartialParamTypes[TemplateName("header")])
+	}
+}
+
+func TestBuildBundle_PartialParamTypes_ExplicitContext(t *testing.T) {
+	bundle, err := BuildBundle(map[string]string{
+		"main":  `{{#each rows}}{{> row this}}{{/each}}`,
+		"row":   `<tr>{{name}}</tr>`,
+	}, BuildOptions{})
+	if err != nil {
+		t.Fatalf("BuildBundle: %v", err)
+	}
+	// Explicit context ({{> row this}}): row keeps its own context; no shared param type.
+	if bundle.PartialParamTypes[TemplateName("row")] != ContextTypeName("") {
+		t.Errorf("expected PartialParamTypes[row] empty (explicit context), got %q", bundle.PartialParamTypes[TemplateName("row")])
+	}
+}
+
+func TestBuildBundle_CanonicalType_SharedPartial(t *testing.T) {
+	bundle, err := BuildBundle(map[string]string{
+		"default":  `Page: {{title}}{{> menu}}`,
+		"firstpage": `First: {{title}}{{> menu}}`,
+		"menu":     `<nav>{{title}}</nav>`,
+	}, BuildOptions{})
+	if err != nil {
+		t.Fatalf("BuildBundle: %v", err)
+	}
+	if bundle.CanonicalType[TemplateName("menu")] != ContextTypeName("MenuContext") {
+		t.Errorf("expected CanonicalType[menu]=MenuContext, got %q", bundle.CanonicalType[TemplateName("menu")])
+	}
+	if bundle.PrimaryCaller[TemplateName("menu")] != TemplateName("default") {
+		t.Errorf("expected PrimaryCaller[menu]=default (first alphabetically), got %q", bundle.PrimaryCaller[TemplateName("menu")])
+	}
+}
+
+func TestBuildBundle_InvalidTemplate_ParserError(t *testing.T) {
+	_, err := BuildBundle(map[string]string{
+		"main": "{{#if ok}}unclosed",
+	}, BuildOptions{})
+	if err == nil {
+		t.Fatal("expected BuildBundle to fail on unclosed block")
+	}
+	if !strings.Contains(err.Error(), "unclosed") {
+		t.Errorf("error should mention unclosed: %v", err)
+	}
+}
+
+func TestBuildBundle_EmitGo_RoundTrip(t *testing.T) {
+	templates := map[string]string{"main": "Hello {{name}}"}
+	bundle, err := BuildBundle(templates, BuildOptions{})
+	if err != nil {
+		t.Fatalf("BuildBundle: %v", err)
+	}
+	code, err := EmitGo(bundle, CodegenOptions{
+		PackageName: "templates",
+	})
+	if err != nil {
+		t.Fatalf("EmitGo: %v", err)
+	}
+	if !strings.Contains(string(code), "func RenderMain(w io.Writer, data MainContext) error") {
+		t.Errorf("EmitGo output should contain RenderMain: %s", string(code)[:min(500, len(string(code)))])
+	}
+}
+

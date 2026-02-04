@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	"github.com/andriyg76/go-hbars/internal/ast"
-	"github.com/andriyg76/go-hbars/internal/parser"
 	"github.com/andriyg76/hexerr"
 )
 
@@ -76,8 +75,41 @@ type Options struct {
 	TemplateFiles map[string]string
 }
 
+// CodegenOptions configures Go code emission (phase 2). Used by EmitGo.
+type CodegenOptions struct {
+	PackageName       string
+	RuntimeImport     string
+	Helpers           map[string]HelperRef
+	GenerateBootstrap bool
+	GeneratorVersion  string
+	TemplateFiles     map[string]string
+}
+
 // CompileTemplates compiles templates into Go source code.
+// It builds the IR (Bundle) then emits Go; equivalent to BuildBundle + EmitGo.
 func CompileTemplates(templates map[string]string, opts Options) ([]byte, error) {
+	if opts.PackageName == "" {
+		return nil, hexerr.New("compiler: package name is required")
+	}
+	bundle, err := BuildBundle(templates, BuildOptions{
+		Helpers:       opts.Helpers,
+		TemplateFiles: opts.TemplateFiles,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return EmitGo(bundle, CodegenOptions{
+		PackageName:       opts.PackageName,
+		RuntimeImport:     opts.RuntimeImport,
+		Helpers:           opts.Helpers,
+		GenerateBootstrap: opts.GenerateBootstrap,
+		GeneratorVersion:  opts.GeneratorVersion,
+		TemplateFiles:     opts.TemplateFiles,
+	})
+}
+
+// EmitGo generates Go source from a Bundle (phase 2). The bundle must have been built with BuildBundle.
+func EmitGo(bundle *Bundle, opts CodegenOptions) ([]byte, error) {
 	if opts.PackageName == "" {
 		return nil, hexerr.New("compiler: package name is required")
 	}
@@ -89,46 +121,41 @@ func CompileTemplates(templates map[string]string, opts Options) ([]byte, error)
 	if err != nil {
 		return nil, err
 	}
-
-	names := make([]string, 0, len(templates))
-	parsed := make(map[string][]ast.Node, len(templates))
-	for name, tmpl := range templates {
-		nodes, err := parser.Parse(tmpl)
-		if err != nil {
-			if file := opts.TemplateFiles[name]; file != "" {
-				return nil, templateErrorWithFile(file, err)
-			}
-			return nil, hexerr.Wrapf(err, "compiler: template %q", name)
-		}
-		parsed[name] = nodes
-		names = append(names, name)
+	parsed := make(map[string][]ast.Node, len(bundle.Templates))
+	funcNames := make(map[string]string, len(bundle.Templates))
+	typeTrees := make(map[string]*TypeNode, len(bundle.Templates))
+	for name, t := range bundle.Templates {
+		sn := string(name)
+		parsed[sn] = t.Parsed
+		funcNames[sn] = string(t.FuncName)
+		typeTrees[sn] = t.TypeTree
 	}
-	sort.Strings(names)
-
-	funcNames := make(map[string]string, len(names))
-	seenFunc := make(map[string]string, len(names))
-	for _, name := range names {
-		ident := goIdent(name)
-		if prev, exists := seenFunc[ident]; exists {
-			return nil, hexerr.New(fmt.Sprintf("compiler: templates %q and %q map to %q", prev, name, ident))
-		}
-		seenFunc[ident] = name
-		funcNames[name] = ident
+	names := make([]string, len(bundle.Names))
+	for i, n := range bundle.Names {
+		names[i] = string(n)
 	}
-
+	partialParamTypes := make(map[string]string, len(bundle.PartialParamTypes))
+	for k, v := range bundle.PartialParamTypes {
+		partialParamTypes[string(k)] = string(v)
+	}
+	canonicalType := make(map[string]string, len(bundle.CanonicalType))
+	for k, v := range bundle.CanonicalType {
+		canonicalType[string(k)] = string(v)
+	}
+	primaryCaller := make(map[string]string, len(bundle.PrimaryCaller))
+	for k, v := range bundle.PrimaryCaller {
+		primaryCaller[string(k)] = string(v)
+	}
+	typeSet := make(map[string]map[string]bool, len(bundle.TypeSet))
+	for k, set := range bundle.TypeSet {
+		m := make(map[string]bool, len(set))
+		for ctx := range set {
+			m[string(ctx)] = true
+		}
+		typeSet[string(k)] = m
+	}
 	usedHelpers := collectUsedHelperNames(parsed, helperExprs)
 	helperImports = filterHelperImports(helperImports, opts.Helpers, usedHelpers)
-
-	partialParamTypes := CollectPartialParamTypes(parsed, names, funcNames, helperExprs)
-	typeSet := buildPartialTypeSet(parsed, names, funcNames, helperExprs)
-	// Ensure shared partials (multiple same-scope callers) have a Go name so they get a canonical type.
-	// Partials referenced by path (e.g. news/informer) may not be in names (templates map keys).
-	for partialName, set := range typeSet {
-		if len(set) > 1 && funcNames[partialName] == "" {
-			funcNames[partialName] = goIdent(partialName)
-		}
-	}
-	canonicalType, primaryCaller := SharedPartialInfo(typeSet, names, funcNames)
 
 	needFmt := templatesUseBlockHelpers(parsed, helperExprs) || opts.GenerateBootstrap
 	useLayoutBlocks := templatesUsesLayoutBlocks(parsed)
@@ -162,20 +189,6 @@ func CompileTemplates(templates map[string]string, opts Options) ([]byte, error)
 	header.indentDec()
 	header.line(")")
 	header.line("")
-
-	// Build type trees for all templates.
-	typeTrees := make(map[string]*typeNode)
-	for _, name := range names {
-		col := newPathCollector(helperExprs)
-		col.setParsed(parsed)
-		if err := col.collectNodes(parsed[name]); err != nil {
-			if file := opts.TemplateFiles[name]; file != "" {
-				return nil, templateErrorWithFile(file, err)
-			}
-			return nil, hexerr.Wrapf(err, "compiler: template %q context inference", name)
-		}
-		typeTrees[name] = buildTypeTree(col.paths, col.eachFields)
-	}
 
 	// Context type -> template name that owns it (so partials can use that template's type tree).
 	contextTypeToTemplate := make(map[string]string)
@@ -247,11 +260,11 @@ func CompileTemplates(templates map[string]string, opts Options) ([]byte, error)
 			continue
 		}
 		goName := strings.TrimSuffix(canon, "Context")
-		var subtree *typeNode
+		var subtree *TypeNode
 		for _, name := range emitOrder {
 			tree := typeTrees[name]
-			if tree != nil && tree.fields != nil && tree.fields[partialName] != nil {
-				subtree = tree.fields[partialName]
+			if tree != nil && tree.Fields != nil && tree.Fields[partialName] != nil {
+				subtree = tree.Fields[partialName]
 				break
 			}
 		}
@@ -267,16 +280,24 @@ func CompileTemplates(templates map[string]string, opts Options) ([]byte, error)
 	}
 
 	for i, name := range append(first, rest...) {
+		t := bundle.Templates[TemplateName(name)]
 		goName := funcNames[name]
 		tree := typeTrees[name]
-		if file := opts.TemplateFiles[name]; file != "" {
+		file := ""
+		if t != nil {
+			file = t.SourcePath
+		}
+		if file == "" && opts.TemplateFiles != nil {
+			file = opts.TemplateFiles[name]
+		}
+		if file != "" {
 			if i > 0 {
 				contextIfaces.line("")
 			}
 			contextIfaces.line("// from %s:1", sourceRefComment(file))
 		}
 		emitContextInterfaces(contextIfaces, name, goName, tree, canonicalType, primaryCaller, typeTrees)
-		if file := opts.TemplateFiles[name]; file != "" {
+		if file != "" {
 			if i > 0 {
 				contextData.line("")
 			}
@@ -345,6 +366,7 @@ func CompileTemplates(templates map[string]string, opts Options) ([]byte, error)
 
 	functions := &codeWriter{}
 	for i, name := range names {
+		t := bundle.Templates[TemplateName(name)]
 		goName := funcNames[name]
 		nodes := parsed[name]
 		rootContext := partialParamTypes[name]
@@ -361,7 +383,14 @@ func CompileTemplates(templates map[string]string, opts Options) ([]byte, error)
 		if useLayoutBlocks {
 			gen.blocksVar = "blocks"
 		}
-		if file := opts.TemplateFiles[name]; file != "" {
+		file := ""
+		if t != nil {
+			file = t.SourcePath
+		}
+		if file == "" && opts.TemplateFiles != nil {
+			file = opts.TemplateFiles[name]
+		}
+		if file != "" {
 			if i > 0 {
 				functions.line("")
 			}
@@ -380,7 +409,7 @@ func CompileTemplates(templates map[string]string, opts Options) ([]byte, error)
 		functions.line("}")
 		gen.pushTypedScope("data", "", tree)
 		if err := gen.emitNodes(nodes); err != nil {
-			if file := opts.TemplateFiles[name]; file != "" {
+			if file != "" {
 				return nil, templateErrorWithFile(file, err)
 			}
 			return nil, hexerr.Wrapf(err, "compiler: template %q", name)
@@ -445,8 +474,8 @@ func CompileTemplates(templates map[string]string, opts Options) ([]byte, error)
 }
 
 // buildTemplateInheritanceDiagram returns comment lines with a mermaid flowchart of template inclusion
-// (which template includes which partial). emitOrder = roots; typeTrees[name].fields keys that are in nameSet = included partials.
-func buildTemplateInheritanceDiagram(emitOrder []string, typeTrees map[string]*typeNode, nameSet map[string]bool) []string {
+// (which template includes which partial). emitOrder = roots; typeTrees[name].Fields keys that are in nameSet = included partials.
+func buildTemplateInheritanceDiagram(emitOrder []string, typeTrees map[string]*TypeNode, nameSet map[string]bool) []string {
 	var lines []string
 	lines = append(lines, "Template inclusion (who includes whom):")
 	lines = append(lines, "```mermaid")
@@ -454,11 +483,11 @@ func buildTemplateInheritanceDiagram(emitOrder []string, typeTrees map[string]*t
 	seen := make(map[string]bool)
 	for _, name := range emitOrder {
 		tree := typeTrees[name]
-		if tree == nil || tree.fields == nil {
+		if tree == nil || tree.Fields == nil {
 			continue
 		}
 		var partials []string
-		for field := range tree.fields {
+		for field := range tree.Fields {
 			if nameSet[field] && field != name {
 				partials = append(partials, field)
 			}
@@ -485,7 +514,7 @@ func buildTemplateInheritanceDiagram(emitOrder []string, typeTrees map[string]*t
 
 // buildContextStructureDiagram returns comment lines with a mermaid classDiagram of context types:
 // root contexts, nested/partial contexts, and canonical vs primary embedding (shared partials).
-func buildContextStructureDiagram(emitOrder []string, typeTrees map[string]*typeNode, names []string, funcNames map[string]string, canonicalType, primaryCaller map[string]string) []string {
+func buildContextStructureDiagram(emitOrder []string, typeTrees map[string]*TypeNode, names []string, funcNames map[string]string, canonicalType, primaryCaller map[string]string) []string {
 	nameSet := make(map[string]bool)
 	for _, n := range names {
 		nameSet[n] = true
@@ -508,14 +537,14 @@ func buildContextStructureDiagram(emitOrder []string, typeTrees map[string]*type
 		}
 		rootCtx := goName + "Context"
 		tree := typeTrees[name]
-		if tree == nil || tree.fields == nil {
+		if tree == nil || tree.Fields == nil {
 			if !canonicalSet[rootCtx] {
 				lines = append(lines, "  class "+rootCtx+" { }")
 			}
 			continue
 		}
 		var fields []string
-		for f := range tree.fields {
+		for f := range tree.Fields {
 			if nameSet[f] && f != name {
 				fields = append(fields, f)
 			}
@@ -768,7 +797,7 @@ func uniqueAlias(base string, used map[string]bool) string {
 type typedScope struct {
 	varName    string
 	pathPrefix string
-	node       *typeNode
+	node       *TypeNode
 	eachKeyVar string // when in {{#each}} body, the loop key/index variable name for @key/@index
 }
 
@@ -776,9 +805,9 @@ type generator struct {
 	w           *codeWriter
 	helpers     map[string]string
 	partials    map[string]string
-	typeTrees   map[string]*typeNode
+	typeTrees   map[string]*TypeNode
 	tempID      int
-	tree        *typeNode
+	tree        *TypeNode
 	goName      string
 	typedStack  []typedScope
 	rootVar     string   // name of root context variable ("root"); same as data in entry, passed in for partials
@@ -1073,7 +1102,7 @@ func (g *generator) emitIfBlock(n *ast.Block, inverted bool) error {
 	}
 
 	// Block param for if/unless: push typed scope so path resolves to the condition value
-	var paramScopeNode *typeNode
+	var paramScopeNode *TypeNode
 	if len(n.Params) > 0 && blockExpr.kind == exprPath {
 		scope, _ := g.currentTypedScope()
 		paramScopeNode = nodeAtPath(scope.node, blockExpr.value)
@@ -1191,9 +1220,9 @@ func (g *generator) emitEachBlock(n *ast.Block) error {
 		pathStr = blockExpr.value
 	}
 	colNode := nodeAtPath(scope.node, pathStr)
-	var itemNode *typeNode
-	if colNode != nil && colNode.isSlice && colNode.sliceElem != nil {
-		itemNode = colNode.sliceElem
+	var itemNode *TypeNode
+	if colNode != nil && colNode.IsSlice && colNode.SliceElem != nil {
+		itemNode = colNode.SliceElem
 	}
 	// Always use temps for loop vars to avoid "no new variables" in nested each
 	itemVar := g.nextTemp("item")
@@ -1209,7 +1238,7 @@ func (g *generator) emitEachBlock(n *ast.Block) error {
 	} else {
 		g.w.line("%s := %s", itemsVar, collectionExpr)
 		// When collection is a map (object), use comma-ok so []any at runtime doesn't panic
-		if colNode != nil && !colNode.isSlice {
+		if colNode != nil && !colNode.IsSlice {
 			useMapAssert = true
 		}
 	}
@@ -1668,7 +1697,7 @@ func (g *generator) emitLiteralValue(value expr) (string, error) {
 	}
 }
 
-func (g *generator) pushTypedScope(varName, pathPrefix string, node *typeNode) {
+func (g *generator) pushTypedScope(varName, pathPrefix string, node *TypeNode) {
 	g.typedStack = append(g.typedStack, typedScope{varName: varName, pathPrefix: pathPrefix, node: node})
 }
 

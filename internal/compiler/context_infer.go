@@ -675,11 +675,11 @@ func SharedPartialInfo(typeSet map[string]map[string]bool, names []string, funcN
 
 // AllContextTypeNames returns all context interface names that would be emitted from this template's type tree.
 // Used to map each context type to its owning template (e.g. MainOrdersOrderItemContext -> "main").
-func AllContextTypeNames(goName string, tree *typeNode) []string {
+func AllContextTypeNames(goName string, tree *TypeNode) []string {
 	var out []string
 	seen := make(map[string]bool)
-	var visit func(pathPrefix string, n *typeNode)
-	visit = func(pathPrefix string, n *typeNode) {
+	var visit func(pathPrefix string, n *TypeNode)
+	visit = func(pathPrefix string, n *TypeNode) {
 		if n == nil {
 			return
 		}
@@ -687,19 +687,19 @@ func AllContextTypeNames(goName string, tree *typeNode) []string {
 			out = append(out, goName+"Context")
 			seen[goName+"Context"] = true
 		}
-		if n.isSlice && n.sliceElem != nil {
+		if n.IsSlice && n.SliceElem != nil {
 			elemName := contextItemInterfaceName(goName, strings.TrimPrefix(pathPrefix, "."))
 			if !seen[elemName] {
 				seen[elemName] = true
 				out = append(out, elemName)
 			}
-			visit(pathPrefix+".", n.sliceElem)
+			visit(pathPrefix+".", n.SliceElem)
 			return
 		}
-		if n.fields == nil {
+		if n.Fields == nil {
 			return
 		}
-		for field, child := range n.fields {
+		for field, child := range n.Fields {
 			if field == "" || (len(field) > 0 && (field[0] == '@' || field[0] == '.')) {
 				continue
 			}
@@ -711,11 +711,11 @@ func AllContextTypeNames(goName string, tree *typeNode) []string {
 					subPath = pathPrefix + "." + field
 				}
 			}
-			if child.isSlice {
+			if child.IsSlice {
 				visit(subPath, child)
 				continue
 			}
-			if len(child.fields) > 0 {
+			if len(child.Fields) > 0 {
 				ifaceName := contextInterfaceName(goName, subPath)
 				if !seen[ifaceName] {
 					seen[ifaceName] = true
@@ -729,15 +729,16 @@ func AllContextTypeNames(goName string, tree *typeNode) []string {
 	return out
 }
 
-// typeNode is a node in the inferred type tree (object fields or slice element).
-type typeNode struct {
-	fields    map[string]*typeNode
-	sliceElem *typeNode
-	isSlice   bool
+// TypeNode is a node in the inferred type tree (object fields or slice element).
+// Exported so callers can inspect the template structure (e.g. Bundle.TypeTrees) without generating Go.
+type TypeNode struct {
+	Fields    map[string]*TypeNode
+	SliceElem *TypeNode
+	IsSlice   bool
 }
 
-func buildTypeTree(paths map[string]bool, eachFields map[string]map[string]bool) *typeNode {
-	root := &typeNode{fields: make(map[string]*typeNode)}
+func buildTypeTree(paths map[string]bool, eachFields map[string]map[string]bool) *TypeNode {
+	root := &TypeNode{Fields: make(map[string]*TypeNode)}
 	for p := range paths {
 		if p == "" || p == "." || (len(p) > 0 && (p[0] == '@' || p[0] == '.')) {
 			continue
@@ -751,15 +752,15 @@ func buildTypeTree(paths map[string]bool, eachFields map[string]map[string]bool)
 			if part == "" || part == "." || (len(part) > 0 && (part[0] == '@' || part[0] == '.')) {
 				continue
 			}
-			if cur.fields == nil {
-				cur.fields = make(map[string]*typeNode)
+			if cur.Fields == nil {
+				cur.Fields = make(map[string]*TypeNode)
 			}
-			if cur.fields[part] == nil {
-				cur.fields[part] = &typeNode{}
+			if cur.Fields[part] == nil {
+				cur.Fields[part] = &TypeNode{}
 			}
-			cur = cur.fields[part]
+			cur = cur.Fields[part]
 			if i == len(parts)-1 {
-				// leaf: keep as any (cur.fields empty, no slice)
+				// leaf: keep as any (cur.Fields empty, no slice)
 			}
 		}
 	}
@@ -773,21 +774,21 @@ func buildTypeTree(paths map[string]bool, eachFields map[string]map[string]bool)
 			if part == "" || part == "." || (len(part) > 0 && (part[0] == '@' || part[0] == '.')) {
 				continue
 			}
-			if cur.fields == nil {
-				cur.fields = make(map[string]*typeNode)
+			if cur.Fields == nil {
+				cur.Fields = make(map[string]*TypeNode)
 			}
-			if cur.fields[part] == nil {
-				cur.fields[part] = &typeNode{}
+			if cur.Fields[part] == nil {
+				cur.Fields[part] = &TypeNode{}
 			}
-			cur = cur.fields[part]
+			cur = cur.Fields[part]
 		}
-		cur.isSlice = true
-		cur.sliceElem = &typeNode{fields: make(map[string]*typeNode)}
+		cur.IsSlice = true
+		cur.SliceElem = &TypeNode{Fields: make(map[string]*TypeNode)}
 		for f := range fields {
 			if f == "" || f == "." || (len(f) > 0 && (f[0] == '@' || f[0] == '.')) {
 				continue
 			}
-			cur.sliceElem.fields[f] = &typeNode{}
+			cur.SliceElem.Fields[f] = &TypeNode{}
 		}
 	}
 	return root
@@ -844,7 +845,7 @@ func contextDataStructName(ifaceName string) string {
 // pathPrefix is the current scope path (e.g. "" at root, "user" in {{#with user}}).
 // path is the expression path from the template (e.g. "title", "user.name").
 // Returns ("", false) for paths with "..", "@", or when path is not under the typed tree (e.g. slice element).
-func resolvePathToMethodChain(node *typeNode, pathPrefix, path, goIdent string) (methodChain string, ok bool) {
+func resolvePathToMethodChain(node *TypeNode, pathPrefix, path, goIdent string) (methodChain string, ok bool) {
 	path = strings.TrimSpace(path)
 	if path == "" || path == "." || path == "this" {
 		return "", true // current context: caller should use current var as-is
@@ -876,10 +877,10 @@ func resolvePathToMethodChain(node *typeNode, pathPrefix, path, goIdent string) 
 		if segment == "" || (len(segment) > 0 && (segment[0] == '@' || segment[0] == '.')) {
 			return "", false
 		}
-		if cur == nil || cur.fields == nil {
+		if cur == nil || cur.Fields == nil {
 			return "", false
 		}
-		child, ok := cur.fields[segment]
+		child, ok := cur.Fields[segment]
 		if !ok {
 			return "", false
 		}
@@ -888,12 +889,12 @@ func resolvePathToMethodChain(node *typeNode, pathPrefix, path, goIdent string) 
 			return "", false
 		}
 		// Slice is allowed only as the last segment (e.g. "users" in {{#each users}}) so we get data.Users().
-		if child.isSlice && child.sliceElem != nil && i < len(parts)-1 {
+		if child.IsSlice && child.SliceElem != nil && i < len(parts)-1 {
 			return "", false
 		}
 		chain = append(chain, methodName+"()")
 		if i < len(parts)-1 {
-			if len(child.fields) == 0 {
+			if len(child.Fields) == 0 {
 				return "", false
 			}
 			cur = child
@@ -903,7 +904,7 @@ func resolvePathToMethodChain(node *typeNode, pathPrefix, path, goIdent string) 
 }
 
 // nodeAtPath returns the type node at the given path from root, or nil.
-func nodeAtPath(root *typeNode, path string) *typeNode {
+func nodeAtPath(root *TypeNode, path string) *TypeNode {
 	path = strings.TrimSpace(path)
 	if path == "" || strings.HasPrefix(path, "..") || strings.HasPrefix(path, "@") {
 		return nil
@@ -914,10 +915,10 @@ func nodeAtPath(root *typeNode, path string) *typeNode {
 		if segment == "" || (len(segment) > 0 && (segment[0] == '@' || segment[0] == '.')) {
 			return nil
 		}
-		if cur == nil || cur.fields == nil {
+		if cur == nil || cur.Fields == nil {
 			return nil
 		}
-		child, ok := cur.fields[segment]
+		child, ok := cur.Fields[segment]
 		if !ok {
 			return nil
 		}
@@ -927,12 +928,12 @@ func nodeAtPath(root *typeNode, path string) *typeNode {
 }
 
 // RootFieldKeys returns root-level field names from the type tree (keys used at root context).
-func RootFieldKeys(tree *typeNode) []string {
-	if tree == nil || tree.fields == nil {
+func RootFieldKeys(tree *TypeNode) []string {
+	if tree == nil || tree.Fields == nil {
 		return nil
 	}
 	var keys []string
-	for k := range tree.fields {
+	for k := range tree.Fields {
 		if k == "" || (len(k) > 0 && (k[0] == '@' || k[0] == '.')) {
 			continue
 		}
@@ -945,12 +946,12 @@ func RootFieldKeys(tree *typeNode) []string {
 // rootLayoutPartial returns the single root-level shared partial name when the root template
 // has exactly one root-level field that is a shared partial (in canonicalType). Otherwise returns "".
 // Used to emit root contexts that embed the layout context and only template-specific methods.
-func rootLayoutPartial(tree *typeNode, canonicalType map[string]string) string {
-	if tree == nil || tree.fields == nil || canonicalType == nil {
+func rootLayoutPartial(tree *TypeNode, canonicalType map[string]string) string {
+	if tree == nil || tree.Fields == nil || canonicalType == nil {
 		return ""
 	}
 	var layout string
-	for f := range tree.fields {
+	for f := range tree.Fields {
 		if f == "" || (len(f) > 0 && (f[0] == '@' || f[0] == '.')) {
 			continue
 		}
@@ -964,7 +965,7 @@ func rootLayoutPartial(tree *typeNode, canonicalType map[string]string) string {
 	return layout
 }
 
-func emitContextInterfaces(w *codeWriter, templateName, goName string, tree *typeNode, canonicalType, primaryCaller map[string]string, typeTrees map[string]*typeNode) {
+func emitContextInterfaces(w *codeWriter, templateName, goName string, tree *TypeNode, canonicalType, primaryCaller map[string]string, typeTrees map[string]*TypeNode) {
 	rootName := goName + "Context"
 	seen := make(map[string]bool)
 	seen[rootName] = true
@@ -976,10 +977,10 @@ func emitContextInterfaces(w *codeWriter, templateName, goName string, tree *typ
 	if layoutPartial != "" && typeTrees != nil {
 		// Use the layout template's root-level fields so we skip all layout content (e.g. news/informer
 		// merged from default) even when the current tree stores the layout as a leaf.
-		if layoutTree := typeTrees[layoutPartial]; layoutTree != nil && layoutTree.fields != nil {
+		if layoutTree := typeTrees[layoutPartial]; layoutTree != nil && layoutTree.Fields != nil {
 			skipFieldsAtRoot = make(map[string]bool)
 			skipFieldsAtRoot[layoutPartial] = true
-			for f := range layoutTree.fields {
+			for f := range layoutTree.Fields {
 				if f == "" || (len(f) > 0 && (f[0] == '@' || f[0] == '.')) {
 					continue
 				}
@@ -1002,11 +1003,11 @@ func emitContextInterfaces(w *codeWriter, templateName, goName string, tree *typ
 	emitNodeInterfaces(w, templateName, goName, "", tree, seen, canonicalType, primaryCaller, typeTrees)
 }
 
-func emitNodeInterfaces(w *codeWriter, templateName, goIdent, pathPrefix string, n *typeNode, seen map[string]bool, canonicalType, primaryCaller map[string]string, typeTrees map[string]*typeNode) {
+func emitNodeInterfaces(w *codeWriter, templateName, goIdent, pathPrefix string, n *TypeNode, seen map[string]bool, canonicalType, primaryCaller map[string]string, typeTrees map[string]*TypeNode) {
 	if n == nil {
 		return
 	}
-	if n.isSlice && n.sliceElem != nil {
+	if n.IsSlice && n.SliceElem != nil {
 		elemName := contextItemInterfaceName(goIdent, pathPrefix)
 		if seen[elemName] {
 			return
@@ -1016,17 +1017,17 @@ func emitNodeInterfaces(w *codeWriter, templateName, goIdent, pathPrefix string,
 		w.line("// %s is the context for one element of %s.", elemName, pathPrefix)
 		w.line("type %s interface {", elemName)
 		w.indentInc()
-		emitInterfaceMethods(w, templateName, goIdent, pathPrefix+".", n.sliceElem, seen, canonicalType, primaryCaller, "", nil, typeTrees)
+		emitInterfaceMethods(w, templateName, goIdent, pathPrefix+".", n.SliceElem, seen, canonicalType, primaryCaller, "", nil, typeTrees)
 		w.line("Raw() any")
 		w.indentDec()
 		w.line("}")
-		emitNodeInterfaces(w, templateName, goIdent, pathPrefix+".", n.sliceElem, seen, canonicalType, primaryCaller, typeTrees)
+		emitNodeInterfaces(w, templateName, goIdent, pathPrefix+".", n.SliceElem, seen, canonicalType, primaryCaller, typeTrees)
 		return
 	}
-	if n.fields == nil {
+	if n.Fields == nil {
 		return
 	}
-	for field, child := range n.fields {
+	for field, child := range n.Fields {
 		if field == "" || field == "." || (len(field) > 0 && (field[0] == '@' || field[0] == '.')) {
 			continue
 		}
@@ -1034,11 +1035,11 @@ func emitNodeInterfaces(w *codeWriter, templateName, goIdent, pathPrefix string,
 		if pathPrefix != "" {
 			subPath = pathPrefix + "." + field
 		}
-		if child.isSlice {
+		if child.IsSlice {
 			emitNodeInterfaces(w, templateName, goIdent, subPath, child, seen, canonicalType, primaryCaller, typeTrees)
 			continue
 		}
-		if len(child.fields) > 0 {
+		if len(child.Fields) > 0 {
 			// Shared partial at this path: skip emitting nested interface (canonical type emitted by partial's tree).
 			if canonicalType != nil && canonicalType[field] != "" {
 				continue
@@ -1071,12 +1072,12 @@ func emitNodeInterfaces(w *codeWriter, templateName, goIdent, pathPrefix string,
 	}
 }
 
-func emitInterfaceMethods(w *codeWriter, templateName, goIdent, pathPrefix string, n *typeNode, seen map[string]bool, canonicalType, primaryCaller map[string]string, layoutPartial string, skipFieldsAtRoot map[string]bool, typeTrees map[string]*typeNode) {
-	if n == nil || n.fields == nil {
+func emitInterfaceMethods(w *codeWriter, templateName, goIdent, pathPrefix string, n *TypeNode, seen map[string]bool, canonicalType, primaryCaller map[string]string, layoutPartial string, skipFieldsAtRoot map[string]bool, typeTrees map[string]*TypeNode) {
+	if n == nil || n.Fields == nil {
 		return
 	}
 	var names []string
-	for f := range n.fields {
+	for f := range n.Fields {
 		if f == "" || f == "." || (len(f) > 0 && (f[0] == '@' || f[0] == '.')) {
 			continue
 		}
@@ -1090,12 +1091,12 @@ func emitInterfaceMethods(w *codeWriter, templateName, goIdent, pathPrefix strin
 		if pathPrefix == "" && skipFieldsAtRoot != nil && skipFieldsAtRoot[field] {
 			continue
 		}
-		child := n.fields[field]
+		child := n.Fields[field]
 		methodName := goFieldName(field)
 		if methodName == "" {
 			continue
 		}
-		if child.isSlice && child.sliceElem != nil {
+		if child.IsSlice && child.SliceElem != nil {
 			fullPath := pathPrefix + field
 			elemIdent := goIdent
 			elemPath := fullPath
@@ -1117,7 +1118,7 @@ func emitInterfaceMethods(w *codeWriter, templateName, goIdent, pathPrefix strin
 			w.line("%s() []%s", methodName, elemName)
 			continue
 		}
-		if len(child.fields) > 0 {
+		if len(child.Fields) > 0 {
 			canon := ""
 			if canonicalType != nil {
 				canon = canonicalType[field]
@@ -1131,15 +1132,15 @@ func emitInterfaceMethods(w *codeWriter, templateName, goIdent, pathPrefix strin
 			if canon != "" {
 				// Always use canonical type for shared partials (no primary-embedding types).
 				ifaceName = canon
-			} else if pathPrefix == "" && typeTrees != nil && n.fields != nil {
+			} else if pathPrefix == "" && typeTrees != nil && n.Fields != nil {
 				// At root: if this field is a root-level field of a root-level shared partial (e.g. default has news/informer),
 				// use that partial's ident so the root implements the layout's interface.
-				for k := range n.fields {
+				for k := range n.Fields {
 					if canonicalType == nil || canonicalType[k] == "" {
 						continue
 					}
 					otherTree := typeTrees[k]
-					if otherTree == nil || otherTree.fields == nil || otherTree.fields[field] == nil {
+					if otherTree == nil || otherTree.Fields == nil || otherTree.Fields[field] == nil {
 						continue
 					}
 					ifaceName = contextInterfaceName(strings.TrimSuffix(canonicalType[k], "Context"), field)
@@ -1177,7 +1178,7 @@ func emitInterfaceMethods(w *codeWriter, templateName, goIdent, pathPrefix strin
 }
 
 // emitContextDataTypes emits all ...ContextData structs and FromMap for the given template.
-func emitContextDataTypes(w *codeWriter, templateName, goName string, tree *typeNode, canonicalType, primaryCaller map[string]string, typeTrees map[string]*typeNode) {
+func emitContextDataTypes(w *codeWriter, templateName, goName string, tree *TypeNode, canonicalType, primaryCaller map[string]string, typeTrees map[string]*TypeNode) {
 	seen := make(map[string]bool)
 	emitNodeContextDataTypes(w, templateName, goName, "", tree, seen, canonicalType)
 	rootName := goName + "Context"
@@ -1186,7 +1187,7 @@ func emitContextDataTypes(w *codeWriter, templateName, goName string, tree *type
 	if layoutPartial == templateName {
 		layoutPartial = ""
 	}
-	var layoutTree *typeNode
+	var layoutTree *TypeNode
 	if layoutPartial != "" && typeTrees != nil {
 		layoutTree = typeTrees[layoutPartial]
 	}
@@ -1194,14 +1195,14 @@ func emitContextDataTypes(w *codeWriter, templateName, goName string, tree *type
 	emitFromMap(w, goName, rootName, rootDataName)
 }
 
-func emitNodeContextDataTypes(w *codeWriter, templateName, goIdent, pathPrefix string, n *typeNode, seen map[string]bool, canonicalType map[string]string) {
+func emitNodeContextDataTypes(w *codeWriter, templateName, goIdent, pathPrefix string, n *TypeNode, seen map[string]bool, canonicalType map[string]string) {
 	if n == nil {
 		return
 	}
 	// Recurse first so nested/item types are emitted before types that depend on them.
-	if n.fields != nil {
+	if n.Fields != nil {
 		var names []string
-		for f := range n.fields {
+		for f := range n.Fields {
 			if f == "" || (len(f) > 0 && (f[0] == '@' || f[0] == '.')) {
 				continue
 			}
@@ -1209,7 +1210,7 @@ func emitNodeContextDataTypes(w *codeWriter, templateName, goIdent, pathPrefix s
 		}
 		sort.Strings(names)
 		for _, field := range names {
-			child := n.fields[field]
+			child := n.Fields[field]
 			subPath := field
 			if pathPrefix != "" {
 				subPath = pathPrefix + "." + field
@@ -1217,8 +1218,8 @@ func emitNodeContextDataTypes(w *codeWriter, templateName, goIdent, pathPrefix s
 			emitNodeContextDataTypes(w, templateName, goIdent, subPath, child, seen, canonicalType)
 		}
 	}
-	if n.isSlice && n.sliceElem != nil && pathPrefix != "" {
-		emitNodeContextDataTypes(w, templateName, goIdent, pathPrefix+".", n.sliceElem, seen, canonicalType)
+	if n.IsSlice && n.SliceElem != nil && pathPrefix != "" {
+		emitNodeContextDataTypes(w, templateName, goIdent, pathPrefix+".", n.SliceElem, seen, canonicalType)
 	}
 	// Emit this node's ContextData (skip root; root is emitted by emitRootContextDataStruct).
 	if pathPrefix == "" {
@@ -1238,14 +1239,14 @@ func emitNodeContextDataTypes(w *codeWriter, templateName, goIdent, pathPrefix s
 			return
 		}
 	}
-	if n.isSlice && n.sliceElem != nil {
+	if n.IsSlice && n.SliceElem != nil {
 		elemName := contextItemInterfaceName(goIdent, pathPrefix)
 		dataName := contextDataStructName(elemName)
 		if seen[dataName] {
 			return
 		}
 		seen[dataName] = true
-		emitItemContextDataStruct(w, goIdent, pathPrefix, n.sliceElem, dataName, elemName)
+		emitItemContextDataStruct(w, goIdent, pathPrefix, n.SliceElem, dataName, elemName)
 		return
 	}
 	// pathPrefix ending with "." means we're the slice element node (child of a slice); we already emitted the item type above.
@@ -1259,7 +1260,7 @@ func emitNodeContextDataTypes(w *codeWriter, templateName, goIdent, pathPrefix s
 			return
 		}
 	}
-	if len(n.fields) > 0 {
+	if len(n.Fields) > 0 {
 		ifaceName := contextInterfaceName(goIdent, pathPrefix)
 		dataName := contextDataStructName(ifaceName)
 		if seen[dataName] {
@@ -1270,7 +1271,7 @@ func emitNodeContextDataTypes(w *codeWriter, templateName, goIdent, pathPrefix s
 	}
 }
 
-func emitObjectContextDataStruct(w *codeWriter, templateName, goIdent, pathPrefix string, n *typeNode, dataName, ifaceName string) {
+func emitObjectContextDataStruct(w *codeWriter, templateName, goIdent, pathPrefix string, n *TypeNode, dataName, ifaceName string) {
 	w.line("")
 	w.line("// %s is a map-backed implementation of %s.", dataName, ifaceName)
 	w.line("type %s struct { m map[string]any }", dataName)
@@ -1280,7 +1281,7 @@ func emitObjectContextDataStruct(w *codeWriter, templateName, goIdent, pathPrefi
 	emitFromMapForIface(w, ifaceName, dataName)
 }
 
-func emitItemContextDataStruct(w *codeWriter, goIdent, collectionPath string, n *typeNode, dataName, ifaceName string) {
+func emitItemContextDataStruct(w *codeWriter, goIdent, collectionPath string, n *TypeNode, dataName, ifaceName string) {
 	w.line("")
 	w.line("// %s is a map-backed implementation of %s.", dataName, ifaceName)
 	w.line("type %s struct { m map[string]any }", dataName)
@@ -1291,12 +1292,12 @@ func emitItemContextDataStruct(w *codeWriter, goIdent, collectionPath string, n 
 	emitFromMapForIface(w, ifaceName, dataName)
 }
 
-func emitContextDataMethods(w *codeWriter, templateName, goIdent, pathPrefix string, n *typeNode, dataName string, canonicalType, primaryCaller map[string]string, layoutPartial string, skipFieldsAtRoot map[string]bool, typeTrees map[string]*typeNode) {
-	if n == nil || n.fields == nil {
+func emitContextDataMethods(w *codeWriter, templateName, goIdent, pathPrefix string, n *TypeNode, dataName string, canonicalType, primaryCaller map[string]string, layoutPartial string, skipFieldsAtRoot map[string]bool, typeTrees map[string]*TypeNode) {
+	if n == nil || n.Fields == nil {
 		return
 	}
 	var names []string
-	for f := range n.fields {
+	for f := range n.Fields {
 		if f == "" || (len(f) > 0 && (f[0] == '@' || f[0] == '.')) {
 			continue
 		}
@@ -1310,13 +1311,13 @@ func emitContextDataMethods(w *codeWriter, templateName, goIdent, pathPrefix str
 		if pathPrefix == "" && skipFieldsAtRoot != nil && skipFieldsAtRoot[field] {
 			continue
 		}
-		child := n.fields[field]
+		child := n.Fields[field]
 		methodName := goFieldName(field)
 		if methodName == "" {
 			continue
 		}
 		mapKey := field
-		if child.isSlice && child.sliceElem != nil {
+		if child.IsSlice && child.SliceElem != nil {
 			fullPath := pathPrefix + field
 			elemIdent := goIdent
 			elemPath := fullPath
@@ -1357,7 +1358,7 @@ func emitContextDataMethods(w *codeWriter, templateName, goIdent, pathPrefix str
 			w.line("}")
 			continue
 		}
-		if len(child.fields) > 0 {
+		if len(child.Fields) > 0 {
 			canon := ""
 			if canonicalType != nil {
 				canon = canonicalType[field]
@@ -1367,14 +1368,14 @@ func emitContextDataMethods(w *codeWriter, templateName, goIdent, pathPrefix str
 				// Always use canonical type for shared partials (no primary-embedding types).
 				ifaceName = canon
 				nestedDataName = contextDataStructName(canon)
-			} else if pathPrefix == "" && typeTrees != nil && n.fields != nil {
+			} else if pathPrefix == "" && typeTrees != nil && n.Fields != nil {
 				// At root: if this field is a root-level field of a root-level shared partial, use that partial's ident.
-				for k := range n.fields {
+				for k := range n.Fields {
 					if canonicalType == nil || canonicalType[k] == "" {
 						continue
 					}
 					otherTree := typeTrees[k]
-					if otherTree == nil || otherTree.fields == nil || otherTree.fields[field] == nil {
+					if otherTree == nil || otherTree.Fields == nil || otherTree.Fields[field] == nil {
 						continue
 					}
 					ifaceName = contextInterfaceName(strings.TrimSuffix(canonicalType[k], "Context"), field)
@@ -1401,7 +1402,7 @@ func emitContextDataMethods(w *codeWriter, templateName, goIdent, pathPrefix str
 	}
 }
 
-func emitRootContextDataStruct(w *codeWriter, templateName, goIdent string, tree *typeNode, rootDataName string, canonicalType, primaryCaller map[string]string, layoutPartial string, layoutTree *typeNode, typeTrees map[string]*typeNode) {
+func emitRootContextDataStruct(w *codeWriter, templateName, goIdent string, tree *TypeNode, rootDataName string, canonicalType, primaryCaller map[string]string, layoutPartial string, layoutTree *TypeNode, typeTrees map[string]*TypeNode) {
 	rootName := goIdent + "Context"
 	w.line("")
 	w.line("// %s is a map-backed implementation of %s.", rootDataName, rootName)
@@ -1414,8 +1415,8 @@ func emitRootContextDataStruct(w *codeWriter, templateName, goIdent string, tree
 		emitContextDataMethods(w, layoutPartial, layoutGoName, "", layoutTree, rootDataName, canonicalType, primaryCaller, "", nil, nil)
 		skipFieldsAtRoot = make(map[string]bool)
 		skipFieldsAtRoot[layoutPartial] = true
-		if layoutTree.fields != nil {
-			for f := range layoutTree.fields {
+		if layoutTree.Fields != nil {
+			for f := range layoutTree.Fields {
 				if f == "" || (len(f) > 0 && (f[0] == '@' || f[0] == '.')) {
 					continue
 				}
