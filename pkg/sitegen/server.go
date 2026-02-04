@@ -37,10 +37,11 @@ func NewServer(config *Config, r renderer.TemplateRenderer) (*Server, error) {
 	}
 
 	procConfig := &processor.Config{
-		RootPath:      root,
-		DataPath:      config.DataPath,
-		SharedPath:    config.SharedPath,
-		OutputPath:    "", // Not used for server
+		RootPath:          root,
+		DataPath:          config.DataPath,
+		SharedPath:        config.SharedPath,
+		OutputPath:        "", // Not used for server
+		ReflectUsageLevel: config.ReflectUsageLevel,
 	}
 
 	// Load shared data

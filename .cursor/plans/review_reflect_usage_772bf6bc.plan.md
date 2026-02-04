@@ -7,7 +7,7 @@ todos:
     status: pending
   - id: review-renderer
     content: "Перевірити processor/renderer.go: потреба struct-шляху, recover для Call"
-    status: pending
+    status: completed
   - id: review-blocks
     content: "Перевірити runtime/blocks.go: чи можна звузити reflect"
     status: pending

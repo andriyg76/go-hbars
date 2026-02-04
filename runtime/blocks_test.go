@@ -5,6 +5,11 @@ import (
 	"testing"
 )
 
+func init() {
+	// Tests use reflect fallback (e.g. []int, map[string]int); allow reflect.
+	SetReflectUsageLevel(ReflectUse)
+}
+
 func TestIsNumericZero(t *testing.T) {
 	cases := []struct {
 		name  string
@@ -25,7 +30,11 @@ func TestIsNumericZero(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := IsNumericZero(tc.value); got != tc.want {
+			got, err := IsNumericZero(tc.value)
+			if err != nil {
+				t.Fatalf("IsNumericZero(%v): %v", tc.value, err)
+			}
+			if got != tc.want {
 				t.Errorf("IsNumericZero(%v) = %v, want %v", tc.value, got, tc.want)
 			}
 		})
@@ -49,7 +58,11 @@ func TestIncludeZeroTruthy(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := IncludeZeroTruthy(tc.value); got != tc.want {
+			got, err := IncludeZeroTruthy(tc.value)
+			if err != nil {
+				t.Fatalf("IncludeZeroTruthy(%v): %v", tc.value, err)
+			}
+			if got != tc.want {
 				t.Errorf("IncludeZeroTruthy(%v) = %v, want %v", tc.value, got, tc.want)
 			}
 		})
@@ -80,8 +93,12 @@ func TestIsTruthy(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := IsTruthy(tc.value); got != tc.want {
-				t.Fatalf("IsTruthy(%v) = %v", tc.value, got)
+			got, err := IsTruthy(tc.value)
+			if err != nil {
+				t.Fatalf("IsTruthy(%v): %v", tc.value, err)
+			}
+			if got != tc.want {
+				t.Fatalf("IsTruthy(%v) = %v, want %v", tc.value, got, tc.want)
 			}
 		})
 	}

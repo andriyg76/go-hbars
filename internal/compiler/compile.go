@@ -1060,11 +1060,13 @@ func (g *generator) emitIfBlock(n *ast.Block, inverted bool) error {
 	} else {
 		g.w.line("%s := %s", valVar, valueExpr)
 	}
+	errVar := g.nextTemp("err")
 	if useIncludeZero {
-		g.w.line("%s := runtime.IncludeZeroTruthy(%s)", condVar, valVar)
+		g.w.line("%s, %s := runtime.IncludeZeroTruthy(%s)", condVar, errVar, valVar)
 	} else {
-		g.w.line("%s := runtime.IsTruthy(%s)", condVar, valVar)
+		g.w.line("%s, %s := runtime.IsTruthy(%s)", condVar, errVar, valVar)
 	}
+	g.w.line("if %s != nil { return %s }", errVar, errVar)
 	condExpr := condVar
 	if inverted {
 		condExpr = "!" + condVar
@@ -1139,7 +1141,11 @@ func (g *generator) emitWithBlock(n *ast.Block) error {
 	} else {
 		g.w.line("%s := %s", typedCtxVar, valueExpr)
 	}
-	g.w.line("if runtime.IsTruthy(%s) {", typedCtxVar)
+	withCondVar := g.nextTemp("cond")
+	withErrVar := g.nextTemp("err")
+	g.w.line("%s, %s := runtime.IsTruthy(%s)", withCondVar, withErrVar, typedCtxVar)
+	g.w.line("if %s != nil { return %s }", withErrVar, withErrVar)
+	g.w.line("if %s {", withCondVar)
 	g.w.indentInc()
 	g.pushTypedScope(typedCtxVar, scopePathPrefix, childNode)
 	if err := g.emitNodes(n.Body); err != nil {

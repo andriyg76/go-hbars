@@ -1,6 +1,7 @@
 package helpers
 
 import (
+	"log"
 	"reflect"
 	"strconv"
 	"time"
@@ -68,66 +69,75 @@ func GetNumberArg(args []any, idx int) (float64, error) {
 	}
 }
 
-// IsTruthy returns whether a value is truthy in Handlebars context.
-func IsTruthy(v any) bool {
+// IsEmpty checks if a value is empty (nil, empty string, empty collection, zero number).
+// Returns (true, nil) for empty, (false, nil) for non-empty, or (false, error) when reflect is used and ReflectUsageLevel=ERROR.
+func IsEmpty(v any) (bool, error) {
 	if v == nil {
-		return false
+		return true, nil
 	}
 	switch t := v.(type) {
-	case bool:
-		return t
 	case string:
-		return t != ""
+		return t == "", nil
 	case []any:
-		return len(t) > 0
+		return len(t) == 0, nil
 	case []byte:
-		return len(t) > 0
+		return len(t) == 0, nil
 	case map[string]any:
-		return len(t) > 0
-	default:
-		rv := reflect.ValueOf(v)
-		switch rv.Kind() {
-		case reflect.Slice, reflect.Map, reflect.Array:
-			return rv.Len() > 0
-		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-			return rv.Int() != 0
-		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-			return rv.Uint() != 0
-		case reflect.Float32, reflect.Float64:
-			return rv.Float() != 0
-		}
-		return true
+		return len(t) == 0, nil
+	case map[any]any:
+		return len(t) == 0, nil
+	case int:
+		return t == 0, nil
+	case int8:
+		return t == 0, nil
+	case int16:
+		return t == 0, nil
+	case int32:
+		return t == 0, nil
+	case int64:
+		return t == 0, nil
+	case uint:
+		return t == 0, nil
+	case uint8:
+		return t == 0, nil
+	case uint16:
+		return t == 0, nil
+	case uint32:
+		return t == 0, nil
+	case uint64:
+		return t == 0, nil
+	case uintptr:
+		return t == 0, nil
+	case float32:
+		return t == 0, nil
+	case float64:
+		return t == 0, nil
 	}
+	// Reflect path
+	level := runtime.GetReflectUsageLevel()
+	if level == runtime.ReflectError {
+		return false, hexerr.Newf("reflect usage disabled by ReflectUsageLevel=ERROR (IsEmpty for type %T)", v)
+	}
+	if level == runtime.ReflectWarn {
+		// log is in stdlib
+		reflectWarn("IsEmpty", v)
+	}
+	rv := reflect.ValueOf(v)
+	switch rv.Kind() {
+	case reflect.Slice, reflect.Map, reflect.Array:
+		return rv.Len() == 0, nil
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return rv.Int() == 0, nil
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		return rv.Uint() == 0, nil
+	case reflect.Float32, reflect.Float64:
+		return rv.Float() == 0, nil
+	}
+	return false, nil
 }
 
-// IsEmpty checks if a value is empty (nil, empty string, empty collection, zero number).
-func IsEmpty(v any) bool {
-	if v == nil {
-		return true
-	}
-	switch t := v.(type) {
-	case string:
-		return t == ""
-	case []any:
-		return len(t) == 0
-	case []byte:
-		return len(t) == 0
-	case map[string]any:
-		return len(t) == 0
-	default:
-		rv := reflect.ValueOf(v)
-		switch rv.Kind() {
-		case reflect.Slice, reflect.Map, reflect.Array:
-			return rv.Len() == 0
-		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-			return rv.Int() == 0
-		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-			return rv.Uint() == 0
-		case reflect.Float32, reflect.Float64:
-			return rv.Float() == 0
-		}
-		return false
-	}
+func reflectWarn(funcName string, v any) {
+	log.Printf("[go-hbars] reflect used in %s for type %T", funcName, v)
 }
 
 // ParseTime attempts to parse a time string using common formats.
@@ -151,4 +161,3 @@ func ParseTime(s string) (time.Time, error) {
 	}
 	return time.Time{}, hexerr.Newf("unable to parse time: %q", s)
 }
-

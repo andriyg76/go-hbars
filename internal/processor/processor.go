@@ -6,23 +6,26 @@ import (
 	"strings"
 
 	"github.com/andriyg76/go-hbars/pkg/renderer"
+	"github.com/andriyg76/go-hbars/runtime"
 	"github.com/andriyg76/hexerr"
 )
 
 // Config holds processor configuration.
 type Config struct {
-	RootPath   string
-	DataPath   string
-	SharedPath string
-	OutputPath string
+	RootPath         string
+	DataPath         string
+	SharedPath       string
+	OutputPath       string
+	ReflectUsageLevel runtime.ReflectUsageLevel
 }
 
 // DefaultConfig returns a default configuration.
 func DefaultConfig() *Config {
 	return &Config{
-		DataPath:   "data",
-		SharedPath: "shared",
-		OutputPath: "pages",
+		DataPath:         "data",
+		SharedPath:       "shared",
+		OutputPath:       "pages",
+		ReflectUsageLevel: runtime.ReflectWarn,
 	}
 }
 
@@ -34,6 +37,9 @@ type Processor struct {
 
 // NewProcessor creates a new processor with the given configuration and renderer.
 func NewProcessor(config *Config, r renderer.TemplateRenderer) *Processor {
+	if config != nil {
+		runtime.SetReflectUsageLevel(config.ReflectUsageLevel)
+	}
 	return &Processor{
 		config:   config,
 		renderer: r,

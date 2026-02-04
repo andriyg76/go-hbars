@@ -561,7 +561,11 @@ func renderMain(data MainContext, w io.Writer) error {
 		return err
 	}
 	ctx21 := data.User()
-	if runtime.IsTruthy(ctx21) {
+	cond21, err := runtime.IsTruthy(ctx21)
+	if err != nil {
+		return err
+	}
+	if cond21 {
 		if _, err := io.WriteString(w, "\nName: "); err != nil {
 			return err
 		}
@@ -656,7 +660,10 @@ func renderMain(data MainContext, w io.Writer) error {
 			return err
 		}
 		val38 := result37
-		cond39 := runtime.IsTruthy(val38)
+		cond39, err := runtime.IsTruthy(val38)
+		if err != nil {
+			return err
+		}
 		if cond39 {
 			if _, err := io.WriteString(w, "VIP"); err != nil {
 				return err
@@ -1044,7 +1051,10 @@ func renderUserCard(data UserCardContext, w io.Writer) error {
 		return err
 	}
 	val9 := result8
-	cond10 := runtime.IsTruthy(val9)
+	cond10, err := runtime.IsTruthy(val9)
+	if err != nil {
+		return err
+	}
 	if cond10 {
 		if _, err := io.WriteString(w, "<strong>Admin</strong>"); err != nil {
 			return err
@@ -1054,7 +1064,10 @@ func renderUserCard(data UserCardContext, w io.Writer) error {
 		return err
 	}
 	val11 := data.Active()
-	cond12 := runtime.IsTruthy(val11)
+	cond12, err := runtime.IsTruthy(val11)
+	if err != nil {
+		return err
+	}
 	if !cond12 {
 		if _, err := io.WriteString(w, "<em>Inactive</em>"); err != nil {
 			return err

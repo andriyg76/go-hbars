@@ -2,6 +2,7 @@ package handlebars
 
 import (
 	"github.com/andriyg76/go-hbars/helpers"
+	"github.com/andriyg76/go-hbars/runtime"
 )
 
 // Eq checks if two values are equal.
@@ -73,7 +74,11 @@ func Gte(args []any) (any, error) {
 // And returns true if all arguments are truthy.
 func And(args []any) (any, error) {
 	for _, arg := range args {
-		if !helpers.IsTruthy(arg) {
+		ok, err := runtime.IsTruthy(arg)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
 			return false, nil
 		}
 	}
@@ -83,7 +88,11 @@ func And(args []any) (any, error) {
 // Or returns true if any argument is truthy.
 func Or(args []any) (any, error) {
 	for _, arg := range args {
-		if helpers.IsTruthy(arg) {
+		ok, err := runtime.IsTruthy(arg)
+		if err != nil {
+			return nil, err
+		}
+		if ok {
 			return true, nil
 		}
 	}
@@ -93,6 +102,10 @@ func Or(args []any) (any, error) {
 // Not returns the negation of a value.
 func Not(args []any) (any, error) {
 	arg := helpers.GetArg(args, 0)
-	return !helpers.IsTruthy(arg), nil
+	ok, err := runtime.IsTruthy(arg)
+	if err != nil {
+		return nil, err
+	}
+	return !ok, nil
 }
 

@@ -74,12 +74,20 @@ func Size(args []any) (any, error) {
 // IsEmpty checks if a value is empty.
 func IsEmpty(args []any) (any, error) {
 	arg := helpers.GetArg(args, 0)
-	return helpers.IsEmpty(arg), nil
+	empty, err := helpers.IsEmpty(arg)
+	if err != nil {
+		return nil, err
+	}
+	return empty, nil
 }
 
 // IsNotEmpty checks if a value is not empty.
 func IsNotEmpty(args []any) (any, error) {
 	arg := helpers.GetArg(args, 0)
-	return !helpers.IsEmpty(arg), nil
+	empty, err := helpers.IsEmpty(arg)
+	if err != nil {
+		return nil, err
+	}
+	return !empty, nil
 }
 

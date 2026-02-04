@@ -33,10 +33,11 @@ func NewProcessor(config *Config, r renderer.TemplateRenderer) (*Processor, erro
 	}
 
 	procConfig := &processor.Config{
-		RootPath:   root,
-		DataPath:   config.DataPath,
-		SharedPath: config.SharedPath,
-		OutputPath: config.OutputPath,
+		RootPath:          root,
+		DataPath:          config.DataPath,
+		SharedPath:        config.SharedPath,
+		OutputPath:        config.OutputPath,
+		ReflectUsageLevel: config.ReflectUsageLevel,
 	}
 
 	proc := processor.NewProcessor(procConfig, r)

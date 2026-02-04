@@ -1,10 +1,12 @@
 package handlebars
 
 import (
+	"log"
 	"reflect"
 
 	"github.com/andriyg76/go-hbars/helpers"
 	"github.com/andriyg76/go-hbars/runtime"
+	"github.com/andriyg76/hexerr"
 )
 
 // rawGetter is implemented by typed context interfaces (e.g. MainContext).
@@ -40,15 +42,19 @@ func Lookup(args []any) (any, error) {
 func Default(args []any) (any, error) {
 	value := helpers.GetArg(args, 0)
 	defaultVal := helpers.GetArg(args, 1)
-	
+
 	hash, _ := runtime.HashArg(args)
 	if hash != nil {
 		if def, ok := hash["value"]; ok {
 			defaultVal = def
 		}
 	}
-	
-	if helpers.IsTruthy(value) {
+
+	ok, err := runtime.IsTruthy(value)
+	if err != nil {
+		return nil, err
+	}
+	if ok {
 		return value, nil
 	}
 	if defaultVal != nil {
@@ -76,7 +82,14 @@ func Length(args []any) (any, error) {
 	case map[any]any:
 		return len(v), nil
 	default:
-		// Try reflection for other types
+		// Reflect path: check ReflectUsageLevel
+		level := runtime.GetReflectUsageLevel()
+		if level == runtime.ReflectError {
+			return nil, hexerr.Newf("reflect usage disabled by ReflectUsageLevel=ERROR (Length for type %T)", arg)
+		}
+		if level == runtime.ReflectWarn {
+			log.Printf("[go-hbars] reflect used in Length for type %T", arg)
+		}
 		rv := reflect.ValueOf(arg)
 		switch rv.Kind() {
 		case reflect.Slice, reflect.Map, reflect.Array, reflect.String:

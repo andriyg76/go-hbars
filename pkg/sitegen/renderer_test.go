@@ -66,10 +66,7 @@ func TestLoadRendererFromPackage_FuncMap(t *testing.T) {
 			return nil
 		},
 	}
-	r, err := LoadRendererFromPackage(funcs)
-	if err != nil {
-		t.Fatalf("LoadRendererFromPackage: %v", err)
-	}
+	r := LoadRendererFromPackage(funcs)
 	if r == nil {
 		t.Fatal("expected non-nil renderer")
 	}

@@ -1,5 +1,7 @@
 package sitegen
 
+import "github.com/andriyg76/go-hbars/runtime"
+
 // Config holds configuration for site generation.
 type Config struct {
 	// RootPath is the base directory for resolving relative paths.
@@ -23,16 +25,20 @@ type Config struct {
 
 	// Addr is the address to listen on for server (default: ":8080").
 	Addr string
+
+	// ReflectUsageLevel controls reflect fallback: runtime.ReflectUse, runtime.ReflectWarn (default), or runtime.ReflectError.
+	ReflectUsageLevel runtime.ReflectUsageLevel
 }
 
 // DefaultConfig returns a default configuration.
 func DefaultConfig() *Config {
 	return &Config{
-		DataPath:      "data",
-		SharedPath:    "shared",
-		TemplatesPath: ".processor/templates",
-		OutputPath:    "pages",
-		Addr:          ":8080",
+		DataPath:          "data",
+		SharedPath:        "shared",
+		TemplatesPath:     ".processor/templates",
+		OutputPath:        "pages",
+		Addr:              ":8080",
+		ReflectUsageLevel: runtime.ReflectWarn,
 	}
 }
 

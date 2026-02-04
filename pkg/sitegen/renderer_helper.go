@@ -25,34 +25,23 @@ type RenderFunc func(io.Writer, any) error
 // NewRendererFromFunctions accepts map[string]func(io.Writer, any) error so that
 // generated bootstrap code (rendererFuncs) can be passed without type conversion.
 func NewRendererFromFunctions(funcs map[string]func(io.Writer, any) error) renderer.TemplateRenderer {
-	r, _ := processor.NewCompiledTemplateRenderer(funcs)
-	return r
+	return processor.NewCompiledTemplateRenderer(funcs)
 }
 
-// LoadRendererFromPackage attempts to load render functions from a package using reflection.
-// This works when the package has a struct with Render* methods or when you provide
-// a map of functions.
-//
-// For packages with standalone Render* functions, use NewRendererFromFunctions instead.
-func LoadRendererFromPackage(templatePackage any) (renderer.TemplateRenderer, error) {
-	r, err := processor.NewCompiledTemplateRenderer(templatePackage)
-	if err != nil {
-		return nil, hexerr.Wrap(err, "failed to create renderer")
-	}
-	return r, nil
+// LoadRendererFromPackage creates a renderer from a map of render functions.
+// For standalone Render* functions, use NewRendererFromFunctions instead.
+func LoadRendererFromPackage(funcs map[string]func(io.Writer, any) error) renderer.TemplateRenderer {
+	return processor.NewCompiledTemplateRenderer(funcs)
 }
 
-// AutoLoadRenderer attempts to automatically discover and load render functions.
-// It tries multiple strategies:
-// 1. If templatePackage is a map[string]RenderFunc, uses it directly
-// 2. If templatePackage is a struct with Render* methods, uses reflection
-// 3. Otherwise returns an error
+// AutoLoadRenderer creates a renderer from templatePackage.
+// templatePackage must be map[string]RenderFunc (or map[string]func(io.Writer, any) error).
+// Struct with Render* methods is no longer supported; use NewRendererFromFunctions with a map.
 func AutoLoadRenderer(templatePackage any) (renderer.TemplateRenderer, error) {
 	if templatePackage == nil {
 		return nil, hexerr.New("templatePackage cannot be nil")
 	}
 
-	// Check if it's already a map of functions (convert to unnamed type for NewRendererFromFunctions)
 	if funcMap, ok := templatePackage.(map[string]RenderFunc); ok {
 		m := make(map[string]func(io.Writer, any) error, len(funcMap))
 		for k, v := range funcMap {
@@ -61,6 +50,5 @@ func AutoLoadRenderer(templatePackage any) (renderer.TemplateRenderer, error) {
 		return NewRendererFromFunctions(m), nil
 	}
 
-	// Try reflection-based loading
-	return LoadRendererFromPackage(templatePackage)
+	return nil, hexerr.New("templatePackage must be map[string]RenderFunc (or map[string]func(io.Writer, any) error); struct with Render* methods is no longer supported")
 }

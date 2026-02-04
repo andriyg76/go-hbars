@@ -72,75 +72,32 @@ func TestGetNumberArg(t *testing.T) {
 	}
 }
 
-func TestIsTruthy(t *testing.T) {
-	if IsTruthy(nil) {
-		t.Error("IsTruthy(nil) want false")
-	}
-	if !IsTruthy(true) {
-		t.Error("IsTruthy(true) want true")
-	}
-	if IsTruthy(false) {
-		t.Error("IsTruthy(false) want false")
-	}
-	if !IsTruthy("x") {
-		t.Error("IsTruthy(\"x\") want true")
-	}
-	if IsTruthy("") {
-		t.Error("IsTruthy(\"\") want false")
-	}
-	if !IsTruthy([]any{1}) {
-		t.Error("IsTruthy([]any{1}) want true")
-	}
-	if IsTruthy([]any{}) {
-		t.Error("IsTruthy([]any{}) want false")
-	}
-	if !IsTruthy(map[string]any{"a": 1}) {
-		t.Error("IsTruthy(map) want true")
-	}
-	if IsTruthy(map[string]any{}) {
-		t.Error("IsTruthy(empty map) want false")
-	}
-	if !IsTruthy(1) {
-		t.Error("IsTruthy(1) want true")
-	}
-	if IsTruthy(0) {
-		t.Error("IsTruthy(0) want false")
-	}
-	if !IsTruthy(3.14) {
-		t.Error("IsTruthy(3.14) want true")
-	}
-	if IsTruthy(0.0) {
-		t.Error("IsTruthy(0.0) want false")
-	}
-}
-
 func TestIsEmpty(t *testing.T) {
-	if !IsEmpty(nil) {
-		t.Error("IsEmpty(nil) want true")
+	tests := []struct {
+		name string
+		v    any
+		want bool
+	}{
+		{"nil", nil, true},
+		{"empty string", "", true},
+		{"non-empty string", "x", false},
+		{"empty slice", []any{}, true},
+		{"non-empty slice", []any{1}, false},
+		{"empty map", map[string]any{}, true},
+		{"non-empty map", map[string]any{"a": 1}, false},
+		{"zero", 0, true},
+		{"non-zero", 1, false},
 	}
-	if !IsEmpty("") {
-		t.Error("IsEmpty(\"\") want true")
-	}
-	if IsEmpty("x") {
-		t.Error("IsEmpty(\"x\") want false")
-	}
-	if !IsEmpty([]any{}) {
-		t.Error("IsEmpty([]any{}) want true")
-	}
-	if IsEmpty([]any{1}) {
-		t.Error("IsEmpty([]any{1}) want false")
-	}
-	if !IsEmpty(map[string]any{}) {
-		t.Error("IsEmpty(empty map) want true")
-	}
-	if IsEmpty(map[string]any{"a": 1}) {
-		t.Error("IsEmpty(non-empty map) want false")
-	}
-	if !IsEmpty(0) {
-		t.Error("IsEmpty(0) want true")
-	}
-	if IsEmpty(1) {
-		t.Error("IsEmpty(1) want false")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := IsEmpty(tt.v)
+			if err != nil {
+				t.Fatalf("IsEmpty(%v): %v", tt.v, err)
+			}
+			if got != tt.want {
+				t.Errorf("IsEmpty(%v) = %v, want %v", tt.v, got, tt.want)
+			}
+		})
 	}
 }
 

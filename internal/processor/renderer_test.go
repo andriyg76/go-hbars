@@ -8,15 +8,12 @@ import (
 )
 
 func TestNewCompiledTemplateRenderer_Nil(t *testing.T) {
-	r, err := NewCompiledTemplateRenderer(nil)
-	if err != nil {
-		t.Fatalf("NewCompiledTemplateRenderer(nil): %v", err)
-	}
+	r := NewCompiledTemplateRenderer(nil)
 	if r == nil {
 		t.Fatal("expected non-nil renderer")
 	}
 	var buf bytes.Buffer
-	err = r.Render("main", &buf, nil)
+	err := r.Render("main", &buf, nil)
 	if err == nil {
 		t.Error("Render with no templates expected error")
 	}
@@ -39,10 +36,7 @@ func TestNewCompiledTemplateRenderer_FuncMap(t *testing.T) {
 			return nil
 		},
 	}
-	r, err := NewCompiledTemplateRenderer(funcs)
-	if err != nil {
-		t.Fatalf("NewCompiledTemplateRenderer(funcs): %v", err)
-	}
+	r := NewCompiledTemplateRenderer(funcs)
 
 	var buf bytes.Buffer
 	if err := r.Render("main", &buf, nil); err != nil {
@@ -65,7 +59,7 @@ func TestNewCompiledTemplateRenderer_FuncMap(t *testing.T) {
 }
 
 func TestCompiledTemplateRenderer_RegisterRenderFunc(t *testing.T) {
-	r, _ := NewCompiledTemplateRenderer(nil)
+	r := NewCompiledTemplateRenderer(nil)
 	r.RegisterRenderFunc("custom", func(w io.Writer, data any) error {
 		_, _ = w.Write([]byte("custom"))
 		return nil
@@ -83,7 +77,7 @@ func TestCompiledTemplateRenderer_FindTemplateName_Normalize(t *testing.T) {
 	funcs := map[string]func(io.Writer, any) error{
 		"main": func(w io.Writer, data any) error { return nil },
 	}
-	r, _ := NewCompiledTemplateRenderer(funcs)
+	r := NewCompiledTemplateRenderer(funcs)
 	var buf bytes.Buffer
 	// Leading/trailing slashes should be normalized
 	if err := r.Render("/main/", &buf, nil); err != nil {
@@ -95,7 +89,7 @@ func TestCompiledTemplateRenderer_UnknownTemplate(t *testing.T) {
 	funcs := map[string]func(io.Writer, any) error{
 		"main": func(w io.Writer, data any) error { return nil },
 	}
-	r, _ := NewCompiledTemplateRenderer(funcs)
+	r := NewCompiledTemplateRenderer(funcs)
 	var buf bytes.Buffer
 	err := r.Render("nonexistent", &buf, nil)
 	if err == nil {
