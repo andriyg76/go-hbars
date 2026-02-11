@@ -24,6 +24,7 @@ import (
 	"strings"
 
 	"github.com/andriyg76/glog"
+	"github.com/andriyg76/go-hbars/helpers"
 	"github.com/andriyg76/go-hbars/internal/compiler"
 	"github.com/andriyg76/hexerr"
 )
@@ -35,16 +36,17 @@ func main() {
 		inDir       = flag.String("in", "", "input directory or file (templates); required")
 		outPath     = flag.String("out", "", "output .go file path (default: stdout when max-phase=4)")
 		pkg         = flag.String("pkg", "templates", "Go package name for generated code")
-		maxPhase    = flag.Int("max-phase", 4, "maximum compilation phase (1=parse, 2=2a, 3=2b, 4=IR, 5=Go); compilation runs from 1 to max-phase")
+		maxPhase    = flag.Int("max-phase", 5, "maximum compilation phase (1=parse, 2=2a, 3=2b, 4=IR, 5=Go); compilation runs from 1 to max-phase")
 		phase1Out   = flag.String("phase1-output", "", "write phase 1 result (AST) to this JSON file")
 		phase2aOut  = flag.String("phase2a-output", "", "write phase 2a result (partial types) to this JSON file")
 		phase2bOut  = flag.String("phase2b-output", "", "write phase 2b result (type trees) to this JSON file")
 		phase3Out   = flag.String("phase3-output", "", "write phase 3 result (IR) to this JSON file")
 		verbose     = flag.Bool("verbose", false, "enable debug-level compiler log")
 		trace       = flag.Bool("trace", false, "enable trace-level compiler log")
-		bootstrap   = flag.Bool("bootstrap", false, "generate bootstrap (NewRenderer, NewQuickProcessor, NewQuickServer)")
-		genVersion  = flag.String("generator-version", "", "emit Generator version comment in output")
-		runtimeImp  = flag.String("runtime", "", "runtime import path (default: github.com/andriyg76/go-hbars/runtime)")
+		bootstrap        = flag.Bool("bootstrap", false, "generate bootstrap (NewRenderer, NewQuickProcessor, NewQuickServer)")
+		noCoreHelpers    = flag.Bool("no-core-helpers", false, "disable default core helpers (from helpers.Registry())")
+		genVersion       = flag.String("generator-version", "", "emit Generator version comment in output")
+		runtimeImp       = flag.String("runtime", "", "runtime import path (default: github.com/andriyg76/go-hbars/runtime)")
 	)
 	flag.Parse()
 
@@ -80,6 +82,13 @@ func main() {
 		GeneratorVersion:  *genVersion,
 		TemplateFiles:     templateFiles,
 		Log:               compilerLog,
+	}
+	if !*noCoreHelpers {
+		reg := helpers.Registry()
+		opts.Helpers = make(map[string]compiler.HelperRef, len(reg))
+		for name, ref := range reg {
+			opts.Helpers[name] = compiler.HelperRef{ImportPath: ref.ImportPath, Ident: ref.Ident}
+		}
 	}
 	opts.MaxPhase = compiler.MaxPhase(*maxPhase)
 	if opts.MaxPhase < 1 || opts.MaxPhase > 5 {
