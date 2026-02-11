@@ -1,33 +1,11 @@
 package compiler
 
 import (
-	"encoding/json"
-	"os"
 	"sort"
 	"strings"
 
 	"github.com/andriyg76/go-hbars/internal/ast"
 )
-
-// #region agent log
-func debugLog(hy string, loc string, msg string, data map[string]interface{}) {
-	if data == nil {
-		data = make(map[string]interface{})
-	}
-	data["hypothesisId"] = hy
-	data["location"] = loc
-	data["message"] = msg
-	f, err := os.OpenFile("/home/andrij/src/go-hbars/.cursor/debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		return
-	}
-	defer f.Close()
-	enc := json.NewEncoder(f)
-	enc.SetEscapeHTML(false)
-	_ = enc.Encode(data)
-}
-
-// #endregion
 
 // pathScope represents the current scope when walking the template AST.
 type pathScope struct {
@@ -553,39 +531,6 @@ func buildPartialTypeSet(parsed map[string][]ast.Node, names []string, funcNames
 			}
 		}
 	}
-	// #region agent log
-	if set := typeSet["menu"]; set != nil {
-		callers := make([]string, 0, len(set))
-		for c := range set {
-			callers = append(callers, c)
-		}
-		sort.Strings(callers)
-		debugLog("H1", "buildPartialTypeSet:after", "typeSet[menu] callers", map[string]interface{}{"count": len(set), "callers": callers})
-	}
-	if set := typeSet["default"]; set != nil {
-		callers := make([]string, 0, len(set))
-		for c := range set {
-			callers = append(callers, c)
-		}
-		sort.Strings(callers)
-		debugLog("H4", "buildPartialTypeSet:after", "typeSet[default] callers", map[string]interface{}{"count": len(set), "callers": callers})
-	}
-	if set := typeSet["news/informer"]; set != nil {
-		callers := make([]string, 0, len(set))
-		for c := range set {
-			callers = append(callers, c)
-		}
-		sort.Strings(callers)
-		debugLog("H5", "buildPartialTypeSet:after", "typeSet[news/informer] callers", map[string]interface{}{"count": len(set), "callers": callers})
-	}
-	// Log all typeSet keys to see partial names (e.g. news/informer vs news.informer).
-	allKeys := make([]string, 0, len(typeSet))
-	for k := range typeSet {
-		allKeys = append(allKeys, k)
-	}
-	sort.Strings(allKeys)
-	debugLog("H8", "buildPartialTypeSet:after", "typeSet all keys", map[string]interface{}{"keys": allKeys})
-	// #endregion
 	return typeSet
 }
 
@@ -615,22 +560,13 @@ func SharedPartialInfo(typeSet map[string]map[string]bool, names []string, funcN
 	primaryCaller = make(map[string]string)
 	for partialName, set := range typeSet {
 		if len(set) <= 1 {
-			// #region agent log
-			if partialName == "menu" {
-				debugLog("H2", "SharedPartialInfo:skip", "menu not shared len<=1", map[string]interface{}{"partialName": partialName, "setLen": len(set)})
-			}
-			// #endregion
 			continue
 		}
 		goName := funcNames[partialName]
 		if goName == "" {
-			debugLog("H6", "SharedPartialInfo:skip", "partial has no goName", map[string]interface{}{"partialName": partialName, "setLen": len(set)})
 			continue
 		}
 		canonicalType[partialName] = goName + "Context"
-		if partialName == "news/informer" {
-			debugLog("H7", "SharedPartialInfo:set", "canonicalType[news/informer]", map[string]interface{}{"canon": goName + "Context"})
-		}
 		var callers []string
 		for _, name := range names {
 			if funcNames[name]+"Context" == "" {
@@ -645,13 +581,6 @@ func SharedPartialInfo(typeSet map[string]map[string]bool, names []string, funcN
 			primaryCaller[partialName] = callers[0]
 		}
 	}
-	// Log all canonicalType entries to verify news/informer and others.
-	canonKeys := make([]string, 0, len(canonicalType))
-	for k := range canonicalType {
-		canonKeys = append(canonKeys, k)
-	}
-	sort.Strings(canonKeys)
-	debugLog("H9", "SharedPartialInfo:after", "canonicalType keys", map[string]interface{}{"keys": canonKeys})
 	return canonicalType, primaryCaller
 }
 
@@ -1104,11 +1033,6 @@ func emitInterfaceMethods(w *codeWriter, templateName, goIdent, pathPrefix strin
 			if canonicalType != nil {
 				canon = canonicalType[field]
 			}
-			// #region agent log
-			if field == "menu" && pathPrefix == "" {
-				debugLog("H3", "emitInterfaceMethods:menu", "choosing menu return type", map[string]interface{}{"templateName": templateName, "canon": canon, "goIdent": goIdent})
-			}
-			// #endregion
 			var ifaceName string
 			if canon != "" {
 				// Always use canonical type for shared partials (no primary-embedding types).
