@@ -1,0 +1,23 @@
+{
+  "partialParamTypes": {},
+  "typeSet": {
+    "layout": [
+      "DefaultContext",
+      "FirstpageContext",
+      "NewsContext"
+    ]
+  },
+  "canonicalType": {
+    "layout": "LayoutContext"
+  },
+  "primaryCaller": {
+    "layout": "default"
+  },
+  "funcNames": {
+    "default": "Default",
+    "firstpage": "Firstpage",
+    "layout": "Layout",
+    "menu": "Menu",
+    "news": "News"
+  }
+}
