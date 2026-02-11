@@ -51,6 +51,17 @@ type MenuContext interface {
    go run ./cmd/hbc -in examples/partials-inheritance/templates -out examples/partials-inheritance/gen/templates_gen.go -pkg templates
    ```
 
+   To also emit all compiler intermediate outputs (phase AST, type analysis, IR) in this directory:
+
+   ```bash
+   cd examples/partials-inheritance
+   go run github.com/andriyg76/go-hbars/cmd/hbc -in templates -out gen/templates_gen.go -pkg templates \
+     -max-phase 5 -phase1-output phase1_ast.json -phase2a-output phase2a.json \
+     -phase2b-output phase2b.json -phase3-output phase3_ir.json
+   ```
+
+   This produces: `gen/templates_gen.go`, `phase1_ast.json`, `phase2a.json`, `phase2b.json`, `phase3_ir.json`.
+
 2. Build pages (from this directory):
 
    ```bash

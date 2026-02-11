@@ -1,0 +1,76 @@
+{
+  "typeSet": {
+    "layout": [
+      "NewsContext",
+      "DefaultContext",
+      "FirstpageContext"
+    ]
+  },
+  "typeTrees": {
+    "default": {
+      "fields": {
+        "layout": {
+          "fields": {
+            "_shared": {
+              "fields": {
+                "menu": {}
+              }
+            }
+          }
+        },
+        "title": {}
+      }
+    },
+    "firstpage": {
+      "fields": {
+        "layout": {
+          "fields": {
+            "_shared": {
+              "fields": {
+                "menu": {}
+              }
+            }
+          }
+        },
+        "title": {}
+      }
+    },
+    "layout": {
+      "fields": {
+        "_shared": {
+          "fields": {
+            "menu": {}
+          }
+        }
+      }
+    },
+    "menu": {
+      "fields": {
+        "title": {}
+      }
+    },
+    "news": {
+      "fields": {
+        "layout": {
+          "fields": {
+            "_shared": {
+              "fields": {
+                "menu": {}
+              }
+            }
+          }
+        },
+        "title": {}
+      }
+    }
+  },
+  "emitOrder": [
+    "layout",
+    "default",
+    "firstpage",
+    "menu",
+    "news"
+  ],
+  "needFmt": false,
+  "useLayoutBlocks": false
+}

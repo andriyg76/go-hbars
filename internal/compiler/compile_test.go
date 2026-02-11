@@ -781,5 +781,24 @@ func TestCompileTemplates_GeneratedCodeCompiles(t *testing.T) {
 		}
 		mustBuildGeneratedCode(t, code, "templates")
 	})
+	t.Run("phased_compilation", func(t *testing.T) {
+		// Full pipeline via phases (MaxPhase=Phase4) must produce the same compilable output.
+		tmpls := map[string]string{
+			"main":   `Hello {{name}}{{> footer}}`,
+			"footer": `<footer>{{name}}</footer>`,
+		}
+		opts := Options{PackageName: "templates", MaxPhase: Phase4}
+		code, err := CompileTemplates(tmpls, opts)
+		if err != nil {
+			t.Fatalf("phased compile: %v", err)
+		}
+		if len(code) == 0 {
+			t.Fatalf("phased compile produced no output")
+		}
+		if !strings.Contains(string(code), "func RenderMain(") {
+			t.Fatalf("phased output missing RenderMain")
+		}
+		mustBuildGeneratedCode(t, code, "templates")
+	})
 }
 

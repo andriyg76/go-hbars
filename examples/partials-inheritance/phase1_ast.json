@@ -1,0 +1,115 @@
+{
+  "templates": {
+    "default": [
+      {
+        "kind": "Text",
+        "value": "Page: "
+      },
+      {
+        "kind": "Mustache",
+        "expr": "title"
+      },
+      {
+        "kind": "Text",
+        "value": "\n"
+      },
+      {
+        "kind": "Partial",
+        "expr": "layout"
+      },
+      {
+        "kind": "Text",
+        "value": "\n"
+      }
+    ],
+    "firstpage": [
+      {
+        "kind": "Text",
+        "value": "First: "
+      },
+      {
+        "kind": "Mustache",
+        "expr": "title"
+      },
+      {
+        "kind": "Text",
+        "value": "\n"
+      },
+      {
+        "kind": "Partial",
+        "expr": "layout"
+      },
+      {
+        "kind": "Text",
+        "value": "\n"
+      }
+    ],
+    "layout": [
+      {
+        "kind": "Partial",
+        "expr": "menu _shared.menu"
+      },
+      {
+        "kind": "Text",
+        "value": "\n"
+      }
+    ],
+    "menu": [
+      {
+        "kind": "Text",
+        "value": "\u003cnav\u003e"
+      },
+      {
+        "kind": "Mustache",
+        "expr": "title"
+      },
+      {
+        "kind": "Text",
+        "value": "\u003c/nav\u003e\n"
+      }
+    ],
+    "news": [
+      {
+        "kind": "Text",
+        "value": "News: "
+      },
+      {
+        "kind": "Mustache",
+        "expr": "title"
+      },
+      {
+        "kind": "Text",
+        "value": "\n"
+      },
+      {
+        "kind": "Partial",
+        "expr": "layout"
+      },
+      {
+        "kind": "Text",
+        "value": "\n"
+      }
+    ]
+  },
+  "names": [
+    "default",
+    "firstpage",
+    "layout",
+    "menu",
+    "news"
+  ],
+  "funcNames": {
+    "default": "Default",
+    "firstpage": "Firstpage",
+    "layout": "Layout",
+    "menu": "Menu",
+    "news": "News"
+  },
+  "templateFiles": {
+    "default": "templates/default.hbs",
+    "firstpage": "templates/firstpage.hbs",
+    "layout": "templates/layout.hbs",
+    "menu": "templates/menu.hbs",
+    "news": "templates/news.hbs"
+  }
+}

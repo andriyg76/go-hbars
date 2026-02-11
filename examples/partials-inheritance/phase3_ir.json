@@ -1,0 +1,80 @@
+{
+  "packageName": "templates",
+  "runtimeImport": "github.com/andriyg76/go-hbars/runtime",
+  "emitOrder": [
+    "layout",
+    "default",
+    "firstpage",
+    "menu",
+    "news"
+  ],
+  "contextIfaces": null,
+  "contextData": null,
+  "partials": [
+    {
+      "Name": "default",
+      "GoName": "Default",
+      "CtxType": "DefaultContext",
+      "FromMapFn": "DefaultContextFromMap"
+    },
+    {
+      "Name": "firstpage",
+      "GoName": "Firstpage",
+      "CtxType": "FirstpageContext",
+      "FromMapFn": "FirstpageContextFromMap"
+    },
+    {
+      "Name": "layout",
+      "GoName": "Layout",
+      "CtxType": "LayoutContext",
+      "FromMapFn": "LayoutContextFromMap"
+    },
+    {
+      "Name": "menu",
+      "GoName": "Menu",
+      "CtxType": "MenuContext",
+      "FromMapFn": "MenuContextFromMap"
+    },
+    {
+      "Name": "news",
+      "GoName": "News",
+      "CtxType": "NewsContext",
+      "FromMapFn": "NewsContextFromMap"
+    }
+  ],
+  "renderFuncs": [
+    {
+      "Template": "default",
+      "GoName": "Default",
+      "RootContext": "DefaultContext",
+      "UseLayoutBlocks": false
+    },
+    {
+      "Template": "firstpage",
+      "GoName": "Firstpage",
+      "RootContext": "FirstpageContext",
+      "UseLayoutBlocks": false
+    },
+    {
+      "Template": "layout",
+      "GoName": "Layout",
+      "RootContext": "LayoutContext",
+      "UseLayoutBlocks": false
+    },
+    {
+      "Template": "menu",
+      "GoName": "Menu",
+      "RootContext": "MenuContext",
+      "UseLayoutBlocks": false
+    },
+    {
+      "Template": "news",
+      "GoName": "News",
+      "RootContext": "NewsContext",
+      "UseLayoutBlocks": false
+    }
+  ],
+  "useLayoutBlocks": false,
+  "generateBootstrap": false,
+  "helperImports": []
+}
