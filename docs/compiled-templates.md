@@ -133,14 +133,17 @@ The partial's fields are not merged into the caller's type tree — each partial
 
 ## hbc command-line flags
 
+Core helpers (from `helpers.Registry()`) are **enabled by default**, so templates can use `upper`, `lower`, `formatDate`, `lookup`, etc. without extra flags. Use `-no-core-helpers` to disable them.
+
 | Flag | Description |
 |------|-------------|
 | `-in` | Input template file or directory (required). |
 | `-out` | Output Go file path (default: `templates_gen.go`). |
 | `-pkg` | Package name for generated code (default: derived from output path). |
 | `-bootstrap` | Generate `NewQuickServer()` and `NewQuickProcessor()` for quick server/processor setup. |
+| `-max-phase` | Maximum compilation phase: 1–4 intermediate, 5=Go code (default: 5). |
 | `-ext` | Comma-separated template extensions (default: `.hbs,.handlebars`). |
-| `-runtime-import` | Override runtime package import path. |
+| `-runtime` | Override runtime package import path. |
 | `-no-core-helpers` | Disable default core helpers (from `helpers.Registry()`). |
 | `-helper` | Helper mapping: `name=Ident` or `name=import/path:Ident`. |
 | `-import` | Import path for helpers: `path` or `path:alias`. |

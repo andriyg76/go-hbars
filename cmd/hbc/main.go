@@ -4,11 +4,11 @@
 //
 //	hbc -in <dir|file> -out <file.go> -pkg <package>
 //
-// Phased compilation (observe intermediate results):
+// Phased compilation (observe intermediate results; default -max-phase=5 emits Go):
 //
 //	hbc -in templates -max-phase 1 -phase1-output phase1_ast.json
 //	hbc -in templates -max-phase 2 -phase2a-output phase2a.json -phase2b-output phase2b.json
-//	hbc -in templates -max-phase 4 -output gen/templates_gen.go
+//	hbc -in . -out ./templates_gen.go -pkg templates
 //
 // Logging:
 //
@@ -34,7 +34,7 @@ func main() {
 
 	var (
 		inDir       = flag.String("in", "", "input directory or file (templates); required")
-		outPath     = flag.String("out", "", "output .go file path (default: stdout when max-phase=4)")
+		outPath     = flag.String("out", "", "output .go file path (default: stdout when no path given)")
 		pkg         = flag.String("pkg", "templates", "Go package name for generated code")
 		maxPhase    = flag.Int("max-phase", 5, "maximum compilation phase (1=parse, 2=2a, 3=2b, 4=IR, 5=Go); compilation runs from 1 to max-phase")
 		phase1Out   = flag.String("phase1-output", "", "write phase 1 result (AST) to this JSON file")
