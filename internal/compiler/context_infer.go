@@ -264,7 +264,7 @@ func (c *pathCollector) collectMustache(n *ast.Mustache) error {
 }
 
 func (c *pathCollector) collectPartial(n *ast.Partial) error {
-	parts, hash, err := parseParts(n.Expr)
+	parts, hash, err := partialToParts(n)
 	if err != nil {
 		return nil
 	}
@@ -423,7 +423,7 @@ func (c *pathCollector) walkPartialsCollect(nodes []ast.Node, goName string, add
 func (c *pathCollector) walkPartialsCollectNode(node ast.Node, goName string, add func(partialName, paramType string, sameScope bool)) error {
 	switch n := node.(type) {
 	case *ast.Partial:
-		parts, _, err := parseParts(n.Expr)
+		parts, _, err := partialToParts(n)
 		if err != nil || len(parts) == 0 {
 			return nil
 		}

@@ -23,7 +23,7 @@ func TestParseMixed(t *testing.T) {
 	assertMustache(t, nodes[3], "raw", true)
 	assertText(t, nodes[4], " ")
 	assertMustache(t, nodes[5], "title", true)
-	assertPartial(t, nodes[6], "\"head\" user")
+	assertPartial(t, nodes[6], "\"head\"", []ast.PartialParam{{Path: "user"}})
 	assertText(t, nodes[7], ".")
 }
 
@@ -181,14 +181,30 @@ func assertMustache(t *testing.T, node ast.Node, expr string, raw bool) {
 	}
 }
 
-func assertPartial(t *testing.T, node ast.Node, expr string) {
+func assertPartial(t *testing.T, node ast.Node, nameOrExpr string, params []ast.PartialParam) {
 	t.Helper()
 	p, ok := node.(*ast.Partial)
 	if !ok {
 		t.Fatalf("expected Partial node, got %T", node)
 	}
-	if p.Expr != expr {
-		t.Fatalf("Partial = %q", p.Expr)
+	if p.NameOrExpr != nameOrExpr {
+		t.Fatalf("Partial.NameOrExpr = %q, want %q", p.NameOrExpr, nameOrExpr)
+	}
+	if len(p.Params) != len(params) {
+		t.Fatalf("Partial has %d params, want %d", len(p.Params), len(params))
+	}
+	for i := range params {
+		if p.Params[i].Path != params[i].Path {
+			t.Fatalf("Partial.Params[%d].Path = %q, want %q", i, p.Params[i].Path, params[i].Path)
+		}
+		if len(p.Params[i].Hash) != len(params[i].Hash) {
+			t.Fatalf("Partial.Params[%d].Hash len = %d, want %d", i, len(p.Params[i].Hash), len(params[i].Hash))
+		}
+		for k, v := range params[i].Hash {
+			if p.Params[i].Hash[k] != v {
+				t.Fatalf("Partial.Params[%d].Hash[%q] = %q, want %q", i, k, p.Params[i].Hash[k], v)
+			}
+		}
 	}
 }
 

@@ -34,9 +34,9 @@ func TestMustache_Node(t *testing.T) {
 }
 
 func TestPartial_Node(t *testing.T) {
-	n := &Partial{Expr: "header"}
-	if n.Expr != "header" {
-		t.Errorf("Partial.Expr = %q, want header", n.Expr)
+	n := &Partial{NameOrExpr: "header", Params: nil}
+	if n.NameOrExpr != "header" {
+		t.Errorf("Partial.NameOrExpr = %q, want header", n.NameOrExpr)
 	}
 	_ = Node(n)
 }

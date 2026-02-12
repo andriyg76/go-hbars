@@ -6,17 +6,25 @@ import (
 	"github.com/andriyg76/go-hbars/internal/ast"
 )
 
+// PartialParamDTO is the JSON shape for ast.PartialParam (path ref or hash).
+type PartialParamDTO struct {
+	Path string            `json:"path,omitempty"`
+	Hash map[string]string  `json:"hash,omitempty"`
+}
+
 // ASTNodeDTO is a JSON-serializable representation of ast.Node.
 type ASTNodeDTO struct {
-	Kind   string       `json:"kind"`
-	Value  string       `json:"value,omitempty"`
-	Expr   string       `json:"expr,omitempty"`
-	Raw    bool         `json:"raw,omitempty"`
-	Name   string       `json:"name,omitempty"`
-	Args   string       `json:"args,omitempty"`
-	Params []string     `json:"params,omitempty"`
-	Body   []ASTNodeDTO `json:"body,omitempty"`
-	Else   []ASTNodeDTO `json:"else,omitempty"`
+	Kind         string           `json:"kind"`
+	Value        string           `json:"value,omitempty"`
+	Expr         string           `json:"expr,omitempty"`
+	NameOrExpr   string           `json:"nameOrExpr,omitempty"`
+	PartialParams []PartialParamDTO `json:"params,omitempty"`
+	Raw          bool             `json:"raw,omitempty"`
+	Name         string           `json:"name,omitempty"`
+	Args         string           `json:"args,omitempty"`
+	Params       []string         `json:"params,omitempty"`
+	Body         []ASTNodeDTO     `json:"body,omitempty"`
+	Else         []ASTNodeDTO     `json:"else,omitempty"`
 }
 
 func astNodesToDTO(nodes []ast.Node) []ASTNodeDTO {
@@ -34,7 +42,14 @@ func astNodeToDTO(n ast.Node) ASTNodeDTO {
 	case *ast.Mustache:
 		return ASTNodeDTO{Kind: "Mustache", Expr: node.Expr, Raw: node.Raw}
 	case *ast.Partial:
-		return ASTNodeDTO{Kind: "Partial", Expr: node.Expr}
+		dto := ASTNodeDTO{Kind: "Partial", NameOrExpr: node.NameOrExpr}
+		if len(node.Params) > 0 {
+			dto.PartialParams = make([]PartialParamDTO, len(node.Params))
+			for i, p := range node.Params {
+				dto.PartialParams[i] = PartialParamDTO{Path: p.Path, Hash: p.Hash}
+			}
+		}
+		return dto
 	case *ast.Block:
 		return ASTNodeDTO{
 			Kind:   "Block",
@@ -68,7 +83,14 @@ func astDTOToNode(d ASTNodeDTO) (ast.Node, error) {
 	case "Mustache":
 		return &ast.Mustache{Expr: d.Expr, Raw: d.Raw}, nil
 	case "Partial":
-		return &ast.Partial{Expr: d.Expr}, nil
+		p := &ast.Partial{NameOrExpr: d.NameOrExpr}
+		if len(d.PartialParams) > 0 {
+			p.Params = make([]ast.PartialParam, len(d.PartialParams))
+			for i, q := range d.PartialParams {
+				p.Params[i] = ast.PartialParam{Path: q.Path, Hash: q.Hash}
+			}
+		}
+		return p, nil
 	case "Block":
 		body, err := astDTOToNodes(d.Body)
 		if err != nil {

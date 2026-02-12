@@ -20,9 +20,19 @@ type Mustache struct {
 
 func (*Mustache) node() {}
 
+// PartialParam is one parameter to a partial: either a context path reference or hash key=value.
+// Exactly one of Path or Hash is set. Params are merged in order into the partial's context map.
+type PartialParam struct {
+	Path string            // context reference (e.g. "_shared.menu", "user"); empty if Hash is set
+	Hash map[string]string  // key=value pairs (value is expression string); nil if Path is set
+}
+
 // Partial is a partial invocation.
+// NameOrExpr is the partial name or a subexpression (e.g. "(lookup . \"cardPartial\")") that evaluates at runtime.
+// Params is the ordered list of context refs and/or hash; merged into a single context map for the partial.
 type Partial struct {
-	Expr string
+	NameOrExpr string         // partial name or evaluable subexpression
+	Params     []PartialParam // ordered: path refs and hash, merged into context
 }
 
 func (*Partial) node() {}

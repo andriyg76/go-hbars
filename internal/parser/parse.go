@@ -207,7 +207,11 @@ func parseUntilStop(input string, start int, endBlock string) ([]ast.Node, int, 
 			if rest == "" {
 				return nil, 0, stopNone, parserErr(input, open, "parser: empty partial name")
 			}
-			nodes = append(nodes, &ast.Partial{Expr: rest})
+			nameOrExpr, params, err := parsePartialContent(rest)
+			if err != nil {
+				return nil, 0, stopNone, parserErrWrap(input, open, err)
+			}
+			nodes = append(nodes, &ast.Partial{NameOrExpr: nameOrExpr, Params: params})
 			continue
 		}
 		nodes = append(nodes, &ast.Mustache{Expr: content, Raw: raw})
@@ -548,4 +552,112 @@ func stopLabel(stop stopKind, endBlock string) string {
 	default:
 		return "delimiter"
 	}
+}
+
+// tokenizePartialContent splits partial content into tokens, respecting quotes and parentheses.
+func tokenizePartialContent(input string) ([]string, error) {
+	input = strings.TrimSpace(input)
+	var tokens []string
+	for i := 0; i < len(input); {
+		for i < len(input) && isSpace(input[i]) {
+			i++
+		}
+		if i >= len(input) {
+			break
+		}
+		switch input[i] {
+		case '(':
+			depth := 1
+			start := i
+			i++
+			for i < len(input) && depth > 0 {
+				switch input[i] {
+				case '\\':
+					if i+1 < len(input) {
+						i += 2
+						continue
+					}
+				case '"', '\'':
+					quote := input[i]
+					i++
+					for i < len(input) {
+						if input[i] == '\\' && i+1 < len(input) {
+							i += 2
+							continue
+						}
+						if input[i] == quote {
+							i++
+							break
+						}
+						i++
+					}
+					continue
+				case '(':
+					depth++
+				case ')':
+					depth--
+				}
+				i++
+			}
+			if depth != 0 {
+				return nil, hexerr.New("unclosed ( in partial expression")
+			}
+			tokens = append(tokens, input[start:i])
+		case '"', '\'':
+			quote := input[i]
+			start := i
+			i++
+			for i < len(input) {
+				if input[i] == '\\' && i+1 < len(input) {
+					i += 2
+					continue
+				}
+				if input[i] == quote {
+					i++
+					break
+				}
+				i++
+			}
+			tokens = append(tokens, input[start:i])
+		default:
+			start := i
+			for i < len(input) && !isSpace(input[i]) && input[i] != '=' {
+				if input[i] == '"' || input[i] == '\'' || input[i] == '(' {
+					break
+				}
+				i++
+			}
+			tokens = append(tokens, input[start:i])
+		}
+	}
+	return tokens, nil
+}
+
+// parsePartialContent parses "nameOrExpr param1 param2 key=val ..." into name and ordered params.
+// NameOrExpr is the first token (word or parenthesized expression).
+// Params are an ordered list: each item is either a path reference (e.g. this, _shared.menu) or one key=value (hash).
+// All params are merged in order into a single context map for the partial.
+func parsePartialContent(rest string) (nameOrExpr string, params []ast.PartialParam, err error) {
+	tokens, err := tokenizePartialContent(rest)
+	if err != nil {
+		return "", nil, err
+	}
+	if len(tokens) == 0 {
+		return "", nil, hexerr.New("parser: empty partial expression")
+	}
+	nameOrExpr = tokens[0]
+	for _, tok := range tokens[1:] {
+		eq := strings.Index(tok, "=")
+		if eq > 0 && !strings.ContainsAny(tok[:eq], "'\"") {
+			key := strings.TrimSpace(tok[:eq])
+			val := strings.TrimSpace(tok[eq+1:])
+			if key == "" {
+				return "", nil, hexerr.New("parser: empty hash key in partial")
+			}
+			params = append(params, ast.PartialParam{Hash: map[string]string{key: val}})
+			continue
+		}
+		params = append(params, ast.PartialParam{Path: tok})
+	}
+	return nameOrExpr, params, nil
 }

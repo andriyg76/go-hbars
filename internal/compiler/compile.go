@@ -770,7 +770,7 @@ func collectUsedHelperNames(parsed map[string][]ast.Node, helperExprs map[string
 				walk(n.Body)
 				walk(n.Else)
 			case *ast.Partial:
-				parts, _, err := parseParts(n.Expr)
+				parts, _, err := partialToParts(n)
 				if err == nil {
 					collectExpr(parts)
 				}
@@ -781,6 +781,45 @@ func collectUsedHelperNames(parsed map[string][]ast.Node, helperExprs map[string
 		walk(nodes)
 	}
 	return used
+}
+
+// partialToParts converts ast.Partial (NameOrExpr + Params) to compiler parts and hash for emitPartial/context_infer.
+func partialToParts(n *ast.Partial) ([]expr, []hashArg, error) {
+	parts, nameHash, err := parseParts(n.NameOrExpr)
+	if err != nil {
+		return nil, nil, err
+	}
+	if len(parts) != 1 {
+		return nil, nil, hexerr.New("partial name must be a single expression")
+	}
+	nameExpr := parts[0]
+	allParts := []expr{nameExpr}
+	allHash := make([]hashArg, 0, len(nameHash))
+	allHash = append(allHash, nameHash...)
+	for _, p := range n.Params {
+		if p.Path != "" {
+			pathParts, _, err := parseParts(p.Path)
+			if err != nil {
+				return nil, nil, err
+			}
+			if len(pathParts) != 1 {
+				return nil, nil, hexerr.New("partial path param must be single expression")
+			}
+			allParts = append(allParts, pathParts[0])
+		} else if len(p.Hash) > 0 {
+			for k, vStr := range p.Hash {
+				vParts, vH, err := parseParts(vStr)
+				if err != nil {
+					return nil, nil, err
+				}
+				if len(vParts) != 1 || len(vH) != 0 {
+					return nil, nil, hexerr.New("partial hash value must be single expression")
+				}
+				allHash = append(allHash, hashArg{key: k, value: vParts[0]})
+			}
+		}
+	}
+	return allParts, allHash, nil
 }
 
 // filterHelperImports keeps only imports for helpers that are actually used in the templates.
@@ -972,7 +1011,7 @@ func (g *generator) emitMustache(n *ast.Mustache) error {
 }
 
 func (g *generator) emitPartial(n *ast.Partial) error {
-	parts, hash, err := parseParts(n.Expr)
+	parts, hash, err := partialToParts(n)
 	if err != nil {
 		return err
 	}
@@ -980,7 +1019,7 @@ func (g *generator) emitPartial(n *ast.Partial) error {
 		return hexerr.New("partial invocation is empty")
 	}
 	if len(parts) > 2 {
-		return hexerr.New("partial: context must be a single expression")
+		return hexerr.New("partial: at most one context path param supported")
 	}
 	nameExpr := parts[0]
 	scope, _ := g.currentTypedScope()
