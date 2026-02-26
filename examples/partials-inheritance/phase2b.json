@@ -1,9 +1,9 @@
 {
   "typeSet": {
     "layout": [
-      "NewsContext",
       "DefaultContext",
-      "FirstpageContext"
+      "FirstpageContext",
+      "NewsContext"
     ]
   },
   "typeTrees": {

@@ -2,9 +2,9 @@
   "partialParamTypes": {},
   "typeSet": {
     "layout": [
-      "DefaultContext",
       "FirstpageContext",
-      "NewsContext"
+      "NewsContext",
+      "DefaultContext"
     ]
   },
   "canonicalType": {
