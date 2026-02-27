@@ -1,0 +1,147 @@
+(*
+   BNF Grammar for go-hbars template syntax
+   See docs/syntax.md and docs/extensions.md for semantics.
+*)
+
+<template>           ::= <node>*
+
+<node>               ::= <text>
+                      | <mustache>
+                      | <block>
+                      | <partial>
+                      | <raw-block>
+                      | <comment>
+
+(* Plain text: any character sequence not containing "{{" *)
+<text>               ::= (* arbitrary characters except "{{" *)
+
+(* --------------------------------------------------------------------------- *)
+(* Mustache (expression in double or triple braces)                             *)
+(* --------------------------------------------------------------------------- *)
+
+<mustache>           ::= <mustache-escaped>     (* {{ ... }}  HTML-escaped *)
+                      | <mustache-raw>         (* {{{ ... }}} or {{& ... }} *)
+
+<mustache-escaped>   ::= "{{" <trim-left> <mustache-content> <trim-right> "}}"
+<mustache-raw>       ::= "{{{" <trim-left> <mustache-content> <trim-right> "}}}"
+                      | "{{" <trim-left> "&" <mustache-content> <trim-right> "}}"
+
+<trim-left>          ::= "" | "~"
+<trim-right>         ::= "" | "~"
+
+<mustache-content>   ::= <expression>         (* path, helper, subexpr, etc. *)
+                      (* "else" and "/" name only valid in block context *)
+
+(* --------------------------------------------------------------------------- *)
+(* Block: {{# name args [ as | params | ] }} body {{else}} inverse {{/ name }} *)
+(* --------------------------------------------------------------------------- *)
+
+<block>              ::= "{{" <trim-left> "#" <block-start> <trim-right> "}}"
+                        <block-body>
+                        [ "{{" "else" "}}" <else-body> ]
+                        "{{" "/" <block-name> "}}"
+
+<block-start>        ::= <block-name> [ <block-args> ] [ " " "as" " " "|" <block-params> "|" ]
+<block-args>         ::= (* single main expr + optional hash; see ParseBlockHeader in ast/expr.go *)
+<block-params>       ::= <identifier> ( " " <identifier> )*
+<block-name>         ::= <identifier>
+<block-body>         ::= <node>*
+<else-body>          ::= <node>*   (* may contain {{else if expr}} / {{elseif expr}} as nested {{#if}} *)
+
+(* {{else if expr}} and {{elseif expr}} = nested {{#if expr}} ... {{/if}} inside else *)
+
+(* --------------------------------------------------------------------------- *)
+(* Partial: {{> partial-expr }}                                                *)
+(* --------------------------------------------------------------------------- *)
+
+<partial>            ::= "{{" <trim-left> ">" <partial-expr> <trim-right> "}}"
+<partial-expr>       ::= <expression> [ <space> <expression> ] [ <space> <hash-args> ]
+                         (* name [ctx] [hash]; see ParsePartialArgs in ast/expr.go. Name: PathRef or StringLit *)
+
+(* Note: {{#> }} (block partials) are NOT supported *)
+
+(* --------------------------------------------------------------------------- *)
+(* Raw block: inner {{ }} are not parsed                                       *)
+(* --------------------------------------------------------------------------- *)
+
+<raw-block>          ::= "{{{{" <trim-left> <raw-name> "}}}}"
+                        <raw-body>
+                        "{{{{" "/" <raw-name> [ "~" ] "}}}}"
+<raw-name>           ::= <identifier>
+<raw-body>           ::= (* any characters except "{{{{/"; {{ not parsed *)
+
+(* --------------------------------------------------------------------------- *)
+(* Comment: removed from output                                                *)
+(* --------------------------------------------------------------------------- *)
+
+<comment>            ::= "{{!" <comment-inline> "}}"
+                      | "{{!--" <comment-block> "--}}"
+                      | "{{~!--" <comment-block> "--}}"   (* trim left before *)
+
+<comment-inline>     ::= (* any characters except "}}" *)
+<comment-block>      ::= (* any characters except "--}}" *)
+
+(* --------------------------------------------------------------------------- *)
+(* Expression (inside mustache, block args, partial, hash values)              *)
+(* Grammar: internal/ast/expr.go (ParseExpr, tokenizeExpr, parseParts);        *)
+(* AST types: internal/ast/nodes.go (PathRef, StringLit, HelperCall, etc.)     *)
+(* --------------------------------------------------------------------------- *)
+
+<expression>         ::= <parts> [ <hash-args> ]
+<parts>              ::= <expr> ( <space> <expr> )*
+<hash-args>          ::= <space> <hash-arg> ( <space> <hash-arg> )*
+<hash-arg>           ::= <identifier> "=" <expr>
+
+<expr>               ::= <path>
+                      | <string>
+                      | <number>
+                      | <boolean>
+                      | <null>
+                      | <subexpr>
+
+<path>               ::= <path-segment> ( "." <path-segment> )*
+<path-segment>       ::= <identifier>
+                      | ".."           (* parent context *)
+                      | "."            (* current context *)
+                      | "this"         (* current context *)
+                      | "@" "root"     (* root context *)
+                      | "@" "root" "." <path-segment> ( "." <path-segment> )*
+                      | "@" "index"    (* in each: 0-based index *)
+                      | "@" "key"      (* in each over map: key *)
+                      | "@" "first"    (* in each: first item *)
+                      | "@" "last"     (* in each: last item *)
+
+<identifier>         ::= (* word: letters, digits, underscore; not starting with digit *)
+
+<string>             ::= '"' <string-char>* '"'
+                      | "'" <string-char>* "'"
+<string-char>        ::= (* any char except quote and \ *)
+                      | "\\" ( "\\" | '"' | "'" )
+
+<number>             ::= (* decimal integer or float *)
+
+<boolean>            ::= "true" | "false"
+
+<null>               ::= "null" | "nil"
+
+<subexpr>            ::= "(" <expr> ")"
+                      | "(" <helper-call> ")"   (* ( helper args hash ) *)
+<helper-call>        ::= <identifier> ( <space> <expr> )* [ <space> <hash-args> ]
+
+<space>              ::= ( " " | "\t" | "\n" | "\r" )+
+
+(* --------------------------------------------------------------------------- *)
+(* Built-in block names (semantics in docs/syntax.md)                           *)
+(* --------------------------------------------------------------------------- *)
+(* if, unless, with, each — built-in block helpers                             *)
+(* Any other name: custom block helper or universal section (with-like)        *)
+(* includeZero=true is a custom extension for {{#if}} / {{#unless}}           *)
+
+(* --------------------------------------------------------------------------- *)
+(* Lexical notes                                                                *)
+(* --------------------------------------------------------------------------- *)
+(* - Delimiters are longest-match: {{{ before {{, {{{{ before {{{, {{!-- before {{ *)
+(* - After "{{", trim-left "~" trims whitespace to the left of the mustache   *)
+(* - Before "}}", "~" in content trims whitespace to the right                 *)
+(* - Empty mustache content after trim is ignored                              *)
+(* - Comments: "{{!" starts inline comment; "{{!--" starts block comment       *)
