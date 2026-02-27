@@ -1435,15 +1435,28 @@ func (g *generator) emitCustomBlockHelper(n *ast.Block) error {
 		g.w.line("}")
 	}
 
-	inverseVar := ""
-	if inverseFnVar != "nil" {
-		inverseVar = inverseFnVar
-	}
-	helperArgsVar, err := g.emitHelperArgs(parts, hash, true, bodyFnVar, inverseVar, g.currentWriter())
+	argExprs, err := g.buildPositionalArgExpressions(parts)
 	if err != nil {
 		return err
 	}
-	g.w.line("if err := %s(%s); err != nil {", helperExpr, helperArgsVar)
+	hashEntries, err := g.buildHashEntries(hash)
+	if err != nil {
+		return err
+	}
+	writerVar := g.currentWriter()
+	blockFnVar := g.nextTemp("blockFn")
+	g.w.line("%s := func() error { return %s(%s) }", blockFnVar, bodyFnVar, writerVar)
+	inverseFnExpr := "nil"
+	if inverseFnVar != "nil" {
+		inverseFnVal := g.nextTemp("inverseFn")
+		g.w.line("%s := func() error { return %s(%s) }", inverseFnVal, inverseFnVar, writerVar)
+		inverseFnExpr = inverseFnVal
+	}
+	g.w.line("if err := %s(runtime.HelperArgs{", helperExpr)
+	g.w.indentInc()
+	g.writeHelperArgsStructBody(argExprs, hashEntries, true, blockFnVar, inverseFnExpr)
+	g.w.indentDec()
+	g.w.line("}); err != nil {")
 	g.w.indentInc()
 	g.w.line("return err")
 	g.w.indentDec()
@@ -1528,12 +1541,20 @@ func (g *generator) emitHelperOutput(helperExpr string, args []expr, hash []hash
 }
 
 func (g *generator) emitHelperValue(helperExpr string, args []expr, hash []hashArg) (string, error) {
-	helperArgsVar, err := g.emitHelperArgs(args, hash, false, "", "", "")
+	argExprs, err := g.buildPositionalArgExpressions(args)
+	if err != nil {
+		return "", err
+	}
+	hashEntries, err := g.buildHashEntries(hash)
 	if err != nil {
 		return "", err
 	}
 	resultVar := g.nextTemp("result")
-	g.w.line("%s, err := %s(%s)", resultVar, helperExpr, helperArgsVar)
+	g.w.line("%s, err := %s(runtime.HelperArgs{", resultVar, helperExpr)
+	g.w.indentInc()
+	g.writeHelperArgsStructBody(argExprs, hashEntries, false, "", "")
+	g.w.indentDec()
+	g.w.line("})")
 	g.w.line("if err != nil {")
 	g.w.indentInc()
 	g.w.line("return err")
@@ -1542,82 +1563,31 @@ func (g *generator) emitHelperValue(helperExpr string, args []expr, hash []hashA
 	return resultVar, nil
 }
 
-// emitHelperArgs builds a runtime.HelperArgs value and returns the variable name.
-// For block helpers, bodyFnVar and inverseFnVar are the names of func(w io.Writer) error; writerVar is the current output writer (e.g. "w").
-// For simple helpers pass empty strings for bodyFnVar, inverseFnVar and "" for writerVar.
-func (g *generator) emitHelperArgs(args []expr, hash []hashArg, isBlock bool, bodyFnVar, inverseFnVar, writerVar string) (string, error) {
-	posVar, err := g.emitPositionalArgs(args)
-	if err != nil {
-		return "", err
-	}
-	hashVar, err := g.emitHashMap(hash)
-	if err != nil {
-		return "", err
-	}
-	helperArgsVar := g.nextTemp("helperArgs")
-
-	blockFnExpr := "nil"
-	if isBlock && bodyFnVar != "" && writerVar != "" {
-		blockFnVar := g.nextTemp("blockFn")
-		g.w.line("%s := func() error { return %s(%s) }", blockFnVar, bodyFnVar, writerVar)
-		blockFnExpr = blockFnVar
-	}
-
-	inverseFnExpr := "nil"
-	if isBlock && inverseFnVar != "" && writerVar != "" {
-		inverseFnVal := g.nextTemp("inverseFn")
-		g.w.line("%s := func() error { return %s(%s) }", inverseFnVal, inverseFnVar, writerVar)
-		inverseFnExpr = inverseFnVal
-	}
-
-	g.w.line("%s := runtime.HelperArgs{", helperArgsVar)
-	g.w.indentInc()
-	g.w.line("HashArgs: %s,", hashVar)
-	g.w.line("Args: %s,", posVar)
-	g.w.line("BlockFn: %s,", blockFnExpr)
-	g.w.line("InverseFn: %s,", inverseFnExpr)
-	g.w.line("IsBlock: %v,", isBlock)
-	g.w.indentDec()
-	g.w.line("}")
-	return helperArgsVar, nil
-}
-
-// emitPositionalArgs builds a []any of positional argument values only (no hash).
-func (g *generator) emitPositionalArgs(args []expr) (string, error) {
+// buildPositionalArgExpressions resolves positional args to Go expression strings (emitting nested helper calls) and returns them. Does not emit an args variable.
+func (g *generator) buildPositionalArgExpressions(args []expr) ([]string, error) {
 	argExprs := make([]string, len(args))
 	for i, arg := range args {
 		var exprValue string
 		if arg.kind == exprCall {
 			helperExpr, ok := g.helpers[arg.name]
 			if !ok {
-				return "", hexerr.New(fmt.Sprintf("helper %q is not defined", arg.name))
+				return nil, hexerr.New(fmt.Sprintf("helper %q is not defined", arg.name))
 			}
 			var err error
 			exprValue, err = g.emitHelperValue(helperExpr, arg.args, arg.hash)
 			if err != nil {
-				return "", err
+				return nil, err
 			}
 		} else {
 			var err error
 			exprValue, err = g.emitExprValue(arg)
 			if err != nil {
-				return "", err
+				return nil, err
 			}
 		}
 		argExprs[i] = exprValue
 	}
-	if len(argExprs) == 0 {
-		return "nil", nil
-	}
-	argsVar := g.nextTemp("args")
-	g.w.line("%s := []any{", argsVar)
-	g.w.indentInc()
-	for _, arg := range argExprs {
-		g.w.line("%s,", arg)
-	}
-	g.w.indentDec()
-	g.w.line("}")
-	return argsVar, nil
+	return argExprs, nil
 }
 
 type hashEntry struct {
@@ -1625,27 +1595,49 @@ type hashEntry struct {
 	value string
 }
 
-func (g *generator) emitHashMap(hash []hashArg) (string, error) {
+// buildHashEntries resolves hash argument values to key/value expression strings. Does not emit a hash variable.
+func (g *generator) buildHashEntries(hash []hashArg) ([]hashEntry, error) {
 	if len(hash) == 0 {
-		return "nil", nil
+		return nil, nil
 	}
 	entries := make([]hashEntry, 0, len(hash))
 	for _, h := range hash {
 		valueExpr, err := g.emitExprValue(h.value)
 		if err != nil {
-			return "", err
+			return nil, err
 		}
 		entries = append(entries, hashEntry{key: h.key, value: valueExpr})
 	}
-	hashVar := g.nextTemp("hash")
-	g.w.line("%s := runtime.Hash{", hashVar)
-	g.w.indentInc()
-	for _, entry := range entries {
-		g.w.line("%s: %s,", strconv.Quote(entry.key), entry.value)
+	return entries, nil
+}
+
+// writeHelperArgsStructBody writes the body of a runtime.HelperArgs literal (no variable). Omits zero-value fields.
+func (g *generator) writeHelperArgsStructBody(argExprs []string, hashEntries []hashEntry, isBlock bool, blockFnExpr, inverseFnExpr string) {
+	if len(argExprs) == 0 {
+		g.w.line("Args: nil,")
+	} else {
+		g.w.line("Args: []any{")
+		g.w.indentInc()
+		for _, e := range argExprs {
+			g.w.line("%s,", e)
+		}
+		g.w.indentDec()
+		g.w.line("},")
 	}
-	g.w.indentDec()
-	g.w.line("}")
-	return hashVar, nil
+	if len(hashEntries) > 0 {
+		g.w.line("HashArgs: runtime.Hash{")
+		g.w.indentInc()
+		for _, entry := range hashEntries {
+			g.w.line("%s: %s,", strconv.Quote(entry.key), entry.value)
+		}
+		g.w.indentDec()
+		g.w.line("},")
+	}
+	if isBlock {
+		g.w.line("BlockFn: %s,", blockFnExpr)
+		g.w.line("InverseFn: %s,", inverseFnExpr)
+		g.w.line("IsBlock: true,")
+	}
 }
 
 // emitPartialContextMap emits a clean map[string]any with only the hash keys/values (for partial context).

@@ -58,19 +58,6 @@ type MainUserProfileContext interface {
 	Raw() any
 }
 
-// MainHeaderContext is the context for path "header".
-type MainHeaderContext interface {
-	Site() MainHeaderSiteContext
-	Raw() any
-}
-
-// MainHeaderSiteContext is the context for path "header.site".
-type MainHeaderSiteContext interface {
-	Title() any
-	Url() any
-	Raw() any
-}
-
 // MainFooterContext is the context for path "footer".
 type MainFooterContext interface {
 	Stats() MainFooterStatsContext
@@ -82,6 +69,19 @@ type MainFooterContext interface {
 type MainFooterStatsContext interface {
 	Avg() any
 	Total() any
+	Raw() any
+}
+
+// MainHeaderContext is the context for path "header".
+type MainHeaderContext interface {
+	Site() MainHeaderSiteContext
+	Raw() any
+}
+
+// MainHeaderSiteContext is the context for path "header.site".
+type MainHeaderSiteContext interface {
+	Title() any
+	Url() any
 	Raw() any
 }
 
@@ -449,64 +449,46 @@ func renderFooter(data MainContext, w io.Writer, root MainContext) error {
 	if _, err := io.WriteString(w, "<footer>\n  Total: "); err != nil {
 		return err
 	}
-	args1 := []any{
-		nil,
-	}
-	helperArgs2 := runtime.HelperArgs{
-		HashArgs:  nil,
-		Args:      args1,
-		BlockFn:   nil,
-		InverseFn: nil,
-		IsBlock:   false,
-	}
-	result3, err := handlebars.FormatNumber(helperArgs2)
+	result1, err := handlebars.FormatNumber(runtime.HelperArgs{
+		Args: []any{
+			nil,
+		},
+	})
 	if err != nil {
 		return err
 	}
-	if err := runtime.WriteEscaped(w, result3); err != nil {
+	if err := runtime.WriteEscaped(w, result1); err != nil {
 		return err
 	}
 	if _, err := io.WriteString(w, " (avg "); err != nil {
 		return err
 	}
-	args4 := []any{
-		nil,
-	}
-	hash5 := runtime.Hash{
-		"precision": int64(2),
-	}
-	helperArgs6 := runtime.HelperArgs{
-		HashArgs:  hash5,
-		Args:      args4,
-		BlockFn:   nil,
-		InverseFn: nil,
-		IsBlock:   false,
-	}
-	result7, err := handlebars.FormatNumber(helperArgs6)
+	result2, err := handlebars.FormatNumber(runtime.HelperArgs{
+		Args: []any{
+			nil,
+		},
+		HashArgs: runtime.Hash{
+			"precision": int64(2),
+		},
+	})
 	if err != nil {
 		return err
 	}
-	if err := runtime.WriteEscaped(w, result7); err != nil {
+	if err := runtime.WriteEscaped(w, result2); err != nil {
 		return err
 	}
 	if _, err := io.WriteString(w, ")\n  Users: "); err != nil {
 		return err
 	}
-	args8 := []any{
-		nil,
-	}
-	helperArgs9 := runtime.HelperArgs{
-		HashArgs:  nil,
-		Args:      args8,
-		BlockFn:   nil,
-		InverseFn: nil,
-		IsBlock:   false,
-	}
-	result10, err := handlebars.Length(helperArgs9)
+	result3, err := handlebars.Length(runtime.HelperArgs{
+		Args: []any{
+			nil,
+		},
+	})
 	if err != nil {
 		return err
 	}
-	if err := runtime.WriteEscaped(w, result10); err != nil {
+	if err := runtime.WriteEscaped(w, result3); err != nil {
 		return err
 	}
 	if _, err := io.WriteString(w, "\n</footer>\n\n\n\n"); err != nil {
@@ -547,21 +529,16 @@ func renderHeader(data MainContext, w io.Writer, root MainContext) error {
 	if _, err := io.WriteString(w, "</p>\n  <p>Generated: "); err != nil {
 		return err
 	}
-	hash1 := runtime.Hash{
-		"format": "2006-01-02T15:04:05Z07:00",
-	}
-	helperArgs2 := runtime.HelperArgs{
-		HashArgs:  hash1,
-		Args:      nil,
-		BlockFn:   nil,
-		InverseFn: nil,
-		IsBlock:   false,
-	}
-	result3, err := handlebars.Now(helperArgs2)
+	result1, err := handlebars.Now(runtime.HelperArgs{
+		Args: nil,
+		HashArgs: runtime.Hash{
+			"format": "2006-01-02T15:04:05Z07:00",
+		},
+	})
 	if err != nil {
 		return err
 	}
-	if err := runtime.WriteEscaped(w, result3); err != nil {
+	if err := runtime.WriteEscaped(w, result1); err != nil {
 		return err
 	}
 	if _, err := io.WriteString(w, "</p>\n</header>\n\n\n\n"); err != nil {
@@ -593,328 +570,232 @@ func renderMain(data MainContext, w io.Writer, root MainContext) error {
 	if _, err := io.WriteString(w, "\n\nSite: "); err != nil {
 		return err
 	}
-	args1 := []any{
-		data.Site().Title(),
-	}
-	helperArgs2 := runtime.HelperArgs{
-		HashArgs:  nil,
-		Args:      args1,
-		BlockFn:   nil,
-		InverseFn: nil,
-		IsBlock:   false,
-	}
-	result3, err := handlebars.Upper(helperArgs2)
+	result1, err := handlebars.Upper(runtime.HelperArgs{
+		Args: []any{
+			data.Site().Title(),
+		},
+	})
 	if err != nil {
 		return err
 	}
-	args4 := []any{
-		result3,
-		" ",
-		"-",
-	}
-	helperArgs5 := runtime.HelperArgs{
-		HashArgs:  nil,
-		Args:      args4,
-		BlockFn:   nil,
-		InverseFn: nil,
-		IsBlock:   false,
-	}
-	result6, err := handlebars.Replace(helperArgs5)
+	result2, err := handlebars.Replace(runtime.HelperArgs{
+		Args: []any{
+			result1,
+			" ",
+			"-",
+		},
+	})
 	if err != nil {
 		return err
 	}
-	if err := runtime.WriteEscaped(w, result6); err != nil {
+	if err := runtime.WriteEscaped(w, result2); err != nil {
 		return err
 	}
 	if _, err := io.WriteString(w, "\nURL: "); err != nil {
 		return err
 	}
-	args7 := []any{
-		data.Site().Url(),
+	result3, err := handlebars.StripProtocol(runtime.HelperArgs{
+		Args: []any{
+			data.Site().Url(),
+		},
+	})
+	if err != nil {
+		return err
 	}
-	helperArgs8 := runtime.HelperArgs{
-		HashArgs:  nil,
-		Args:      args7,
-		BlockFn:   nil,
-		InverseFn: nil,
-		IsBlock:   false,
+	if err := runtime.WriteEscaped(w, result3); err != nil {
+		return err
 	}
-	result9, err := handlebars.StripProtocol(helperArgs8)
+	if _, err := io.WriteString(w, " (clean: "); err != nil {
+		return err
+	}
+	result4, err := handlebars.StripQuerystring(runtime.HelperArgs{
+		Args: []any{
+			data.Site().Url(),
+		},
+	})
+	if err != nil {
+		return err
+	}
+	if err := runtime.WriteEscaped(w, result4); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, ")\nFlags ("); err != nil {
+		return err
+	}
+	result5, err := handlebars.Size(runtime.HelperArgs{
+		Args: []any{
+			data.Settings().FeatureFlags(),
+		},
+	})
+	if err != nil {
+		return err
+	}
+	if err := runtime.WriteEscaped(w, result5); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, "): "); err != nil {
+		return err
+	}
+	result6, err := handlebars.Keys(runtime.HelperArgs{
+		Args: []any{
+			data.Settings().FeatureFlags(),
+		},
+	})
+	if err != nil {
+		return err
+	}
+	result7, err := handlebars.Join(runtime.HelperArgs{
+		Args: []any{
+			result6,
+		},
+		HashArgs: runtime.Hash{
+			"separator": ", ",
+		},
+	})
+	if err != nil {
+		return err
+	}
+	if err := runtime.WriteEscaped(w, result7); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, "\nFlag values: "); err != nil {
+		return err
+	}
+	result8, err := handlebars.Values(runtime.HelperArgs{
+		Args: []any{
+			data.Settings().FeatureFlags(),
+		},
+	})
+	if err != nil {
+		return err
+	}
+	result9, err := handlebars.Join(runtime.HelperArgs{
+		Args: []any{
+			result8,
+		},
+		HashArgs: runtime.Hash{
+			"separator": ", ",
+		},
+	})
 	if err != nil {
 		return err
 	}
 	if err := runtime.WriteEscaped(w, result9); err != nil {
 		return err
 	}
-	if _, err := io.WriteString(w, " (clean: "); err != nil {
-		return err
-	}
-	args10 := []any{
-		data.Site().Url(),
-	}
-	helperArgs11 := runtime.HelperArgs{
-		HashArgs:  nil,
-		Args:      args10,
-		BlockFn:   nil,
-		InverseFn: nil,
-		IsBlock:   false,
-	}
-	result12, err := handlebars.StripQuerystring(helperArgs11)
-	if err != nil {
-		return err
-	}
-	if err := runtime.WriteEscaped(w, result12); err != nil {
-		return err
-	}
-	if _, err := io.WriteString(w, ")\nFlags ("); err != nil {
-		return err
-	}
-	args13 := []any{
-		data.Settings().FeatureFlags(),
-	}
-	helperArgs14 := runtime.HelperArgs{
-		HashArgs:  nil,
-		Args:      args13,
-		BlockFn:   nil,
-		InverseFn: nil,
-		IsBlock:   false,
-	}
-	result15, err := handlebars.Size(helperArgs14)
-	if err != nil {
-		return err
-	}
-	if err := runtime.WriteEscaped(w, result15); err != nil {
-		return err
-	}
-	if _, err := io.WriteString(w, "): "); err != nil {
-		return err
-	}
-	args16 := []any{
-		data.Settings().FeatureFlags(),
-	}
-	helperArgs17 := runtime.HelperArgs{
-		HashArgs:  nil,
-		Args:      args16,
-		BlockFn:   nil,
-		InverseFn: nil,
-		IsBlock:   false,
-	}
-	result18, err := handlebars.Keys(helperArgs17)
-	if err != nil {
-		return err
-	}
-	args19 := []any{
-		result18,
-	}
-	hash20 := runtime.Hash{
-		"separator": ", ",
-	}
-	helperArgs21 := runtime.HelperArgs{
-		HashArgs:  hash20,
-		Args:      args19,
-		BlockFn:   nil,
-		InverseFn: nil,
-		IsBlock:   false,
-	}
-	result22, err := handlebars.Join(helperArgs21)
-	if err != nil {
-		return err
-	}
-	if err := runtime.WriteEscaped(w, result22); err != nil {
-		return err
-	}
-	if _, err := io.WriteString(w, "\nFlag values: "); err != nil {
-		return err
-	}
-	args23 := []any{
-		data.Settings().FeatureFlags(),
-	}
-	helperArgs24 := runtime.HelperArgs{
-		HashArgs:  nil,
-		Args:      args23,
-		BlockFn:   nil,
-		InverseFn: nil,
-		IsBlock:   false,
-	}
-	result25, err := handlebars.Values(helperArgs24)
-	if err != nil {
-		return err
-	}
-	args26 := []any{
-		result25,
-	}
-	hash27 := runtime.Hash{
-		"separator": ", ",
-	}
-	helperArgs28 := runtime.HelperArgs{
-		HashArgs:  hash27,
-		Args:      args26,
-		BlockFn:   nil,
-		InverseFn: nil,
-		IsBlock:   false,
-	}
-	result29, err := handlebars.Join(helperArgs28)
-	if err != nil {
-		return err
-	}
-	if err := runtime.WriteEscaped(w, result29); err != nil {
-		return err
-	}
 	if _, err := io.WriteString(w, "\n\n"); err != nil {
 		return err
 	}
-	ctx30 := data.User()
-	cond31, err32 := runtime.IsTruthy(ctx30)
-	if err32 != nil {
-		return err32
+	ctx10 := data.User()
+	cond11, err12 := runtime.IsTruthy(ctx10)
+	if err12 != nil {
+		return err12
 	}
-	if cond31 {
+	if cond11 {
 		if _, err := io.WriteString(w, "\nName: "); err != nil {
 			return err
 		}
-		args33 := []any{
-			ctx30.Name(),
-		}
-		helperArgs34 := runtime.HelperArgs{
-			HashArgs:  nil,
-			Args:      args33,
-			BlockFn:   nil,
-			InverseFn: nil,
-			IsBlock:   false,
-		}
-		result35, err := handlebars.Capitalize(helperArgs34)
+		result13, err := handlebars.Capitalize(runtime.HelperArgs{
+			Args: []any{
+				ctx10.Name(),
+			},
+		})
 		if err != nil {
 			return err
 		}
-		if err := runtime.WriteEscaped(w, result35); err != nil {
+		if err := runtime.WriteEscaped(w, result13); err != nil {
 			return err
 		}
 		if _, err := io.WriteString(w, "\nEmail: "); err != nil {
 			return err
 		}
-		args36 := []any{
-			ctx30.Email(),
-		}
-		helperArgs37 := runtime.HelperArgs{
-			HashArgs:  nil,
-			Args:      args36,
-			BlockFn:   nil,
-			InverseFn: nil,
-			IsBlock:   false,
-		}
-		result38, err := handlebars.Lower(helperArgs37)
+		result14, err := handlebars.Lower(runtime.HelperArgs{
+			Args: []any{
+				ctx10.Email(),
+			},
+		})
 		if err != nil {
 			return err
 		}
-		if err := runtime.WriteEscaped(w, result38); err != nil {
+		if err := runtime.WriteEscaped(w, result14); err != nil {
 			return err
 		}
 		if _, err := io.WriteString(w, "\nRole: "); err != nil {
 			return err
 		}
-		args39 := []any{
-			ctx30.Role(),
-		}
-		helperArgs40 := runtime.HelperArgs{
-			HashArgs:  nil,
-			Args:      args39,
-			BlockFn:   nil,
-			InverseFn: nil,
-			IsBlock:   false,
-		}
-		result41, err := handlebars.Upper(helperArgs40)
+		result15, err := handlebars.Upper(runtime.HelperArgs{
+			Args: []any{
+				ctx10.Role(),
+			},
+		})
 		if err != nil {
 			return err
 		}
-		if err := runtime.WriteEscaped(w, result41); err != nil {
+		if err := runtime.WriteEscaped(w, result15); err != nil {
 			return err
 		}
 		if _, err := io.WriteString(w, "\nJoined: "); err != nil {
 			return err
 		}
-		args42 := []any{
-			ctx30.Joined(),
-		}
-		hash43 := runtime.Hash{
-			"format": "2006-01-02",
-		}
-		helperArgs44 := runtime.HelperArgs{
-			HashArgs:  hash43,
-			Args:      args42,
-			BlockFn:   nil,
-			InverseFn: nil,
-			IsBlock:   false,
-		}
-		result45, err := handlebars.FormatDate(helperArgs44)
+		result16, err := handlebars.FormatDate(runtime.HelperArgs{
+			Args: []any{
+				ctx10.Joined(),
+			},
+			HashArgs: runtime.Hash{
+				"format": "2006-01-02",
+			},
+		})
 		if err != nil {
 			return err
 		}
-		if err := runtime.WriteEscaped(w, result45); err != nil {
+		if err := runtime.WriteEscaped(w, result16); err != nil {
 			return err
 		}
 		if _, err := io.WriteString(w, "\nBio: "); err != nil {
 			return err
 		}
-		args46 := []any{
-			ctx30.Bio(),
-		}
-		hash47 := runtime.Hash{
-			"length": int64(60),
-			"suffix": "...",
-		}
-		helperArgs48 := runtime.HelperArgs{
-			HashArgs:  hash47,
-			Args:      args46,
-			BlockFn:   nil,
-			InverseFn: nil,
-			IsBlock:   false,
-		}
-		result49, err := handlebars.Truncate(helperArgs48)
+		result17, err := handlebars.Truncate(runtime.HelperArgs{
+			Args: []any{
+				ctx10.Bio(),
+			},
+			HashArgs: runtime.Hash{
+				"length": int64(60),
+				"suffix": "...",
+			},
+		})
 		if err != nil {
 			return err
 		}
-		if err := runtime.WriteRaw(w, result49); err != nil {
+		if err := runtime.WriteRaw(w, result17); err != nil {
 			return err
 		}
 		if _, err := io.WriteString(w, "\nStatus: "); err != nil {
 			return err
 		}
-		args50 := []any{
-			nil,
-			int64(80),
-		}
-		helperArgs51 := runtime.HelperArgs{
-			HashArgs:  nil,
-			Args:      args50,
-			BlockFn:   nil,
-			InverseFn: nil,
-			IsBlock:   false,
-		}
-		result52, err := handlebars.Gt(helperArgs51)
+		result18, err := handlebars.Gt(runtime.HelperArgs{
+			Args: []any{
+				nil,
+				int64(80),
+			},
+		})
 		if err != nil {
 			return err
 		}
-		args53 := []any{
-			nil,
-			result52,
-		}
-		helperArgs54 := runtime.HelperArgs{
-			HashArgs:  nil,
-			Args:      args53,
-			BlockFn:   nil,
-			InverseFn: nil,
-			IsBlock:   false,
-		}
-		result55, err := handlebars.And(helperArgs54)
+		result19, err := handlebars.And(runtime.HelperArgs{
+			Args: []any{
+				nil,
+				result18,
+			},
+		})
 		if err != nil {
 			return err
 		}
-		val56 := result55
-		cond57, err58 := runtime.IsTruthy(val56)
-		if err58 != nil {
-			return err58
+		val20 := result19
+		cond21, err22 := runtime.IsTruthy(val20)
+		if err22 != nil {
+			return err22
 		}
-		if cond57 {
+		if cond21 {
 			if _, err := io.WriteString(w, "VIP"); err != nil {
 				return err
 			}
@@ -926,104 +807,74 @@ func renderMain(data MainContext, w io.Writer, root MainContext) error {
 		if _, err := io.WriteString(w, "\nTags: "); err != nil {
 			return err
 		}
-		args59 := []any{
-			ctx30.Tags(),
-		}
-		hash60 := runtime.Hash{
-			"separator": ", ",
-		}
-		helperArgs61 := runtime.HelperArgs{
-			HashArgs:  hash60,
-			Args:      args59,
-			BlockFn:   nil,
-			InverseFn: nil,
-			IsBlock:   false,
-		}
-		result62, err := handlebars.Join(helperArgs61)
+		result23, err := handlebars.Join(runtime.HelperArgs{
+			Args: []any{
+				ctx10.Tags(),
+			},
+			HashArgs: runtime.Hash{
+				"separator": ", ",
+			},
+		})
 		if err != nil {
 			return err
 		}
-		if err := runtime.WriteEscaped(w, result62); err != nil {
+		if err := runtime.WriteEscaped(w, result23); err != nil {
 			return err
 		}
 		if _, err := io.WriteString(w, "\nProfile: "); err != nil {
 			return err
 		}
-		args63 := []any{
-			ctx30.Profile().Title(),
-			"n/a",
-		}
-		helperArgs64 := runtime.HelperArgs{
-			HashArgs:  nil,
-			Args:      args63,
-			BlockFn:   nil,
-			InverseFn: nil,
-			IsBlock:   false,
-		}
-		result65, err := handlebars.Default(helperArgs64)
+		result24, err := handlebars.Default(runtime.HelperArgs{
+			Args: []any{
+				ctx10.Profile().Title(),
+				"n/a",
+			},
+		})
 		if err != nil {
 			return err
 		}
-		if err := runtime.WriteEscaped(w, result65); err != nil {
+		if err := runtime.WriteEscaped(w, result24); err != nil {
 			return err
 		}
 		if _, err := io.WriteString(w, " / "); err != nil {
 			return err
 		}
-		args66 := []any{
-			ctx30.Profile().Note(),
-			"n/a",
-		}
-		helperArgs67 := runtime.HelperArgs{
-			HashArgs:  nil,
-			Args:      args66,
-			BlockFn:   nil,
-			InverseFn: nil,
-			IsBlock:   false,
-		}
-		result68, err := handlebars.Default(helperArgs67)
+		result25, err := handlebars.Default(runtime.HelperArgs{
+			Args: []any{
+				ctx10.Profile().Note(),
+				"n/a",
+			},
+		})
 		if err != nil {
 			return err
 		}
-		if err := runtime.WriteEscaped(w, result68); err != nil {
+		if err := runtime.WriteEscaped(w, result25); err != nil {
 			return err
 		}
 		if _, err := io.WriteString(w, "\nEmail parts: "); err != nil {
 			return err
 		}
-		args69 := []any{
-			ctx30.Email(),
-			"@",
-		}
-		helperArgs70 := runtime.HelperArgs{
-			HashArgs:  nil,
-			Args:      args69,
-			BlockFn:   nil,
-			InverseFn: nil,
-			IsBlock:   false,
-		}
-		result71, err := handlebars.Split(helperArgs70)
+		result26, err := handlebars.Split(runtime.HelperArgs{
+			Args: []any{
+				ctx10.Email(),
+				"@",
+			},
+		})
 		if err != nil {
 			return err
 		}
-		args72 := []any{
-			result71,
-		}
-		hash73 := runtime.Hash{
-			"separator": "@",
-		}
-		helperArgs74 := runtime.HelperArgs{
-			HashArgs:  hash73,
-			Args:      args72,
-			BlockFn:   nil,
-			InverseFn: nil,
-			IsBlock:   false,
-		}
-		result75, err := handlebars.Join(helperArgs74)
+		result27, err := handlebars.Join(runtime.HelperArgs{
+			Args: []any{
+				result26,
+			},
+			HashArgs: runtime.Hash{
+				"separator": "@",
+			},
+		})
 		if err != nil {
 			return err
 		}
-		if err := runtime.WriteEscaped(w, result75); err != nil {
+		if err := runtime.WriteEscaped(w, result27); err != nil {
 			return err
 		}
 		if _, err := io.WriteString(w, "\n"); err != nil {
@@ -1033,22 +884,22 @@ func renderMain(data MainContext, w io.Writer, root MainContext) error {
 	if _, err := io.WriteString(w, "\n\nOrders:\n"); err != nil {
 		return err
 	}
-	items78 := data.Orders()
-	sl79, _eachSliceOk := items78.([]any)
-	if _eachSliceOk && len(sl79) > 0 {
-		for key77, item76 := range sl79 {
-			_, _ = key77, item76
+	items30 := data.Orders()
+	sl31, _eachSliceOk := items30.([]any)
+	if _eachSliceOk && len(sl31) > 0 {
+		for key29, item28 := range sl31 {
+			_, _ = key29, item28
 			if _, err := io.WriteString(w, "\n"); err != nil {
 				return err
 			}
-			partialBase81 := item76
-			if err := partials["orderRow"](partialBase81, w, partialBase81); err != nil {
+			partialBase33 := item28
+			if err := partials["orderRow"](partialBase33, w, partialBase33); err != nil {
 				return err
 			}
 			if _, err := io.WriteString(w, "\nOrder index "); err != nil {
 				return err
 			}
-			if err := runtime.WriteEscaped(w, key77); err != nil {
+			if err := runtime.WriteEscaped(w, key29); err != nil {
 				return err
 			}
 			if _, err := io.WriteString(w, " first="); err != nil {
@@ -1079,20 +930,20 @@ func renderMain(data MainContext, w io.Writer, root MainContext) error {
 				return err
 			}
 		}
-	} else if m80, _eachMapOk := items78.(map[string]any); _eachMapOk && len(m80) > 0 {
-		for key77, item76 := range m80 {
-			_, _ = key77, item76
+	} else if m32, _eachMapOk := items30.(map[string]any); _eachMapOk && len(m32) > 0 {
+		for key29, item28 := range m32 {
+			_, _ = key29, item28
 			if _, err := io.WriteString(w, "\n"); err != nil {
 				return err
 			}
-			partialBase82 := item76
-			if err := partials["orderRow"](partialBase82, w, partialBase82); err != nil {
+			partialBase34 := item28
+			if err := partials["orderRow"](partialBase34, w, partialBase34); err != nil {
 				return err
 			}
 			if _, err := io.WriteString(w, "\nOrder index "); err != nil {
 				return err
 			}
-			if err := runtime.WriteEscaped(w, key77); err != nil {
+			if err := runtime.WriteEscaped(w, key29); err != nil {
 				return err
 			}
 			if _, err := io.WriteString(w, " first="); err != nil {
@@ -1127,47 +978,35 @@ func renderMain(data MainContext, w io.Writer, root MainContext) error {
 	if _, err := io.WriteString(w, "\n\nRaw HTML stripped: "); err != nil {
 		return err
 	}
-	args83 := []any{
-		data.RawHtml(),
-	}
-	helperArgs84 := runtime.HelperArgs{
-		HashArgs:  nil,
-		Args:      args83,
-		BlockFn:   nil,
-		InverseFn: nil,
-		IsBlock:   false,
-	}
-	result85, err := handlebars.StripTags(helperArgs84)
+	result35, err := handlebars.StripTags(runtime.HelperArgs{
+		Args: []any{
+			data.RawHtml(),
+		},
+	})
 	if err != nil {
 		return err
 	}
-	if err := runtime.WriteEscaped(w, result85); err != nil {
+	if err := runtime.WriteEscaped(w, result35); err != nil {
 		return err
 	}
 	if _, err := io.WriteString(w, "\n\nDynamic card:\n"); err != nil {
 		return err
 	}
-	partialBase86 := data.User()
-	args87 := []any{
-		data,
-		"cardPartial",
-	}
-	helperArgs88 := runtime.HelperArgs{
-		HashArgs:  nil,
-		Args:      args87,
-		BlockFn:   nil,
-		InverseFn: nil,
-		IsBlock:   false,
-	}
-	result89, err := handlebars.Lookup(helperArgs88)
+	partialBase36 := data.User()
+	result37, err := handlebars.Lookup(runtime.HelperArgs{
+		Args: []any{
+			data,
+			"cardPartial",
+		},
+	})
 	if err != nil {
 		return err
 	}
-	partial90 := runtime.Stringify(result89)
-	partialFn, ok := partials[partial90]
+	partial38 := runtime.Stringify(result37)
+	partialFn, ok := partials[partial38]
 	if !ok {
-		runtime.MissingPartialOutput(w, partial90)
-	} else if err := partialFn(partialBase86, w, partialBase86); err != nil {
+		runtime.MissingPartialOutput(w, partial38)
+	} else if err := partialFn(partialBase36, w, partialBase36); err != nil {
 		return err
 	}
 	if _, err := io.WriteString(w, "\n\n"); err != nil {
@@ -1208,175 +1047,121 @@ func renderOrderRow(data OrderRowContext, w io.Writer, root OrderRowContext) err
 	if _, err := io.WriteString(w, "</span>\n  <span>Items: "); err != nil {
 		return err
 	}
-	args1 := []any{
-		data.Items(),
+	result1, err := handlebars.Length(runtime.HelperArgs{
+		Args: []any{
+			data.Items(),
+		},
+	})
+	if err != nil {
+		return err
 	}
-	helperArgs2 := runtime.HelperArgs{
-		HashArgs:  nil,
-		Args:      args1,
-		BlockFn:   nil,
-		InverseFn: nil,
-		IsBlock:   false,
+	if err := runtime.WriteEscaped(w, result1); err != nil {
+		return err
 	}
-	result3, err := handlebars.Length(helperArgs2)
+	if _, err := io.WriteString(w, "</span>\n  <span>Subtotal: "); err != nil {
+		return err
+	}
+	result2, err := handlebars.FormatNumber(runtime.HelperArgs{
+		Args: []any{
+			data.Subtotal(),
+		},
+		HashArgs: runtime.Hash{
+			"precision": int64(2),
+		},
+	})
+	if err != nil {
+		return err
+	}
+	if err := runtime.WriteEscaped(w, result2); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, "</span>\n  <span>Tax: "); err != nil {
+		return err
+	}
+	result3, err := handlebars.FormatNumber(runtime.HelperArgs{
+		Args: []any{
+			data.Tax(),
+		},
+		HashArgs: runtime.Hash{
+			"precision": int64(2),
+		},
+	})
 	if err != nil {
 		return err
 	}
 	if err := runtime.WriteEscaped(w, result3); err != nil {
 		return err
 	}
-	if _, err := io.WriteString(w, "</span>\n  <span>Subtotal: "); err != nil {
+	if _, err := io.WriteString(w, "</span>\n  <span>Total: "); err != nil {
 		return err
 	}
-	args4 := []any{
-		data.Subtotal(),
+	result4, err := handlebars.Add(runtime.HelperArgs{
+		Args: []any{
+			data.Subtotal(),
+			data.Tax(),
+		},
+	})
+	if err != nil {
+		return err
 	}
-	hash5 := runtime.Hash{
-		"precision": int64(2),
+	result5, err := handlebars.FormatNumber(runtime.HelperArgs{
+		Args: []any{
+			result4,
+		},
+		HashArgs: runtime.Hash{
+			"precision": int64(2),
+		},
+	})
+	if err != nil {
+		return err
 	}
-	helperArgs6 := runtime.HelperArgs{
-		HashArgs:  hash5,
-		Args:      args4,
-		BlockFn:   nil,
-		InverseFn: nil,
-		IsBlock:   false,
+	if err := runtime.WriteEscaped(w, result5); err != nil {
+		return err
 	}
-	result7, err := handlebars.FormatNumber(helperArgs6)
+	if _, err := io.WriteString(w, "</span>\n  <span>First: "); err != nil {
+		return err
+	}
+	result6, err := handlebars.First(runtime.HelperArgs{
+		Args: []any{
+			data.Items(),
+		},
+	})
+	if err != nil {
+		return err
+	}
+	result7, err := handlebars.Default(runtime.HelperArgs{
+		Args: []any{
+			result6,
+			"n/a",
+		},
+	})
 	if err != nil {
 		return err
 	}
 	if err := runtime.WriteEscaped(w, result7); err != nil {
 		return err
 	}
-	if _, err := io.WriteString(w, "</span>\n  <span>Tax: "); err != nil {
-		return err
-	}
-	args8 := []any{
-		data.Tax(),
-	}
-	hash9 := runtime.Hash{
-		"precision": int64(2),
-	}
-	helperArgs10 := runtime.HelperArgs{
-		HashArgs:  hash9,
-		Args:      args8,
-		BlockFn:   nil,
-		InverseFn: nil,
-		IsBlock:   false,
-	}
-	result11, err := handlebars.FormatNumber(helperArgs10)
-	if err != nil {
-		return err
-	}
-	if err := runtime.WriteEscaped(w, result11); err != nil {
-		return err
-	}
-	if _, err := io.WriteString(w, "</span>\n  <span>Total: "); err != nil {
-		return err
-	}
-	args12 := []any{
-		data.Subtotal(),
-		data.Tax(),
-	}
-	helperArgs13 := runtime.HelperArgs{
-		HashArgs:  nil,
-		Args:      args12,
-		BlockFn:   nil,
-		InverseFn: nil,
-		IsBlock:   false,
-	}
-	result14, err := handlebars.Add(helperArgs13)
-	if err != nil {
-		return err
-	}
-	args15 := []any{
-		result14,
-	}
-	hash16 := runtime.Hash{
-		"precision": int64(2),
-	}
-	helperArgs17 := runtime.HelperArgs{
-		HashArgs:  hash16,
-		Args:      args15,
-		BlockFn:   nil,
-		InverseFn: nil,
-		IsBlock:   false,
-	}
-	result18, err := handlebars.FormatNumber(helperArgs17)
-	if err != nil {
-		return err
-	}
-	if err := runtime.WriteEscaped(w, result18); err != nil {
-		return err
-	}
-	if _, err := io.WriteString(w, "</span>\n  <span>First: "); err != nil {
-		return err
-	}
-	args19 := []any{
-		data.Items(),
-	}
-	helperArgs20 := runtime.HelperArgs{
-		HashArgs:  nil,
-		Args:      args19,
-		BlockFn:   nil,
-		InverseFn: nil,
-		IsBlock:   false,
-	}
-	result21, err := handlebars.First(helperArgs20)
-	if err != nil {
-		return err
-	}
-	args22 := []any{
-		result21,
-		"n/a",
-	}
-	helperArgs23 := runtime.HelperArgs{
-		HashArgs:  nil,
-		Args:      args22,
-		BlockFn:   nil,
-		InverseFn: nil,
-		IsBlock:   false,
-	}
-	result24, err := handlebars.Default(helperArgs23)
-	if err != nil {
-		return err
-	}
-	if err := runtime.WriteEscaped(w, result24); err != nil {
-		return err
-	}
 	if _, err := io.WriteString(w, "</span>\n  <span>Last: "); err != nil {
 		return err
 	}
-	args25 := []any{
-		data.Items(),
-	}
-	helperArgs26 := runtime.HelperArgs{
-		HashArgs:  nil,
-		Args:      args25,
-		BlockFn:   nil,
-		InverseFn: nil,
-		IsBlock:   false,
-	}
-	result27, err := handlebars.Last(helperArgs26)
+	result8, err := handlebars.Last(runtime.HelperArgs{
+		Args: []any{
+			data.Items(),
+		},
+	})
 	if err != nil {
 		return err
 	}
-	args28 := []any{
-		result27,
-		"n/a",
-	}
-	helperArgs29 := runtime.HelperArgs{
-		HashArgs:  nil,
-		Args:      args28,
-		BlockFn:   nil,
-		InverseFn: nil,
-		IsBlock:   false,
-	}
-	result30, err := handlebars.Default(helperArgs29)
+	result9, err := handlebars.Default(runtime.HelperArgs{
+		Args: []any{
+			result8,
+			"n/a",
+		},
+	})
 	if err != nil {
 		return err
 	}
-	if err := runtime.WriteEscaped(w, result30); err != nil {
+	if err := runtime.WriteEscaped(w, result9); err != nil {
 		return err
 	}
 	if _, err := io.WriteString(w, "</span>\n</div>\n\n\n\n"); err != nil {
@@ -1405,87 +1190,63 @@ func renderUserCard(data UserCardContext, w io.Writer, root UserCardContext) err
 	if _, err := io.WriteString(w, "<div class=\"user-card\">\n  <h2>"); err != nil {
 		return err
 	}
-	args1 := []any{
-		data.Name(),
+	result1, err := handlebars.Capitalize(runtime.HelperArgs{
+		Args: []any{
+			data.Name(),
+		},
+	})
+	if err != nil {
+		return err
 	}
-	helperArgs2 := runtime.HelperArgs{
-		HashArgs:  nil,
-		Args:      args1,
-		BlockFn:   nil,
-		InverseFn: nil,
-		IsBlock:   false,
+	if err := runtime.WriteEscaped(w, result1); err != nil {
+		return err
 	}
-	result3, err := handlebars.Capitalize(helperArgs2)
+	if _, err := io.WriteString(w, "</h2>\n  <p>"); err != nil {
+		return err
+	}
+	result2, err := handlebars.Lower(runtime.HelperArgs{
+		Args: []any{
+			data.Email(),
+		},
+	})
+	if err != nil {
+		return err
+	}
+	if err := runtime.WriteEscaped(w, result2); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, "</p>\n  <p>Role: "); err != nil {
+		return err
+	}
+	result3, err := handlebars.Upper(runtime.HelperArgs{
+		Args: []any{
+			data.Role(),
+		},
+	})
 	if err != nil {
 		return err
 	}
 	if err := runtime.WriteEscaped(w, result3); err != nil {
 		return err
 	}
-	if _, err := io.WriteString(w, "</h2>\n  <p>"); err != nil {
-		return err
-	}
-	args4 := []any{
-		data.Email(),
-	}
-	helperArgs5 := runtime.HelperArgs{
-		HashArgs:  nil,
-		Args:      args4,
-		BlockFn:   nil,
-		InverseFn: nil,
-		IsBlock:   false,
-	}
-	result6, err := handlebars.Lower(helperArgs5)
-	if err != nil {
-		return err
-	}
-	if err := runtime.WriteEscaped(w, result6); err != nil {
-		return err
-	}
-	if _, err := io.WriteString(w, "</p>\n  <p>Role: "); err != nil {
-		return err
-	}
-	args7 := []any{
-		data.Role(),
-	}
-	helperArgs8 := runtime.HelperArgs{
-		HashArgs:  nil,
-		Args:      args7,
-		BlockFn:   nil,
-		InverseFn: nil,
-		IsBlock:   false,
-	}
-	result9, err := handlebars.Upper(helperArgs8)
-	if err != nil {
-		return err
-	}
-	if err := runtime.WriteEscaped(w, result9); err != nil {
-		return err
-	}
 	if _, err := io.WriteString(w, "</p>\n  "); err != nil {
 		return err
 	}
-	args10 := []any{
-		data.Role(),
-		"admin",
-	}
-	helperArgs11 := runtime.HelperArgs{
-		HashArgs:  nil,
-		Args:      args10,
-		BlockFn:   nil,
-		InverseFn: nil,
-		IsBlock:   false,
-	}
-	result12, err := handlebars.Eq(helperArgs11)
+	result4, err := handlebars.Eq(runtime.HelperArgs{
+		Args: []any{
+			data.Role(),
+			"admin",
+		},
+	})
 	if err != nil {
 		return err
 	}
-	val13 := result12
-	cond14, err15 := runtime.IsTruthy(val13)
-	if err15 != nil {
-		return err15
+	val5 := result4
+	cond6, err7 := runtime.IsTruthy(val5)
+	if err7 != nil {
+		return err7
 	}
-	if cond14 {
+	if cond6 {
 		if _, err := io.WriteString(w, "<strong>Admin</strong>"); err != nil {
 			return err
 		}
@@ -1493,12 +1254,12 @@ func renderUserCard(data UserCardContext, w io.Writer, root UserCardContext) err
 	if _, err := io.WriteString(w, "\n  "); err != nil {
 		return err
 	}
-	val16 := data.Active()
-	cond17, err18 := runtime.IsTruthy(val16)
-	if err18 != nil {
-		return err18
+	val8 := data.Active()
+	cond9, err10 := runtime.IsTruthy(val8)
+	if err10 != nil {
+		return err10
 	}
-	if !cond17 {
+	if !cond9 {
 		if _, err := io.WriteString(w, "<em>Inactive</em>"); err != nil {
 			return err
 		}
@@ -1506,22 +1267,16 @@ func renderUserCard(data UserCardContext, w io.Writer, root UserCardContext) err
 	if _, err := io.WriteString(w, "\n  <p>Score: "); err != nil {
 		return err
 	}
-	args19 := []any{
-		data.Score(),
-		int64(1),
-	}
-	helperArgs20 := runtime.HelperArgs{
-		HashArgs:  nil,
-		Args:      args19,
-		BlockFn:   nil,
-		InverseFn: nil,
-		IsBlock:   false,
-	}
-	result21, err := handlebars.ToFixed(helperArgs20)
+	result11, err := handlebars.ToFixed(runtime.HelperArgs{
+		Args: []any{
+			data.Score(),
+			int64(1),
+		},
+	})
 	if err != nil {
 		return err
 	}
-	if err := runtime.WriteEscaped(w, result21); err != nil {
+	if err := runtime.WriteEscaped(w, result11); err != nil {
 		return err
 	}
 	if _, err := io.WriteString(w, "</p>\n</div>\n\n\n\n"); err != nil {
