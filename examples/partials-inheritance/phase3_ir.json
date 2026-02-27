@@ -8,8 +8,205 @@
     "menu",
     "news"
   ],
-  "contextIfaces": null,
-  "contextData": null,
+  "contextIfaces": [
+    {
+      "Template": "layout",
+      "GoName": "Layout",
+      "Methods": [
+        {
+          "FieldPath": "_shared",
+          "ReturnType": "LayoutSharedContext",
+          "IsCanonical": false
+        },
+        {
+          "FieldPath": "Raw",
+          "ReturnType": "any",
+          "IsCanonical": false
+        }
+      ],
+      "Comment": "context interface inferred from template \"layout\""
+    },
+    {
+      "Template": "layout",
+      "GoName": "LayoutShared",
+      "Methods": [
+        {
+          "FieldPath": "menu",
+          "ReturnType": "any",
+          "IsCanonical": false
+        },
+        {
+          "FieldPath": "Raw",
+          "ReturnType": "any",
+          "IsCanonical": false
+        }
+      ],
+      "Comment": "context for path \"_shared\""
+    },
+    {
+      "Template": "default",
+      "GoName": "Default",
+      "Methods": [
+        {
+          "FieldPath": "",
+          "ReturnType": "LayoutContext",
+          "IsCanonical": true
+        },
+        {
+          "FieldPath": "title",
+          "ReturnType": "any",
+          "IsCanonical": false
+        },
+        {
+          "FieldPath": "Raw",
+          "ReturnType": "any",
+          "IsCanonical": false
+        }
+      ],
+      "Comment": "context interface inferred from template \"default\""
+    },
+    {
+      "Template": "firstpage",
+      "GoName": "Firstpage",
+      "Methods": [
+        {
+          "FieldPath": "",
+          "ReturnType": "LayoutContext",
+          "IsCanonical": true
+        },
+        {
+          "FieldPath": "title",
+          "ReturnType": "any",
+          "IsCanonical": false
+        },
+        {
+          "FieldPath": "Raw",
+          "ReturnType": "any",
+          "IsCanonical": false
+        }
+      ],
+      "Comment": "context interface inferred from template \"firstpage\""
+    },
+    {
+      "Template": "menu",
+      "GoName": "Menu",
+      "Methods": [
+        {
+          "FieldPath": "title",
+          "ReturnType": "any",
+          "IsCanonical": false
+        },
+        {
+          "FieldPath": "Raw",
+          "ReturnType": "any",
+          "IsCanonical": false
+        }
+      ],
+      "Comment": "context interface inferred from template \"menu\""
+    },
+    {
+      "Template": "news",
+      "GoName": "News",
+      "Methods": [
+        {
+          "FieldPath": "",
+          "ReturnType": "LayoutContext",
+          "IsCanonical": true
+        },
+        {
+          "FieldPath": "title",
+          "ReturnType": "any",
+          "IsCanonical": false
+        },
+        {
+          "FieldPath": "Raw",
+          "ReturnType": "any",
+          "IsCanonical": false
+        }
+      ],
+      "Comment": "context interface inferred from template \"news\""
+    }
+  ],
+  "contextData": [
+    {
+      "Template": "layout",
+      "GoName": "Layout",
+      "Fields": [
+        {
+          "FieldPath": "_shared",
+          "Type": "LayoutSharedContext"
+        }
+      ],
+      "Comment": "map-backed implementation of LayoutContext"
+    },
+    {
+      "Template": "layout",
+      "GoName": "LayoutShared",
+      "Fields": [
+        {
+          "FieldPath": "menu",
+          "Type": "any"
+        }
+      ],
+      "Comment": "map-backed implementation of LayoutSharedContext"
+    },
+    {
+      "Template": "default",
+      "GoName": "Default",
+      "Fields": [
+        {
+          "FieldPath": "_shared",
+          "Type": "LayoutSharedContext"
+        },
+        {
+          "FieldPath": "title",
+          "Type": "any"
+        }
+      ],
+      "Comment": "map-backed implementation of DefaultContext"
+    },
+    {
+      "Template": "firstpage",
+      "GoName": "Firstpage",
+      "Fields": [
+        {
+          "FieldPath": "_shared",
+          "Type": "LayoutSharedContext"
+        },
+        {
+          "FieldPath": "title",
+          "Type": "any"
+        }
+      ],
+      "Comment": "map-backed implementation of FirstpageContext"
+    },
+    {
+      "Template": "menu",
+      "GoName": "Menu",
+      "Fields": [
+        {
+          "FieldPath": "title",
+          "Type": "any"
+        }
+      ],
+      "Comment": "map-backed implementation of MenuContext"
+    },
+    {
+      "Template": "news",
+      "GoName": "News",
+      "Fields": [
+        {
+          "FieldPath": "_shared",
+          "Type": "LayoutSharedContext"
+        },
+        {
+          "FieldPath": "title",
+          "Type": "any"
+        }
+      ],
+      "Comment": "map-backed implementation of NewsContext"
+    }
+  ],
   "partials": [
     {
       "Name": "default",

@@ -7,7 +7,10 @@
       },
       {
         "kind": "Mustache",
-        "expr": "title"
+        "expr": {
+          "kind": "path",
+          "value": "title"
+        }
       },
       {
         "kind": "Text",
@@ -15,7 +18,10 @@
       },
       {
         "kind": "Partial",
-        "expr": "layout"
+        "nameExpr": {
+          "kind": "path",
+          "value": "layout"
+        }
       },
       {
         "kind": "Text",
@@ -29,7 +35,10 @@
       },
       {
         "kind": "Mustache",
-        "expr": "title"
+        "expr": {
+          "kind": "path",
+          "value": "title"
+        }
       },
       {
         "kind": "Text",
@@ -37,7 +46,10 @@
       },
       {
         "kind": "Partial",
-        "expr": "layout"
+        "nameExpr": {
+          "kind": "path",
+          "value": "layout"
+        }
       },
       {
         "kind": "Text",
@@ -47,7 +59,14 @@
     "layout": [
       {
         "kind": "Partial",
-        "expr": "menu _shared.menu"
+        "nameExpr": {
+          "kind": "path",
+          "value": "menu"
+        },
+        "ctxExpr": {
+          "kind": "path",
+          "value": "_shared.menu"
+        }
       },
       {
         "kind": "Text",
@@ -61,7 +80,10 @@
       },
       {
         "kind": "Mustache",
-        "expr": "title"
+        "expr": {
+          "kind": "path",
+          "value": "title"
+        }
       },
       {
         "kind": "Text",
@@ -75,7 +97,10 @@
       },
       {
         "kind": "Mustache",
-        "expr": "title"
+        "expr": {
+          "kind": "path",
+          "value": "title"
+        }
       },
       {
         "kind": "Text",
@@ -83,7 +108,10 @@
       },
       {
         "kind": "Partial",
-        "expr": "layout"
+        "nameExpr": {
+          "kind": "path",
+          "value": "layout"
+        }
       },
       {
         "kind": "Text",
@@ -105,11 +133,70 @@
     "menu": "Menu",
     "news": "News"
   },
+  "helperExprs": {
+    "abs": "handlebars.Abs",
+    "add": "handlebars.Add",
+    "ago": "handlebars.Ago",
+    "and": "handlebars.And",
+    "capitalize": "handlebars.Capitalize",
+    "capitalizeAll": "handlebars.CapitalizeAll",
+    "ceil": "handlebars.Ceil",
+    "decodeURI": "handlebars.DecodeURI",
+    "default": "handlebars.Default",
+    "divide": "handlebars.Divide",
+    "encodeURI": "handlebars.EncodeURI",
+    "eq": "handlebars.Eq",
+    "first": "handlebars.First",
+    "floor": "handlebars.Floor",
+    "formatDate": "handlebars.FormatDate",
+    "formatNumber": "handlebars.FormatNumber",
+    "gt": "handlebars.Gt",
+    "gte": "handlebars.Gte",
+    "has": "handlebars.Has",
+    "inArray": "handlebars.InArray",
+    "isEmpty": "handlebars.IsEmpty",
+    "isNotEmpty": "handlebars.IsNotEmpty",
+    "join": "handlebars.Join",
+    "keys": "handlebars.Keys",
+    "last": "handlebars.Last",
+    "length": "handlebars.Length",
+    "lookup": "handlebars.Lookup",
+    "lower": "handlebars.Lower",
+    "lt": "handlebars.Lt",
+    "lte": "handlebars.Lte",
+    "max": "handlebars.Max",
+    "min": "handlebars.Min",
+    "modulo": "handlebars.Modulo",
+    "multiply": "handlebars.Multiply",
+    "ne": "handlebars.Ne",
+    "not": "handlebars.Not",
+    "now": "handlebars.Now",
+    "or": "handlebars.Or",
+    "random": "handlebars.Random",
+    "replace": "handlebars.Replace",
+    "reverse": "handlebars.Reverse",
+    "round": "handlebars.Round",
+    "size": "handlebars.Size",
+    "split": "handlebars.Split",
+    "stripProtocol": "handlebars.StripProtocol",
+    "stripQuerystring": "handlebars.StripQuerystring",
+    "stripQuotes": "handlebars.StripQuotes",
+    "stripTags": "handlebars.StripTags",
+    "subtract": "handlebars.Subtract",
+    "toFixed": "handlebars.ToFixed",
+    "toFloat": "handlebars.ToFloat",
+    "toInt": "handlebars.ToInt",
+    "toNumber": "handlebars.ToNumber",
+    "toString": "handlebars.ToString",
+    "truncate": "handlebars.Truncate",
+    "upper": "handlebars.Upper",
+    "values": "handlebars.Values"
+  },
   "templateFiles": {
-    "default": "templates/default.hbs",
-    "firstpage": "templates/firstpage.hbs",
-    "layout": "templates/layout.hbs",
-    "menu": "templates/menu.hbs",
-    "news": "templates/news.hbs"
+    "default": "examples/partials-inheritance/templates/default.hbs",
+    "firstpage": "examples/partials-inheritance/templates/firstpage.hbs",
+    "layout": "examples/partials-inheritance/templates/layout.hbs",
+    "menu": "examples/partials-inheritance/templates/menu.hbs",
+    "news": "examples/partials-inheritance/templates/news.hbs"
   }
 }

@@ -236,6 +236,320 @@ func RunPhase2b(phase1 *Phase1Result, phase2a *Phase2aResult, opts Options) (*Ph
 	}, nil
 }
 
+// buildIRContextInfo builds IRContextIface and IRContextData lists from type trees and canonical type info.
+// These populate the Phase3 IR so the JSON output describes the full context structure for debugging.
+func buildIRContextInfo(phase1 *Phase1Result, phase2b *Phase2bResult) ([]IRContextIface, []IRContextData) {
+	funcNamesStr := make(map[string]string, len(phase2b.Phase2a.FuncNames))
+	for k, v := range phase2b.Phase2a.FuncNames {
+		funcNamesStr[string(k)] = string(v)
+	}
+	canonicalType := make(map[string]string, len(phase2b.Phase2a.CanonicalType))
+	for k, v := range phase2b.Phase2a.CanonicalType {
+		canonicalType[string(k)] = string(v)
+	}
+	typeTrees := make(map[string]*typeNode, len(phase2b.TypeTrees))
+	for t, tree := range phase2b.TypeTrees {
+		typeTrees[string(t)] = tree
+	}
+
+	var ifaces []IRContextIface
+	var datas []IRContextData
+	seenGoName := make(map[string]bool)
+
+	// Canonical-only partials (shared partials not in emitOrder) are emitted first.
+	emitOrderSet := make(map[string]bool, len(phase2b.EmitOrder))
+	for _, name := range phase2b.EmitOrder {
+		emitOrderSet[string(name)] = true
+	}
+	var canonicalOnly []string
+	for partialName := range canonicalType {
+		if !emitOrderSet[partialName] {
+			canonicalOnly = append(canonicalOnly, partialName)
+		}
+	}
+	sort.Strings(canonicalOnly)
+	for _, partialName := range canonicalOnly {
+		canon := canonicalType[partialName]
+		if canon == "" {
+			continue
+		}
+		goName := strings.TrimSuffix(canon, "Context")
+		var subtree *typeNode
+		for _, name := range phase2b.EmitOrder {
+			tree := typeTrees[string(name)]
+			if tree != nil && tree.fields != nil && tree.fields[partialName] != nil {
+				subtree = tree.fields[partialName]
+				break
+			}
+		}
+		if subtree == nil {
+			continue
+		}
+		collectContextIR(partialName, goName, subtree, canonicalType, typeTrees, seenGoName, &ifaces, &datas)
+	}
+
+	// Templates in emit order.
+	for _, name := range phase2b.EmitOrder {
+		nameStr := string(name)
+		goName := funcNamesStr[nameStr]
+		if goName == "" {
+			continue
+		}
+		tree := typeTrees[nameStr]
+		collectContextIR(nameStr, goName, tree, canonicalType, typeTrees, seenGoName, &ifaces, &datas)
+	}
+
+	return ifaces, datas
+}
+
+// collectContextIR builds IRContextIface/IRContextData entries for one template and its nested types.
+func collectContextIR(
+	templateName, goName string,
+	tree *typeNode,
+	canonicalType map[string]string,
+	typeTrees map[string]*typeNode,
+	seenGoName map[string]bool,
+	ifaces *[]IRContextIface,
+	datas *[]IRContextData,
+) {
+	if seenGoName[goName] {
+		return
+	}
+	seenGoName[goName] = true
+
+	layoutPartial := rootLayoutPartial(tree, canonicalType)
+	if layoutPartial == templateName {
+		layoutPartial = ""
+	}
+	var skipFieldsAtRoot map[string]bool
+	if layoutPartial != "" {
+		if layoutTree := typeTrees[layoutPartial]; layoutTree != nil && layoutTree.fields != nil {
+			skipFieldsAtRoot = make(map[string]bool)
+			skipFieldsAtRoot[layoutPartial] = true
+			for f := range layoutTree.fields {
+				if f == "" || (len(f) > 0 && (f[0] == '@' || f[0] == '.')) {
+					continue
+				}
+				skipFieldsAtRoot[f] = true
+			}
+		}
+	}
+
+	// Root context interface.
+	rootIface := IRContextIface{
+		Template: Template(templateName),
+		GoName:   GoIdent(goName),
+		Comment:  fmt.Sprintf("context interface inferred from template %q", templateName),
+	}
+	if layoutPartial != "" {
+		rootIface.Methods = append(rootIface.Methods, IRIfaceMethod{
+			FieldPath:   "",
+			ReturnType:  ContextTypeName(canonicalType[layoutPartial]),
+			IsCanonical: true,
+		})
+	}
+	ownFields := irFieldsFromTree(goName, "", tree, canonicalType, skipFieldsAtRoot)
+	rootIface.Methods = append(rootIface.Methods, ownFields...)
+	rootIface.Methods = append(rootIface.Methods, IRIfaceMethod{FieldPath: "Raw", ReturnType: "any"})
+	*ifaces = append(*ifaces, rootIface)
+
+	// Root context data struct: includes fields from embedded layout + own fields.
+	rootData := IRContextData{
+		Template: Template(templateName),
+		GoName:   GoIdent(goName),
+		Comment:  fmt.Sprintf("map-backed implementation of %sContext", goName),
+	}
+	if layoutPartial != "" {
+		layoutGoName := strings.TrimSuffix(canonicalType[layoutPartial], "Context")
+		layoutTree := typeTrees[layoutPartial]
+		rootData.Fields = append(rootData.Fields, irDataFieldsFromTree(layoutGoName, layoutTree, canonicalType, nil)...)
+	}
+	rootData.Fields = append(rootData.Fields, irDataFieldsFromTree(goName, tree, canonicalType, skipFieldsAtRoot)...)
+	*datas = append(*datas, rootData)
+
+	// Nested context types from tree fields (non-canonical, non-skipped paths with sub-fields).
+	if tree != nil && tree.fields != nil {
+		var fieldNames []string
+		for f := range tree.fields {
+			if f == "" || (len(f) > 0 && (f[0] == '@' || f[0] == '.')) {
+				continue
+			}
+			fieldNames = append(fieldNames, f)
+		}
+		sort.Strings(fieldNames)
+		for _, field := range fieldNames {
+			if canonicalType[field] != "" {
+				continue // canonical partial: its own collectContextIR handles it
+			}
+			child := tree.fields[field]
+			if child.isSlice && child.sliceElem != nil {
+				collectNestedContextIR(templateName, goName, field, child, canonicalType, seenGoName, ifaces, datas)
+			} else if len(child.fields) > 0 {
+				collectNestedContextIR(templateName, goName, field, child, canonicalType, seenGoName, ifaces, datas)
+			}
+		}
+	}
+}
+
+// collectNestedContextIR emits IRContextIface/Data for nested paths in the type tree.
+func collectNestedContextIR(
+	templateName, goIdent, pathPrefix string,
+	n *typeNode,
+	canonicalType map[string]string,
+	seenGoName map[string]bool,
+	ifaces *[]IRContextIface,
+	datas *[]IRContextData,
+) {
+	if n == nil {
+		return
+	}
+	if n.isSlice && n.sliceElem != nil {
+		ifaceName := contextItemInterfaceName(goIdent, pathPrefix)
+		ifaceGoName := strings.TrimSuffix(ifaceName, "Context")
+		if seenGoName[ifaceGoName] {
+			return
+		}
+		seenGoName[ifaceGoName] = true
+		iface := IRContextIface{
+			Template: Template(templateName),
+			GoName:   GoIdent(ifaceGoName),
+			Comment:  fmt.Sprintf("context for one element of %q", pathPrefix),
+		}
+		iface.Methods = append(iface.Methods, irFieldsFromTree(goIdent, pathPrefix+".", n.sliceElem, canonicalType, nil)...)
+		iface.Methods = append(iface.Methods, IRIfaceMethod{FieldPath: "Raw", ReturnType: "any"})
+		*ifaces = append(*ifaces, iface)
+		data := IRContextData{
+			Template: Template(templateName),
+			GoName:   GoIdent(ifaceGoName),
+			Comment:  fmt.Sprintf("map-backed implementation of %s", ifaceName),
+			Fields:   irDataFieldsFromTree(goIdent, n.sliceElem, canonicalType, nil),
+		}
+		*datas = append(*datas, data)
+		collectNestedContextIR(templateName, goIdent, pathPrefix+".", n.sliceElem, canonicalType, seenGoName, ifaces, datas)
+		return
+	}
+	if n.fields == nil {
+		return
+	}
+	ifaceName := contextInterfaceName(goIdent, pathPrefix)
+	ifaceGoName := strings.TrimSuffix(ifaceName, "Context")
+	if seenGoName[ifaceGoName] {
+		return
+	}
+	seenGoName[ifaceGoName] = true
+	iface := IRContextIface{
+		Template: Template(templateName),
+		GoName:   GoIdent(ifaceGoName),
+		Comment:  fmt.Sprintf("context for path %q", pathPrefix),
+	}
+	iface.Methods = append(iface.Methods, irFieldsFromTree(goIdent, pathPrefix+".", n, canonicalType, nil)...)
+	iface.Methods = append(iface.Methods, IRIfaceMethod{FieldPath: "Raw", ReturnType: "any"})
+	*ifaces = append(*ifaces, iface)
+	data := IRContextData{
+		Template: Template(templateName),
+		GoName:   GoIdent(ifaceGoName),
+		Comment:  fmt.Sprintf("map-backed implementation of %s", ifaceName),
+		Fields:   irDataFieldsFromTree(goIdent, n, canonicalType, nil),
+	}
+	*datas = append(*datas, data)
+	// Recurse into sub-fields.
+	var fieldNames []string
+	for f := range n.fields {
+		if f == "" || (len(f) > 0 && (f[0] == '@' || f[0] == '.')) {
+			continue
+		}
+		fieldNames = append(fieldNames, f)
+	}
+	sort.Strings(fieldNames)
+	for _, field := range fieldNames {
+		if canonicalType[field] != "" {
+			continue
+		}
+		child := n.fields[field]
+		subPath := pathPrefix + "." + field
+		if pathPrefix == "" {
+			subPath = field
+		}
+		if (child.isSlice && child.sliceElem != nil) || len(child.fields) > 0 {
+			collectNestedContextIR(templateName, goIdent, subPath, child, canonicalType, seenGoName, ifaces, datas)
+		}
+	}
+}
+
+// irFieldsFromTree builds IRIfaceMethod list for a type tree node (one level of interface methods).
+// skipFields: set of fields to skip (used to skip layout-covered fields at root).
+func irFieldsFromTree(goName, pathPrefix string, n *typeNode, canonicalType map[string]string, skipFields map[string]bool) []IRIfaceMethod {
+	if n == nil || n.fields == nil {
+		return nil
+	}
+	var fieldNames []string
+	for f := range n.fields {
+		if f == "" || (len(f) > 0 && (f[0] == '@' || f[0] == '.')) {
+			continue
+		}
+		if skipFields != nil && skipFields[f] {
+			continue
+		}
+		fieldNames = append(fieldNames, f)
+	}
+	sort.Strings(fieldNames)
+	var out []IRIfaceMethod
+	for _, field := range fieldNames {
+		child := n.fields[field]
+		var retType string
+		if child.isSlice && child.sliceElem != nil {
+			retType = "[]" + contextItemInterfaceName(goName, pathPrefix+field)
+		} else if len(child.fields) > 0 {
+			if canon := canonicalType[field]; canon != "" {
+				retType = canon
+			} else {
+				retType = contextInterfaceName(goName, pathPrefix+field)
+			}
+		} else {
+			retType = "any"
+		}
+		out = append(out, IRIfaceMethod{FieldPath: field, ReturnType: ContextTypeName(retType)})
+	}
+	return out
+}
+
+// irDataFieldsFromTree builds IRDataField list from a type tree (fields needed for a ContextData struct).
+// skipFields: set of root-level fields to skip.
+func irDataFieldsFromTree(goName string, n *typeNode, canonicalType map[string]string, skipFields map[string]bool) []IRDataField {
+	if n == nil || n.fields == nil {
+		return nil
+	}
+	var fieldNames []string
+	for f := range n.fields {
+		if f == "" || (len(f) > 0 && (f[0] == '@' || f[0] == '.')) {
+			continue
+		}
+		if skipFields != nil && skipFields[f] {
+			continue
+		}
+		fieldNames = append(fieldNames, f)
+	}
+	sort.Strings(fieldNames)
+	var out []IRDataField
+	for _, field := range fieldNames {
+		child := n.fields[field]
+		var fieldType string
+		if child.isSlice && child.sliceElem != nil {
+			fieldType = "[]" + contextItemInterfaceName(goName, field)
+		} else if len(child.fields) > 0 {
+			if canon := canonicalType[field]; canon != "" {
+				fieldType = canon
+			} else {
+				fieldType = contextInterfaceName(goName, field)
+			}
+		} else {
+			fieldType = "any"
+		}
+		out = append(out, IRDataField{FieldPath: field, Type: ContextTypeName(fieldType)})
+	}
+	return out
+}
+
 // RunPhase3 builds the structured IR from Phase2bResult and Phase1Result.
 func RunPhase3(phase1 *Phase1Result, phase2b *Phase2bResult, opts Options) (*Phase3Result, error) {
 	if opts.Log != nil {
@@ -246,17 +560,19 @@ func RunPhase3(phase1 *Phase1Result, phase2b *Phase2bResult, opts Options) (*Pha
 		runtimeImport = "github.com/andriyg76/go-hbars/runtime"
 	}
 
+	contextIfaces, contextData := buildIRContextInfo(phase1, phase2b)
+
 	ir := &Phase3Result{
-		PackageName:         opts.PackageName,
-		RuntimeImport:       runtimeImport,
-		EmitOrder:           phase2b.EmitOrder,
-		UseLayoutBlocks:     phase2b.UseLayoutBlocks,
-		GenerateBootstrap:   opts.GenerateBootstrap,
-		HelperImports:       phase1.HelperImports,
-		ContextIfaces:       nil,
-		ContextData:         nil,
-		Partials:            nil,
-		RenderFuncs:         nil,
+		PackageName:       opts.PackageName,
+		RuntimeImport:     runtimeImport,
+		EmitOrder:         phase2b.EmitOrder,
+		UseLayoutBlocks:   phase2b.UseLayoutBlocks,
+		GenerateBootstrap: opts.GenerateBootstrap,
+		HelperImports:     phase1.HelperImports,
+		ContextIfaces:     contextIfaces,
+		ContextData:       contextData,
+		Partials:          nil,
+		RenderFuncs:       nil,
 	}
 
 	// Partials: one entry per root template (name, go name, context type, FromMap name).

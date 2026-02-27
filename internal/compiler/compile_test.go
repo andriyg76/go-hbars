@@ -802,3 +802,141 @@ func TestCompileTemplates_GeneratedCodeCompiles(t *testing.T) {
 	})
 }
 
+func TestRunPhase3_ContextIfacesAndDataPopulated(t *testing.T) {
+	// Verify that RunPhase3 populates contextIfaces and contextData (not nil).
+	templates := map[string]string{
+		"main": "Hello {{name}} {{> footer}}",
+		"footer": "<footer>{{name}}</footer>",
+	}
+	opts := Options{PackageName: "templates"}
+	p1, err := RunPhase1(templates, opts)
+	if err != nil {
+		t.Fatalf("phase1: %v", err)
+	}
+	p2a, err := RunPhase2a(p1, opts)
+	if err != nil {
+		t.Fatalf("phase2a: %v", err)
+	}
+	p2b, err := RunPhase2b(p1, p2a, opts)
+	if err != nil {
+		t.Fatalf("phase2b: %v", err)
+	}
+	p3, err := RunPhase3(p1, p2b, opts)
+	if err != nil {
+		t.Fatalf("phase3: %v", err)
+	}
+	if p3.ContextIfaces == nil {
+		t.Fatal("contextIfaces should not be nil")
+	}
+	if p3.ContextData == nil {
+		t.Fatal("contextData should not be nil")
+	}
+	// "main" and "footer" share same-scope: footer becomes MainContext.
+	// So only one top-level context: MainContext.
+	// Verify MainContext has the "name" method.
+	var foundMain bool
+	for _, iface := range p3.ContextIfaces {
+		if string(iface.GoName) == "Main" {
+			foundMain = true
+			var foundName bool
+			for _, m := range iface.Methods {
+				if m.FieldPath == "name" {
+					foundName = true
+					break
+				}
+			}
+			if !foundName {
+				t.Errorf("MainContext should have 'name' method, got methods: %v", iface.Methods)
+			}
+		}
+	}
+	if !foundMain {
+		t.Errorf("contextIfaces should contain Main interface, got: %v", p3.ContextIfaces)
+	}
+}
+
+func TestRunPhase3_SharedPartialEmbeddingInIR(t *testing.T) {
+	// When multiple root templates include the same same-scope partial, the partial gets a
+	// canonical context type. Callers should have IsCanonical=true embedding in contextIfaces.
+	templates := map[string]string{
+		"default":  "Page: {{title}}\n{{> layout}}",
+		"news":     "News: {{title}}\n{{> layout}}",
+		"layout":   "{{> menu _shared.menu}}",
+		"menu":     "<nav>{{title}}</nav>",
+	}
+	opts := Options{PackageName: "templates"}
+	p1, err := RunPhase1(templates, opts)
+	if err != nil {
+		t.Fatalf("phase1: %v", err)
+	}
+	p2a, err := RunPhase2a(p1, opts)
+	if err != nil {
+		t.Fatalf("phase2a: %v", err)
+	}
+	p2b, err := RunPhase2b(p1, p2a, opts)
+	if err != nil {
+		t.Fatalf("phase2b: %v", err)
+	}
+	p3, err := RunPhase3(p1, p2b, opts)
+	if err != nil {
+		t.Fatalf("phase3: %v", err)
+	}
+	if p3.ContextIfaces == nil {
+		t.Fatal("contextIfaces should not be nil")
+	}
+
+	// layout is a shared partial (called by default and news): should have LayoutContext.
+	var foundLayout bool
+	for _, iface := range p3.ContextIfaces {
+		if string(iface.GoName) == "Layout" {
+			foundLayout = true
+		}
+	}
+	if !foundLayout {
+		t.Error("contextIfaces should contain Layout (canonical partial)")
+	}
+
+	// default and news should embed LayoutContext (IsCanonical=true method with no FieldPath).
+	for _, callerName := range []string{"Default", "News"} {
+		var found bool
+		for _, iface := range p3.ContextIfaces {
+			if string(iface.GoName) != callerName {
+				continue
+			}
+			found = true
+			var hasEmbedding bool
+			for _, m := range iface.Methods {
+				if m.IsCanonical && m.FieldPath == "" && string(m.ReturnType) == "LayoutContext" {
+					hasEmbedding = true
+					break
+				}
+			}
+			if !hasEmbedding {
+				t.Errorf("%sContext should embed LayoutContext (IsCanonical=true), methods: %v", callerName, iface.Methods)
+			}
+		}
+		if !found {
+			t.Errorf("contextIfaces should contain %s", callerName)
+		}
+	}
+
+	// DefaultContextData and NewsContextData should include _shared field from the embedded layout.
+	for _, callerName := range []string{"Default", "News"} {
+		for _, data := range p3.ContextData {
+			if string(data.GoName) != callerName {
+				continue
+			}
+			var hasShared bool
+			for _, f := range data.Fields {
+				if f.FieldPath == "_shared" {
+					hasShared = true
+					break
+				}
+			}
+			if !hasShared {
+				t.Errorf("%sContextData should include '_shared' field (from embedded LayoutContext), fields: %v", callerName, data.Fields)
+			}
+		}
+	}
+}
+
