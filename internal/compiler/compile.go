@@ -680,16 +680,35 @@ func prepareHelpers(helpers map[string]HelperRef, runtimeImport string) (map[str
 }
 
 func templatesUseBlockHelpers(parsed map[string][]ast.Node, helperExprs map[string]string) bool {
-	builtinBlocks := map[string]bool{"if": true, "unless": true, "with": true, "each": true, "block": true, "partial": true}
 	var walk func(nodes []ast.Node) bool
 	walk = func(nodes []ast.Node) bool {
 		for _, node := range nodes {
 			switch n := node.(type) {
 			case *ast.Block:
-				if !builtinBlocks[n.Name] && helperExprs[n.Name] != "" {
+				if helperExprs[n.Name] != "" {
 					return true
 				}
 				if walk(n.Body) || walk(n.Else) {
+					return true
+				}
+			case *ast.IfBlock:
+				if walk(n.Body) || walk(n.Else) {
+					return true
+				}
+			case *ast.WithBlock:
+				if walk(n.Body) || walk(n.Else) {
+					return true
+				}
+			case *ast.EachBlock:
+				if walk(n.Body) || walk(n.Else) {
+					return true
+				}
+			case *ast.LayoutBlock:
+				if walk(n.Body) {
+					return true
+				}
+			case *ast.LayoutPartial:
+				if walk(n.Body) {
 					return true
 				}
 			}
@@ -710,10 +729,25 @@ func templatesUsesLayoutBlocks(parsed map[string][]ast.Node) bool {
 	walk = func(nodes []ast.Node) bool {
 		for _, node := range nodes {
 			switch n := node.(type) {
-			case *ast.Block:
-				if n.Name == "block" || n.Name == "partial" {
+			case *ast.LayoutBlock:
+				_ = n
+				return true
+			case *ast.LayoutPartial:
+				_ = n
+				return true
+			case *ast.IfBlock:
+				if walk(n.Body) || walk(n.Else) {
 					return true
 				}
+			case *ast.WithBlock:
+				if walk(n.Body) || walk(n.Else) {
+					return true
+				}
+			case *ast.EachBlock:
+				if walk(n.Body) || walk(n.Else) {
+					return true
+				}
+			case *ast.Block:
 				if walk(n.Body) || walk(n.Else) {
 					return true
 				}
@@ -732,24 +766,24 @@ func templatesUsesLayoutBlocks(parsed map[string][]ast.Node) bool {
 // collectUsedHelperNames returns the set of helper names (e.g. "upper", "lookup") used in the templates.
 func collectUsedHelperNames(parsed map[string][]ast.Node, helperExprs map[string]string) map[string]bool {
 	used := make(map[string]bool)
-	builtinBlocks := map[string]bool{"if": true, "unless": true, "with": true, "each": true}
 
-	var collectExpr func(parts []expr)
-	collectExpr = func(parts []expr) {
-		for _, p := range parts {
-			switch p.kind {
-			case exprPath:
-				if helperExprs[p.value] != "" {
-					used[p.value] = true
-				}
-			case exprCall:
-				used[p.name] = true
-				for _, a := range p.args {
-					collectExpr([]expr{a})
-				}
-				for _, h := range p.hash {
-					collectExpr([]expr{h.value})
-				}
+	var collectAstExpr func(e ast.Expr)
+	collectAstExpr = func(e ast.Expr) {
+		if e == nil {
+			return
+		}
+		switch v := e.(type) {
+		case *ast.PathRef:
+			if helperExprs[v.Path] != "" {
+				used[v.Path] = true
+			}
+		case *ast.HelperCall:
+			used[v.Callee] = true
+			for _, p := range v.Params {
+				collectAstExpr(p)
+			}
+			for _, h := range v.Hash {
+				collectAstExpr(h.Value)
 			}
 		}
 	}
@@ -759,21 +793,38 @@ func collectUsedHelperNames(parsed map[string][]ast.Node, helperExprs map[string
 		for _, node := range nodes {
 			switch n := node.(type) {
 			case *ast.Mustache:
-				parts, _, err := parseParts(n.Expr)
-				if err == nil {
-					collectExpr(parts)
+				collectAstExpr(n.Expr)
+			case *ast.Partial:
+				collectAstExpr(n.Name)
+				collectAstExpr(n.Ctx)
+				for _, h := range n.Hash {
+					collectAstExpr(h.Value)
 				}
 			case *ast.Block:
-				if !builtinBlocks[n.Name] && helperExprs[n.Name] != "" {
+				if helperExprs[n.Name] != "" {
 					used[n.Name] = true
+				}
+				for _, p := range n.Params {
+					collectAstExpr(p)
 				}
 				walk(n.Body)
 				walk(n.Else)
-			case *ast.Partial:
-				parts, _, err := parseParts(n.Expr)
-				if err == nil {
-					collectExpr(parts)
-				}
+			case *ast.IfBlock:
+				collectAstExpr(n.Test)
+				walk(n.Body)
+				walk(n.Else)
+			case *ast.WithBlock:
+				collectAstExpr(n.Value)
+				walk(n.Body)
+				walk(n.Else)
+			case *ast.EachBlock:
+				collectAstExpr(n.Collection)
+				walk(n.Body)
+				walk(n.Else)
+			case *ast.LayoutBlock:
+				walk(n.Body)
+			case *ast.LayoutPartial:
+				walk(n.Body)
 			}
 		}
 	}
@@ -893,6 +944,26 @@ func (g *generator) emitNodes(nodes []ast.Node) error {
 			if err := g.emitPartial(n); err != nil {
 				return err
 			}
+		case *ast.IfBlock:
+			if err := g.emitIfBlock(n); err != nil {
+				return err
+			}
+		case *ast.WithBlock:
+			if err := g.emitWithBlock(n); err != nil {
+				return err
+			}
+		case *ast.EachBlock:
+			if err := g.emitEachBlock(n); err != nil {
+				return err
+			}
+		case *ast.LayoutBlock:
+			if err := g.emitLayoutBlock(n); err != nil {
+				return err
+			}
+		case *ast.LayoutPartial:
+			if err := g.emitLayoutPartial(n); err != nil {
+				return err
+			}
 		case *ast.Block:
 			if err := g.emitBlock(n); err != nil {
 				return err
@@ -905,90 +976,73 @@ func (g *generator) emitNodes(nodes []ast.Node) error {
 }
 
 func (g *generator) emitBlock(n *ast.Block) error {
-	switch n.Name {
-	case "if":
-		return g.emitIfBlock(n, false)
-	case "unless":
-		return g.emitIfBlock(n, true)
-	case "with":
-		return g.emitWithBlock(n)
-	case "each":
-		return g.emitEachBlock(n)
-	case "block":
-		return g.emitLayoutBlock(n)
-	case "partial":
-		return g.emitLayoutPartial(n)
-	default:
-		// Registered helper → custom block helper
-		if _, ok := g.helpers[n.Name]; ok {
-			return g.emitCustomBlockHelper(n)
-		}
-		// Universal section: {{#anything}}...{{/anything}} => {{#with anything}}...{{/with}}
-		// (Mustache/Handlebars semantics: lookup name in context; if truthy, render block with that value as context)
-		sectionExpr := strings.TrimSpace(n.Args)
-		if sectionExpr == "" {
-			sectionExpr = n.Name
-		}
-		synthetic := &ast.Block{Name: "with", Args: sectionExpr, Body: n.Body, Else: n.Else, Params: n.Params}
-		return g.emitWithBlock(synthetic)
+	// Registered helper → custom block helper
+	if _, ok := g.helpers[n.Name]; ok {
+		return g.emitCustomBlockHelper(n)
 	}
+	// Universal section: {{#anything}}...{{/anything}} => {{#with anything}}...{{/with}}
+	// (Mustache/Handlebars semantics: lookup name in context; if truthy, render block with that value as context)
+	// The parser puts the section name as Params[0] (a PathRef) when no explicit params were given.
+	var sectionExpr ast.Expr
+	if len(n.Params) == 1 {
+		sectionExpr = n.Params[0]
+	} else {
+		sectionExpr = &ast.PathRef{Path: n.Name}
+	}
+	synthetic := &ast.WithBlock{Value: sectionExpr, BlockParams: n.BlockParams, Body: n.Body, Else: n.Else}
+	return g.emitWithBlock(synthetic)
 }
 
 func (g *generator) emitMustache(n *ast.Mustache) error {
-	parts, hash, err := parseParts(n.Expr)
-	if err != nil {
-		return err
-	}
-	if len(parts) == 0 {
-		if len(hash) > 0 {
-			return hexerr.New("unexpected hash arguments")
-		}
+	if n.Expr == nil {
 		return nil
 	}
-	if len(parts) == 1 {
-		if parts[0].kind == exprPath {
-			if helperExpr, ok := g.helpers[parts[0].value]; ok {
-				return g.emitHelperOutput(helperExpr, nil, hash, n.Raw)
-			}
+	switch e := n.Expr.(type) {
+	case *ast.PathRef:
+		if helperExpr, ok := g.helpers[e.Path]; ok {
+			return g.emitHelperOutput(helperExpr, nil, nil, n.Raw)
 		}
-		if len(hash) > 0 {
-			return hexerr.New("hash arguments require a helper")
+		valueExpr, err := g.emitExprValue(astExprToExpr(e))
+		if err != nil {
+			return err
 		}
-		valueExpr, err := g.emitExprValue(parts[0])
+		g.emitValueExpr(valueExpr, n.Raw)
+		return nil
+	case *ast.HelperCall:
+		helperExpr, ok := g.helpers[e.Callee]
+		if !ok {
+			return hexerr.New(fmt.Sprintf("helper %q is not defined", e.Callee))
+		}
+		args := make([]expr, len(e.Params))
+		for i, p := range e.Params {
+			args[i] = astExprToExpr(p)
+		}
+		hash := astHashToHashArgs(e.Hash)
+		return g.emitHelperOutput(helperExpr, args, hash, n.Raw)
+	default:
+		// Literal value (string, number, bool, null)
+		valueExpr, err := g.emitExprValue(astExprToExpr(n.Expr))
 		if err != nil {
 			return err
 		}
 		g.emitValueExpr(valueExpr, n.Raw)
 		return nil
 	}
-	if parts[0].kind != exprPath {
-		return hexerr.New("helper name must be a path")
-	}
-	helperExpr, ok := g.helpers[parts[0].value]
-	if !ok {
-		return hexerr.New(fmt.Sprintf("helper %q is not defined", parts[0].value))
-	}
-	return g.emitHelperOutput(helperExpr, parts[1:], hash, n.Raw)
 }
 
 func (g *generator) emitPartial(n *ast.Partial) error {
-	parts, hash, err := parseParts(n.Expr)
-	if err != nil {
-		return err
-	}
-	if len(parts) == 0 {
+	if n.Name == nil {
 		return hexerr.New("partial invocation is empty")
 	}
-	if len(parts) > 2 {
-		return hexerr.New("partial: context must be a single expression")
-	}
-	nameExpr := parts[0]
+	nameExpr := astExprToExpr(n.Name)
+	hash := astHashToHashArgs(n.Hash)
 	scope, _ := g.currentTypedScope()
 	// Current context is passed only when there are no explicit params and no hash ({{> name}}).
 	partialCtxVar := scope.varName
 	baseCtxVar := scope.varName
-	if len(parts) == 2 {
-		valueExpr, err := g.emitExprValue(parts[1])
+	hasCtx := n.Ctx != nil
+	if hasCtx {
+		valueExpr, err := g.emitExprValue(astExprToExpr(n.Ctx))
 		if err != nil {
 			return err
 		}
@@ -1012,7 +1066,7 @@ func (g *generator) emitPartial(n *ast.Partial) error {
 		} else if nameExpr.kind == exprPath {
 			partialName = nameExpr.value
 		}
-		if len(parts) == 1 && partialName != "" && g.typeTrees != nil && g.typeTrees[partialName] != nil {
+		if !hasCtx && partialName != "" && g.typeTrees != nil && g.typeTrees[partialName] != nil {
 			// Only hash, static partial: context = hash + keys the partial uses (from current scope).
 			g.w.line("%s := runtime.MergePartialContext(nil, %s)", partialCtxVar, hashMapVar)
 			hashKeys := make(map[string]bool)
@@ -1034,12 +1088,12 @@ func (g *generator) emitPartial(n *ast.Partial) error {
 			g.w.line("%s := contextMap(%s)", baseMapVar, baseCtxVar)
 			g.w.line("%s := runtime.MergePartialContext(%s, %s)", partialCtxVar, baseMapVar, hashMapVar)
 		}
-	} else if len(parts) == 2 {
+	} else if hasCtx {
 		partialCtxVar = baseCtxVar
 	}
 
-	// When context is a merged map (hash) or explicit (parts==2), use partials map so contextMap+FromMap convert it.
-	usePartialsMap := len(hash) > 0 || len(parts) == 2
+	// When context is a merged map (hash) or explicit ctx, use partials map so contextMap+FromMap convert it.
+	usePartialsMap := len(hash) > 0 || hasCtx
 	writerArg := g.currentWriter()
 	if nameExpr.kind == exprString {
 		name := nameExpr.value
@@ -1113,14 +1167,9 @@ func (g *generator) emitPartial(n *ast.Partial) error {
 	return nil
 }
 
-func (g *generator) emitIfBlock(n *ast.Block, inverted bool) error {
-	if len(n.Params) > 1 {
-		return hexerr.New(fmt.Sprintf("block %q supports a single param", n.Name))
-	}
-	blockExpr, hash, err := g.singleBlockExpr(n)
-	if err != nil {
-		return err
-	}
+func (g *generator) emitIfBlock(n *ast.IfBlock) error {
+	blockExpr := astExprToExpr(n.Test)
+	hash := astHashToHashArgs(n.Hash)
 	useIncludeZero := hashHasIncludeZero(hash)
 	valueExpr, err := g.emitExprValue(blockExpr)
 	if err != nil {
@@ -1141,32 +1190,13 @@ func (g *generator) emitIfBlock(n *ast.Block, inverted bool) error {
 	}
 	g.w.line("if %s != nil { return %s }", errVar, errVar)
 	condExpr := condVar
-	if inverted {
+	if n.Unless {
 		condExpr = "!" + condVar
 	}
-
-	// Block param for if/unless: push typed scope so path resolves to the condition value
-	var paramScopeNode *typeNode
-	if len(n.Params) > 0 && blockExpr.kind == exprPath {
-		scope, _ := g.currentTypedScope()
-		paramScopeNode = nodeAtPath(scope.node, blockExpr.value)
-	}
-
 	g.w.line("if %s {", condExpr)
 	g.w.indentInc()
-	if len(n.Params) > 0 {
-		if len(n.Params) > 1 {
-			return hexerr.New(fmt.Sprintf("block %q supports a single param", n.Name))
-		}
-		paramVar := g.nextTemp("p")
-		g.w.line("%s := %s", paramVar, valVar)
-		g.pushTypedScope(paramVar, n.Params[0], paramScopeNode)
-	}
 	if err := g.emitNodes(n.Body); err != nil {
 		return err
-	}
-	if len(n.Params) > 0 {
-		g.popTypedScope()
 	}
 	g.w.indentDec()
 	if len(n.Else) > 0 {
@@ -1181,14 +1211,11 @@ func (g *generator) emitIfBlock(n *ast.Block, inverted bool) error {
 	return nil
 }
 
-func (g *generator) emitWithBlock(n *ast.Block) error {
-	if len(n.Params) > 1 {
-		return hexerr.New(fmt.Sprintf("block %q supports a single param", n.Name))
+func (g *generator) emitWithBlock(n *ast.WithBlock) error {
+	if len(n.BlockParams) > 1 {
+		return hexerr.New("block \"with\" supports a single param")
 	}
-	blockExpr, _, err := g.singleBlockExpr(n)
-	if err != nil {
-		return err
-	}
+	blockExpr := astExprToExpr(n.Value)
 	valueExpr, err := g.emitExprValue(blockExpr)
 	if err != nil {
 		return err
@@ -1205,9 +1232,9 @@ func (g *generator) emitWithBlock(n *ast.Block) error {
 	childNode := nodeAtPath(scope.node, pathStr)
 	typedCtxVar := g.nextTemp("ctx")
 	scopePathPrefix := newPathPrefix
-	if len(n.Params) == 1 && isIdent(n.Params[0]) {
-		typedCtxVar = n.Params[0]
-		scopePathPrefix = n.Params[0] // so "u.name" resolves to current var + .Name()
+	if len(n.BlockParams) == 1 && isIdent(n.BlockParams[0]) {
+		typedCtxVar = n.BlockParams[0]
+		scopePathPrefix = n.BlockParams[0] // so "u.name" resolves to current var + .Name()
 	}
 	if valueExpr == "nil" {
 		g.w.line("var %s any", typedCtxVar)
@@ -1238,22 +1265,11 @@ func (g *generator) emitWithBlock(n *ast.Block) error {
 	return nil
 }
 
-func (g *generator) emitEachBlock(n *ast.Block) error {
-	if len(n.Params) > 2 {
-		return hexerr.New(fmt.Sprintf("block %q supports up to 2 params", n.Name))
+func (g *generator) emitEachBlock(n *ast.EachBlock) error {
+	if len(n.BlockParams) > 2 {
+		return hexerr.New("block \"each\" supports up to 2 params")
 	}
-	parts, _, err := parseParts(n.Args)
-	if err != nil {
-		return err
-	}
-	var blockExpr expr
-	if len(parts) == 2 && parts[0].kind == exprPath && parts[0].value == "in" {
-		blockExpr = parts[1]
-	} else if len(parts) != 1 {
-		return hexerr.New(fmt.Sprintf("block %q requires a single expression", n.Name))
-	} else {
-		blockExpr = parts[0]
-	}
+	blockExpr := astExprToExpr(n.Collection)
 	collectionExpr, err := g.emitExprValue(blockExpr)
 	if err != nil {
 		return err
@@ -1297,18 +1313,18 @@ func (g *generator) emitEachBlock(n *ast.Block) error {
 		g.w.indentInc()
 		g.w.line("_, _ = %s, %s", keyVar, itemVar)
 		itemPathPrefix := pathStr
-		if len(n.Params) > 0 {
-			itemPathPrefix = n.Params[0]
+		if len(n.BlockParams) > 0 {
+			itemPathPrefix = n.BlockParams[0]
 		}
 		g.pushTypedScope(itemVar, itemPathPrefix, itemNode)
 		g.typedStack[len(g.typedStack)-1].eachKeyVar = keyVar
-		if len(n.Params) > 1 {
-			g.pushTypedScope(keyVar, n.Params[1], nil)
+		if len(n.BlockParams) > 1 {
+			g.pushTypedScope(keyVar, n.BlockParams[1], nil)
 		}
 		if err := g.emitNodes(n.Body); err != nil {
 			return err
 		}
-		if len(n.Params) > 1 {
+		if len(n.BlockParams) > 1 {
 			g.popTypedScope()
 		}
 		g.popTypedScope()
@@ -1322,13 +1338,13 @@ func (g *generator) emitEachBlock(n *ast.Block) error {
 		g.w.line("_, _ = %s, %s", keyVar, itemVar)
 		g.pushTypedScope(itemVar, itemPathPrefix, itemNode)
 		g.typedStack[len(g.typedStack)-1].eachKeyVar = keyVar
-		if len(n.Params) > 1 {
-			g.pushTypedScope(keyVar, n.Params[1], nil)
+		if len(n.BlockParams) > 1 {
+			g.pushTypedScope(keyVar, n.BlockParams[1], nil)
 		}
 		if err := g.emitNodes(n.Body); err != nil {
 			return err
 		}
-		if len(n.Params) > 1 {
+		if len(n.BlockParams) > 1 {
 			g.popTypedScope()
 		}
 		g.popTypedScope()
@@ -1354,18 +1370,18 @@ func (g *generator) emitEachBlock(n *ast.Block) error {
 	g.w.indentInc()
 	g.w.line("_, _ = %s, %s", keyVar, itemVar) // silence "declared and not used" when body uses @key/@index (we emit nil)
 	itemPathPrefix := pathStr
-	if len(n.Params) > 0 {
-		itemPathPrefix = n.Params[0]
+	if len(n.BlockParams) > 0 {
+		itemPathPrefix = n.BlockParams[0]
 	}
 	g.pushTypedScope(itemVar, itemPathPrefix, itemNode)
 	g.typedStack[len(g.typedStack)-1].eachKeyVar = keyVar
-	if len(n.Params) > 1 {
-		g.pushTypedScope(keyVar, n.Params[1], nil)
+	if len(n.BlockParams) > 1 {
+		g.pushTypedScope(keyVar, n.BlockParams[1], nil)
 	}
 	if err := g.emitNodes(n.Body); err != nil {
 		return err
 	}
-	if len(n.Params) > 1 {
+	if len(n.BlockParams) > 1 {
 		g.popTypedScope()
 	}
 	g.popTypedScope()
@@ -1385,20 +1401,15 @@ func (g *generator) emitEachBlock(n *ast.Block) error {
 }
 
 func (g *generator) emitCustomBlockHelper(n *ast.Block) error {
-	parts, hash, err := parseParts(n.Args)
-	if err != nil {
-		return err
-	}
 	helperExpr, ok := g.helpers[n.Name]
 	if !ok {
 		return hexerr.New(fmt.Sprintf("block helper %q is not defined", n.Name))
 	}
-	if len(parts) == 0 {
-		return hexerr.New(fmt.Sprintf("block helper %q requires at least one argument", n.Name))
+	parts := make([]expr, len(n.Params))
+	for i, p := range n.Params {
+		parts[i] = astExprToExpr(p)
 	}
-	if parts[0].kind != exprPath {
-		return hexerr.New("block helper name must be a path")
-	}
+	hash := astHashToHashArgs(n.Hash)
 
 	// Block body and inverse close over typed context; they receive only w.
 	bodyFnVar := g.nextTemp("bodyFn")
@@ -1466,49 +1477,15 @@ func (g *generator) emitCustomBlockHelper(n *ast.Block) error {
 	return nil
 }
 
-func (g *generator) emitLayoutBlock(n *ast.Block) error {
-	blockExpr, _, err := g.singleBlockExpr(n)
-	if err != nil {
-		return err
-	}
+func (g *generator) emitLayoutBlock(n *ast.LayoutBlock) error {
 	if g.blocksVar == "" {
 		return g.emitNodes(n.Body)
 	}
 	// blocks != nil: output registered content or default body
-	if blockExpr.kind == exprString {
-		name := blockExpr.value
-		g.w.line("if %s != nil {", g.blocksVar)
-		g.w.indentInc()
-		g.w.line("if s, ok := %s.Get(%s); ok && s != \"\" {", g.blocksVar, strconv.Quote(name))
-		g.w.indentInc()
-		g.w.line("if _, err := io.WriteString(%s, s); err != nil { return err }", g.currentWriter())
-		g.w.indentDec()
-		g.w.line("} else {")
-		g.w.indentInc()
-		if err := g.emitNodes(n.Body); err != nil {
-			return err
-		}
-		g.w.indentDec()
-		g.w.line("}")
-		g.w.indentDec()
-		g.w.line("} else {")
-		g.w.indentInc()
-		if err := g.emitNodes(n.Body); err != nil {
-			return err
-		}
-		g.w.indentDec()
-		g.w.line("}")
-		return nil
-	}
-	nameVar := g.nextTemp("blockName")
-	valueExpr, err := g.emitExprValue(blockExpr)
-	if err != nil {
-		return err
-	}
-	g.w.line("%s := runtime.Stringify(%s)", nameVar, valueExpr)
+	name := n.Name
 	g.w.line("if %s != nil {", g.blocksVar)
 	g.w.indentInc()
-	g.w.line("if s, ok := %s.Get(%s); ok && s != \"\" {", g.blocksVar, nameVar)
+	g.w.line("if s, ok := %s.Get(%s); ok && s != \"\" {", g.blocksVar, strconv.Quote(name))
 	g.w.indentInc()
 	g.w.line("if _, err := io.WriteString(%s, s); err != nil { return err }", g.currentWriter())
 	g.w.indentDec()
@@ -1530,11 +1507,7 @@ func (g *generator) emitLayoutBlock(n *ast.Block) error {
 	return nil
 }
 
-func (g *generator) emitLayoutPartial(n *ast.Block) error {
-	blockExpr, _, err := g.singleBlockExpr(n)
-	if err != nil {
-		return err
-	}
+func (g *generator) emitLayoutPartial(n *ast.LayoutPartial) error {
 	if g.blocksVar == "" {
 		return g.emitNodes(n.Body)
 	}
@@ -1547,30 +1520,9 @@ func (g *generator) emitLayoutPartial(n *ast.Block) error {
 		return err
 	}
 	g.popWriter()
-	if blockExpr.kind == exprString {
-		name := blockExpr.value
-		g.w.line("if %s != nil { %s.Set(%s, %s.String()) }", g.blocksVar, g.blocksVar, strconv.Quote(name), bufVar)
-		return nil
-	}
-	nameVar := g.nextTemp("blockName")
-	valueExpr, err := g.emitExprValue(blockExpr)
-	if err != nil {
-		return err
-	}
-	g.w.line("%s := runtime.Stringify(%s)", nameVar, valueExpr)
-	g.w.line("if %s != nil { %s.Set(%s, %s.String()) }", g.blocksVar, g.blocksVar, nameVar, bufVar)
+	name := n.Name
+	g.w.line("if %s != nil { %s.Set(%s, %s.String()) }", g.blocksVar, g.blocksVar, strconv.Quote(name), bufVar)
 	return nil
-}
-
-func (g *generator) singleBlockExpr(n *ast.Block) (expr, []hashArg, error) {
-	parts, hash, err := parseParts(n.Args)
-	if err != nil {
-		return expr{}, nil, err
-	}
-	if len(parts) != 1 {
-		return expr{}, nil, hexerr.New(fmt.Sprintf("block %q requires a single expression", n.Name))
-	}
-	return parts[0], hash, nil
 }
 
 // hashHasIncludeZero reports whether the hash contains includeZero=true.

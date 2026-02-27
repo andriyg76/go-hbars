@@ -23,7 +23,7 @@ func TestParseMixed(t *testing.T) {
 	assertMustache(t, nodes[3], "raw", true)
 	assertText(t, nodes[4], " ")
 	assertMustache(t, nodes[5], "title", true)
-	assertPartial(t, nodes[6], "\"head\" user")
+	assertPartialName(t, nodes[6], "head")
 	assertText(t, nodes[7], ".")
 }
 
@@ -36,7 +36,7 @@ func TestParseBlockIfElse(t *testing.T) {
 	if len(nodes) != 1 {
 		t.Fatalf("expected 1 node, got %d", len(nodes))
 	}
-	block := assertBlock(t, nodes[0], "if", "ok", nil)
+	block := assertIfBlock(t, nodes[0], "ok")
 	if len(block.Body) != 1 || len(block.Else) != 1 {
 		t.Fatalf("expected body/else length 1, got %d/%d", len(block.Body), len(block.Else))
 	}
@@ -53,11 +53,11 @@ func TestParseNestedBlocks(t *testing.T) {
 	if len(nodes) != 1 {
 		t.Fatalf("expected 1 node, got %d", len(nodes))
 	}
-	each := assertBlock(t, nodes[0], "each", "items", nil)
+	each := assertEachBlock(t, nodes[0], "items", nil)
 	if len(each.Body) != 1 {
 		t.Fatalf("expected each body length 1, got %d", len(each.Body))
 	}
-	with := assertBlock(t, each.Body[0], "with", "user", nil)
+	with := assertWithBlock(t, each.Body[0], "user", nil)
 	if len(with.Body) != 1 {
 		t.Fatalf("expected with body length 1, got %d", len(with.Body))
 	}
@@ -73,7 +73,7 @@ func TestParseBlockParams(t *testing.T) {
 	if len(nodes) != 1 {
 		t.Fatalf("expected 1 node, got %d", len(nodes))
 	}
-	block := assertBlock(t, nodes[0], "each", "items", []string{"item", "idx"})
+	block := assertEachBlock(t, nodes[0], "items", []string{"item", "idx"})
 	if len(block.Body) != 1 {
 		t.Fatalf("expected body length 1, got %d", len(block.Body))
 	}
@@ -170,43 +170,91 @@ func assertText(t *testing.T, node ast.Node, value string) {
 	}
 }
 
-func assertMustache(t *testing.T, node ast.Node, expr string, raw bool) {
+func mustacheExprPath(m *ast.Mustache) string {
+	if m == nil {
+		return ""
+	}
+	if pr, ok := m.Expr.(*ast.PathRef); ok {
+		return pr.Path
+	}
+	return ""
+}
+
+func assertMustache(t *testing.T, node ast.Node, path string, raw bool) {
 	t.Helper()
 	m, ok := node.(*ast.Mustache)
 	if !ok {
 		t.Fatalf("expected Mustache node, got %T", node)
 	}
-	if m.Expr != expr || m.Raw != raw {
-		t.Fatalf("Mustache = (%q, %v)", m.Expr, m.Raw)
+	if mustacheExprPath(m) != path || m.Raw != raw {
+		t.Fatalf("Mustache = (expr=%v, raw=%v), want path=%q raw=%v", m.Expr, m.Raw, path, raw)
 	}
 }
 
-func assertPartial(t *testing.T, node ast.Node, expr string) {
+func assertPartialName(t *testing.T, node ast.Node, wantName string) *ast.Partial {
 	t.Helper()
 	p, ok := node.(*ast.Partial)
 	if !ok {
 		t.Fatalf("expected Partial node, got %T", node)
 	}
-	if p.Expr != expr {
-		t.Fatalf("Partial = %q", p.Expr)
+	var gotName string
+	switch nm := p.Name.(type) {
+	case *ast.StringLit:
+		gotName = nm.Value
+	case *ast.PathRef:
+		gotName = nm.Path
 	}
+	if gotName != wantName {
+		t.Fatalf("Partial name = %q, want %q", gotName, wantName)
+	}
+	return p
 }
 
-func assertBlock(t *testing.T, node ast.Node, name string, args string, params []string) *ast.Block {
+func assertIfBlock(t *testing.T, node ast.Node, testPath string) *ast.IfBlock {
 	t.Helper()
-	b, ok := node.(*ast.Block)
+	b, ok := node.(*ast.IfBlock)
 	if !ok {
-		t.Fatalf("expected Block node, got %T", node)
+		t.Fatalf("expected IfBlock node, got %T", node)
 	}
-	if b.Name != name || b.Args != args {
-		t.Fatalf("Block = (%q, %q)", b.Name, b.Args)
+	pr, ok2 := b.Test.(*ast.PathRef)
+	if !ok2 || pr.Path != testPath {
+		t.Fatalf("IfBlock test = %v, want PathRef{%q}", b.Test, testPath)
 	}
-	if len(b.Params) != len(params) {
-		t.Fatalf("Block params = %v", b.Params)
+	return b
+}
+
+func assertWithBlock(t *testing.T, node ast.Node, valuePath string, blockParams []string) *ast.WithBlock {
+	t.Helper()
+	b, ok := node.(*ast.WithBlock)
+	if !ok {
+		t.Fatalf("expected WithBlock node, got %T", node)
 	}
-	for i, param := range params {
-		if b.Params[i] != param {
-			t.Fatalf("Block params = %v", b.Params)
+	pr, ok2 := b.Value.(*ast.PathRef)
+	if !ok2 || pr.Path != valuePath {
+		t.Fatalf("WithBlock value = %v, want PathRef{%q}", b.Value, valuePath)
+	}
+	if len(b.BlockParams) != len(blockParams) {
+		t.Fatalf("WithBlock blockParams = %v, want %v", b.BlockParams, blockParams)
+	}
+	return b
+}
+
+func assertEachBlock(t *testing.T, node ast.Node, collectionPath string, blockParams []string) *ast.EachBlock {
+	t.Helper()
+	b, ok := node.(*ast.EachBlock)
+	if !ok {
+		t.Fatalf("expected EachBlock node, got %T", node)
+	}
+	pr, ok2 := b.Collection.(*ast.PathRef)
+	if !ok2 || pr.Path != collectionPath {
+		t.Fatalf("EachBlock collection = %v, want PathRef{%q}", b.Collection, collectionPath)
+	}
+	if len(b.BlockParams) != len(blockParams) {
+		t.Fatalf("EachBlock blockParams = %v, want %v", b.BlockParams, blockParams)
+	}
+	for i, bp := range blockParams {
+		if b.BlockParams[i] != bp {
+			t.Fatalf("EachBlock blockParams[%d] = %q, want %q", i, b.BlockParams[i], bp)
 		}
 	}
 	return b

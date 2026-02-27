@@ -4,8 +4,77 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/andriyg76/go-hbars/internal/ast"
 	"github.com/andriyg76/hexerr"
 )
+
+// astExprToExpr converts an ast.Expr (from the new typed AST) to the internal expr type.
+func astExprToExpr(e ast.Expr) expr {
+	if e == nil {
+		return expr{kind: exprNull}
+	}
+	switch v := e.(type) {
+	case *ast.PathRef:
+		return expr{kind: exprPath, value: v.Path}
+	case *ast.StringLit:
+		return expr{kind: exprString, value: v.Value}
+	case *ast.NumberLit:
+		return expr{kind: exprNumber, value: v.Value}
+	case *ast.BoolLit:
+		if v.Value {
+			return expr{kind: exprBool, value: "true"}
+		}
+		return expr{kind: exprBool, value: "false"}
+	case *ast.NullLit:
+		return expr{kind: exprNull}
+	case *ast.HelperCall:
+		args := make([]expr, len(v.Params))
+		for i, p := range v.Params {
+			args[i] = astExprToExpr(p)
+		}
+		hash := make([]hashArg, len(v.Hash))
+		for i, h := range v.Hash {
+			hash[i] = hashArg{key: h.Key, value: astExprToExpr(h.Value)}
+		}
+		return expr{kind: exprCall, name: v.Callee, args: args, hash: hash}
+	default:
+		return expr{kind: exprNull}
+	}
+}
+
+// astHashToHashArgs converts []ast.HashEntry to []hashArg for the internal expr system.
+func astHashToHashArgs(h []ast.HashEntry) []hashArg {
+	if len(h) == 0 {
+		return nil
+	}
+	out := make([]hashArg, len(h))
+	for i, entry := range h {
+		out[i] = hashArg{key: entry.Key, value: astExprToExpr(entry.Value)}
+	}
+	return out
+}
+
+// pathsFromAstExpr returns all path-like strings used in an ast.Expr.
+func pathsFromAstExpr(e ast.Expr) []string {
+	if e == nil {
+		return nil
+	}
+	switch v := e.(type) {
+	case *ast.PathRef:
+		return []string{v.Path}
+	case *ast.HelperCall:
+		var out []string
+		for _, p := range v.Params {
+			out = append(out, pathsFromAstExpr(p)...)
+		}
+		for _, h := range v.Hash {
+			out = append(out, pathsFromAstExpr(h.Value)...)
+		}
+		return out
+	default:
+		return nil
+	}
+}
 
 type exprKind int
 

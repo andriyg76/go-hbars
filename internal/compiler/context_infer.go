@@ -188,25 +188,6 @@ func (c *pathCollector) addPath(fullPath string, elementField string) {
 	}
 }
 
-// pathsFromExpr returns all path-like strings used in an expression (for data lookup).
-func pathsFromExpr(e expr) []string {
-	var out []string
-	switch e.kind {
-	case exprPath:
-		return []string{e.value}
-	case exprCall:
-		for _, a := range e.args {
-			out = append(out, pathsFromExpr(a)...)
-		}
-		for _, h := range e.hash {
-			out = append(out, pathsFromExpr(h.value)...)
-		}
-		return out
-	default:
-		return nil
-	}
-}
-
 func (c *pathCollector) collectNodes(nodes []ast.Node) error {
 	for _, node := range nodes {
 		if err := c.collectNode(node); err != nil {
@@ -224,6 +205,22 @@ func (c *pathCollector) collectNode(node ast.Node) error {
 		return c.collectMustache(n)
 	case *ast.Partial:
 		return c.collectPartial(n)
+	case *ast.IfBlock:
+		return c.collectIfBlock(n)
+	case *ast.WithBlock:
+		return c.collectWithBlock(n)
+	case *ast.EachBlock:
+		return c.collectEachBlock(n)
+	case *ast.LayoutBlock:
+		if err := c.collectNodes(n.Body); err != nil {
+			return err
+		}
+		return nil
+	case *ast.LayoutPartial:
+		if err := c.collectNodes(n.Body); err != nil {
+			return err
+		}
+		return nil
 	case *ast.Block:
 		return c.collectBlock(n)
 	default:
@@ -232,94 +229,86 @@ func (c *pathCollector) collectNode(node ast.Node) error {
 }
 
 func (c *pathCollector) collectMustache(n *ast.Mustache) error {
-	parts, _, err := parseParts(n.Expr)
-	if err != nil {
-		return err
-	}
-	if len(parts) == 0 {
+	if n.Expr == nil {
 		return nil
 	}
-	if len(parts) == 1 {
-		if parts[0].kind == exprPath && !c.helpers[parts[0].value] {
-			pathStr := parts[0].value
-			// Don't add @root paths to type tree so partial context interfaces don't require root-only methods
-			if strings.HasPrefix(pathStr, "@root") {
-				return nil
-			}
-			full, elem := c.resolvePath(pathStr)
-			c.addPath(full, elem)
+	switch e := n.Expr.(type) {
+	case *ast.PathRef:
+		if c.helpers[e.Path] {
+			return nil
 		}
-		return nil
-	}
-	if parts[0].kind != exprPath || !c.helpers[parts[0].value] {
-		return nil
-	}
-	for _, p := range parts[1:] {
-		for _, pathStr := range pathsFromExpr(p) {
-			full, elem := c.resolvePath(pathStr)
-			c.addPath(full, elem)
+		if strings.HasPrefix(e.Path, "@root") {
+			return nil
+		}
+		full, elem := c.resolvePath(e.Path)
+		c.addPath(full, elem)
+	case *ast.HelperCall:
+		if !c.helpers[e.Callee] {
+			return nil
+		}
+		for _, p := range e.Params {
+			for _, pathStr := range pathsFromAstExpr(p) {
+				full, elem := c.resolvePath(pathStr)
+				c.addPath(full, elem)
+			}
+		}
+		for _, h := range e.Hash {
+			for _, pathStr := range pathsFromAstExpr(h.Value) {
+				full, elem := c.resolvePath(pathStr)
+				c.addPath(full, elem)
+			}
 		}
 	}
 	return nil
 }
 
 func (c *pathCollector) collectPartial(n *ast.Partial) error {
-	parts, hash, err := parseParts(n.Expr)
-	if err != nil {
-		return nil
-	}
 	// Hash keys become partial context fields (e.g. {{> footer note="thanks"}} -> context has "note").
-	for _, h := range hash {
-		if h.key != "" {
-			c.addPath(h.key, "")
+	for _, h := range n.Hash {
+		if h.Key != "" {
+			c.addPath(h.Key, "")
 		}
+	}
+	// Resolve partial name.
+	var partialName string
+	switch nm := n.Name.(type) {
+	case *ast.StringLit:
+		partialName = nm.Value
+	case *ast.PathRef:
+		partialName = nm.Path
 	}
 	// Merge paths from the partial template so the including template's context has the required methods.
-	if c.parsed != nil && len(parts) >= 1 {
-		var partialName string
-		switch parts[0].kind {
-		case exprString:
-			partialName = parts[0].value
-		case exprPath:
-			partialName = parts[0].value
-		default:
-			partialName = ""
-		}
-		if partialName != "" {
-			sameScope := len(parts) == 1
-			if sameScope {
-				// Check if we're currently inside an #each scope
-				top := c.scopeStack[len(c.scopeStack)-1]
-				if top.eachCollection != "" {
-					// Inside {{#each col}}{{> partial}}{{/each}}: the partial's context IS the element.
-					// Collect partial's paths as element fields of the collection (don't push a new scope).
-					if partialNodes, ok := c.parsed[partialName]; ok {
-						err := c.collectNodes(partialNodes)
-						if err != nil {
-							return err
-						}
+	if c.parsed != nil && partialName != "" {
+		sameScope := n.Ctx == nil
+		if sameScope {
+			// Check if we're currently inside an #each scope
+			top := c.scopeStack[len(c.scopeStack)-1]
+			if top.eachCollection != "" {
+				// Inside {{#each col}}{{> partial}}{{/each}}: the partial's context IS the element.
+				if partialNodes, ok := c.parsed[partialName]; ok {
+					if err := c.collectNodes(partialNodes); err != nil {
+						return err
 					}
-				} else {
-					// Same-scope partial ({{> partial}}): add partial name as path so caller's type tree
-					// has a node for it, and caller will EMBED the partial's context type.
-					c.addPath(partialName, "")
-					if partialNodes, ok := c.parsed[partialName]; ok {
-						c.pushWith(partialName, nil)
-						err := c.collectNodes(partialNodes)
-						c.pop()
-						if err != nil {
-							return err
-						}
+				}
+			} else {
+				// Same-scope partial ({{> partial}}): add partial name as path so caller's type tree
+				// has a node for it, and caller will EMBED the partial's context type.
+				c.addPath(partialName, "")
+				if partialNodes, ok := c.parsed[partialName]; ok {
+					c.pushWith(partialName, nil)
+					err := c.collectNodes(partialNodes)
+					c.pop()
+					if err != nil {
+						return err
 					}
 				}
 			}
-			// Different-context partial ({{> partial ctx}}): do NOT merge partial's paths.
-			// The partial has its own context interface; caller just needs the context path to exist.
 		}
+		// Different-context partial ({{> partial ctx}}): do NOT merge partial's paths.
 	}
 	// For different-context partials, add the context path to the type tree.
-	if len(parts) >= 2 {
-		for _, pathStr := range pathsFromExpr(parts[1]) {
+	if n.Ctx != nil {
+		for _, pathStr := range pathsFromAstExpr(n.Ctx) {
 			full, elem := c.resolvePath(pathStr)
 			c.addPath(full, elem)
 		}
@@ -327,86 +316,80 @@ func (c *pathCollector) collectPartial(n *ast.Partial) error {
 	return nil
 }
 
-func (c *pathCollector) collectBlock(n *ast.Block) error {
-	parts, _, err := parseParts(n.Args)
+func (c *pathCollector) collectIfBlock(n *ast.IfBlock) error {
+	if pr, ok := n.Test.(*ast.PathRef); ok {
+		full, elem := c.resolvePath(pr.Path)
+		c.addPath(full, elem)
+	}
+	if err := c.collectNodes(n.Body); err != nil {
+		return err
+	}
+	return c.collectNodes(n.Else)
+}
+
+func (c *pathCollector) collectWithBlock(n *ast.WithBlock) error {
+	var dataPath string
+	if pr, ok := n.Value.(*ast.PathRef); ok {
+		full, _ := c.resolvePath(pr.Path)
+		dataPath = full
+		c.addPath(full, "")
+	}
+	c.pushWith(dataPath, n.BlockParams)
+	err := c.collectNodes(n.Body)
+	c.pop()
 	if err != nil {
-		return nil
+		return err
 	}
-	switch n.Name {
-	case "if", "unless":
-		if len(parts) == 1 && parts[0].kind == exprPath {
-			full, elem := c.resolvePath(parts[0].value)
-			c.addPath(full, elem)
-		}
-		if err := c.collectNodes(n.Body); err != nil {
-			return err
-		}
-		if err := c.collectNodes(n.Else); err != nil {
-			return err
-		}
-		return nil
-	case "with":
-		var dataPath string
-		if len(parts) == 1 && parts[0].kind == exprPath {
-			full, _ := c.resolvePath(parts[0].value)
-			dataPath = full
+	return c.collectNodes(n.Else)
+}
+
+func (c *pathCollector) collectEachBlock(n *ast.EachBlock) error {
+	var collectionPath string
+	if pr, ok := n.Collection.(*ast.PathRef); ok {
+		full, _ := c.resolvePath(pr.Path)
+		collectionPath = full
+		c.addPath(full, "")
+	}
+	c.pushEach(collectionPath, n.BlockParams)
+	err := c.collectNodes(n.Body)
+	c.pop()
+	if err != nil {
+		return err
+	}
+	return c.collectNodes(n.Else)
+}
+
+func (c *pathCollector) collectBlock(n *ast.Block) error {
+	// Generic block helper (custom registered or universal section).
+	// Universal section (e.g. {{#date}}): treat as {{#with date}}.
+	if len(n.Params) == 0 {
+		// Section with no args — section name is the path
+		full, _ := c.resolvePath(n.Name)
+		c.addPath(full, "")
+	} else if len(n.Params) == 1 {
+		if pr, ok := n.Params[0].(*ast.PathRef); ok {
+			full, _ := c.resolvePath(pr.Path)
 			c.addPath(full, "")
 		}
-		c.pushWith(dataPath, n.Params)
-		err := c.collectNodes(n.Body)
-		c.pop()
-		if err != nil {
-			return err
-		}
-		if err := c.collectNodes(n.Else); err != nil {
-			return err
-		}
-		return nil
-	case "each":
-		var collectionPath string
-		if len(parts) == 2 && parts[0].kind == exprPath && parts[0].value == "in" {
-			if parts[1].kind == exprPath {
-				full, _ := c.resolvePath(parts[1].value)
-				collectionPath = full
-				c.addPath(full, "")
-			}
-		} else if len(parts) == 1 && parts[0].kind == exprPath {
-			full, _ := c.resolvePath(parts[0].value)
-			collectionPath = full
-			c.addPath(full, "")
-		}
-		c.pushEach(collectionPath, n.Params)
-		err := c.collectNodes(n.Body)
-		c.pop()
-		if err != nil {
-			return err
-		}
-		if err := c.collectNodes(n.Else); err != nil {
-			return err
-		}
-		return nil
-	default:
-		// Universal section (e.g. {{#date}}): add the section path so context has the getter
-		if len(parts) == 1 && parts[0].kind == exprPath {
-			full, _ := c.resolvePath(parts[0].value)
-			c.addPath(full, "")
-		}
-		if c.helpers[n.Name] {
-			for _, p := range parts {
-				for _, pathStr := range pathsFromExpr(p) {
-					full, elem := c.resolvePath(pathStr)
-					c.addPath(full, elem)
-				}
+	}
+	if c.helpers[n.Name] {
+		for _, p := range n.Params {
+			for _, pathStr := range pathsFromAstExpr(p) {
+				full, elem := c.resolvePath(pathStr)
+				c.addPath(full, elem)
 			}
 		}
-		if err := c.collectNodes(n.Body); err != nil {
-			return err
+		for _, h := range n.Hash {
+			for _, pathStr := range pathsFromAstExpr(h.Value) {
+				full, elem := c.resolvePath(pathStr)
+				c.addPath(full, elem)
+			}
 		}
-		if err := c.collectNodes(n.Else); err != nil {
-			return err
-		}
-		return nil
 	}
+	if err := c.collectNodes(n.Body); err != nil {
+		return err
+	}
+	return c.collectNodes(n.Else)
 }
 
 // walkPartialsCollect walks the AST and calls add(partialName, paramType, sameScope) for each static partial call.
@@ -423,73 +406,68 @@ func (c *pathCollector) walkPartialsCollect(nodes []ast.Node, goName string, add
 func (c *pathCollector) walkPartialsCollectNode(node ast.Node, goName string, add func(partialName, paramType string, sameScope bool)) error {
 	switch n := node.(type) {
 	case *ast.Partial:
-		parts, _, err := parseParts(n.Expr)
-		if err != nil || len(parts) == 0 {
-			return nil
-		}
-		// Static partial name: exprString or exprPath
+		// Static partial name: StringLit or PathRef
 		var partialName string
-		switch parts[0].kind {
-		case exprString:
-			partialName = parts[0].value
-		case exprPath:
-			partialName = parts[0].value
+		switch nm := n.Name.(type) {
+		case *ast.StringLit:
+			partialName = nm.Value
+		case *ast.PathRef:
+			partialName = nm.Path
 		default:
 			return nil // dynamic partial name, skip
 		}
-		sameScope := len(parts) == 1
+		sameScope := n.Ctx == nil
 		var paramType string
 		if sameScope {
 			paramType = c.currentScopeType(goName)
-		} else if len(parts) == 2 && parts[1].kind == exprPath {
-			paramType = c.pathToScopeType(goName, parts[1].value)
+		} else if pr, ok := n.Ctx.(*ast.PathRef); ok {
+			paramType = c.pathToScopeType(goName, pr.Path)
 		} else {
 			paramType = "any"
 		}
 		add(partialName, paramType, sameScope)
 		return nil
-	case *ast.Block:
-		parts, _, err := parseParts(n.Args)
+	case *ast.WithBlock:
+		var dataPath string
+		if pr, ok := n.Value.(*ast.PathRef); ok {
+			full, _ := c.resolvePath(pr.Path)
+			dataPath = full
+		}
+		c.pushWith(dataPath, n.BlockParams)
+		err := c.walkPartialsCollect(n.Body, goName, add)
+		c.pop()
 		if err != nil {
-			return nil
+			return err
 		}
-		switch n.Name {
-		case "with":
-			var dataPath string
-			if len(parts) == 1 && parts[0].kind == exprPath {
-				full, _ := c.resolvePath(parts[0].value)
-				dataPath = full
-			}
-			c.pushWith(dataPath, n.Params)
-			err := c.walkPartialsCollect(n.Body, goName, add)
-			c.pop()
-			if err != nil {
-				return err
-			}
-			return c.walkPartialsCollect(n.Else, goName, add)
-		case "each":
-			var collectionPath string
-			if len(parts) == 2 && parts[0].kind == exprPath && parts[0].value == "in" && parts[1].kind == exprPath {
-				full, _ := c.resolvePath(parts[1].value)
-				collectionPath = full
-			} else if len(parts) == 1 && parts[0].kind == exprPath {
-				full, _ := c.resolvePath(parts[0].value)
-				collectionPath = full
-			}
-			c.pushEach(collectionPath, n.Params)
-			err := c.walkPartialsCollect(n.Body, goName, add)
-			c.pop()
-			if err != nil {
-				return err
-			}
-			return c.walkPartialsCollect(n.Else, goName, add)
-		default:
-			// if/unless/helper: recurse without changing scope
-			if err := c.walkPartialsCollect(n.Body, goName, add); err != nil {
-				return err
-			}
-			return c.walkPartialsCollect(n.Else, goName, add)
+		return c.walkPartialsCollect(n.Else, goName, add)
+	case *ast.EachBlock:
+		var collectionPath string
+		if pr, ok := n.Collection.(*ast.PathRef); ok {
+			full, _ := c.resolvePath(pr.Path)
+			collectionPath = full
 		}
+		c.pushEach(collectionPath, n.BlockParams)
+		err := c.walkPartialsCollect(n.Body, goName, add)
+		c.pop()
+		if err != nil {
+			return err
+		}
+		return c.walkPartialsCollect(n.Else, goName, add)
+	case *ast.IfBlock:
+		if err := c.walkPartialsCollect(n.Body, goName, add); err != nil {
+			return err
+		}
+		return c.walkPartialsCollect(n.Else, goName, add)
+	case *ast.LayoutBlock:
+		return c.walkPartialsCollect(n.Body, goName, add)
+	case *ast.LayoutPartial:
+		return c.walkPartialsCollect(n.Body, goName, add)
+	case *ast.Block:
+		// Generic helper block: recurse without changing scope
+		if err := c.walkPartialsCollect(n.Body, goName, add); err != nil {
+			return err
+		}
+		return c.walkPartialsCollect(n.Else, goName, add)
 	default:
 		return nil
 	}
