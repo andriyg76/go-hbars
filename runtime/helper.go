@@ -1,29 +1,16 @@
 package runtime
 
-import "io"
+// HelperArgs is the argument bundle passed to every helper.
+// Values are resolved by the compiler; the helper receives typed args and hash.
+type HelperArgs struct {
+	HashArgs  map[string]any   // named (hash) arguments
+	Args     []any            // positional arguments
+	BlockFn   func() error    // when IsBlock: closure that renders the main block (writer captured by compiler); nil otherwise
+	InverseFn func() error    // when IsBlock and else exists: closure that renders the else block; may be nil
+	IsBlock   bool            // true for block helper invocations
+}
 
 // Helper is a user-defined function invoked from a template.
-// It receives only args (no context); values are resolved by the compiler.
-type Helper func(args []any) (any, error)
-
-// BlockHelper is a user-defined block helper function.
-type BlockHelper func(args []any, options BlockOptions) error
-
-// BlockOptions contains the render functions for a block helper.
-// Fn and Inverse receive only w; the block body closes over typed context.
-type BlockOptions struct {
-	Fn      func(w io.Writer) error
-	Inverse func(w io.Writer) error
-}
-
-// GetBlockOptions extracts BlockOptions from the last element of args.
-// Returns (nil, false) if args is empty or the last element is not BlockOptions.
-func GetBlockOptions(args []any) (BlockOptions, bool) {
-	if len(args) == 0 {
-		return BlockOptions{}, false
-	}
-	if opts, ok := args[len(args)-1].(BlockOptions); ok {
-		return opts, true
-	}
-	return BlockOptions{}, false
-}
+// It receives HelperArgs; values are resolved by the compiler.
+// For block helpers, call args.BlockFn() or args.InverseFn() with no arguments; the writer is already captured in the closure.
+type Helper func(args HelperArgs) (any, error)

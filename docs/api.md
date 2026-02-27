@@ -49,12 +49,16 @@ str := runtime.Stringify(value)
 
 ### Helper Arguments
 
-```go
-// HashArg extracts hash arguments from helper arguments
-hash, ok := runtime.HashArg(args)
+Helpers receive a single argument of type `runtime.HelperArgs`:
 
-// GetBlockOptions extracts block options from helper arguments (for block helpers)
-opts, ok := runtime.GetBlockOptions(args)
+```go
+type HelperArgs struct {
+    HashArgs   map[string]any  // named (hash) arguments
+    Args       []any           // positional arguments
+    BlockFn    func() error    // when IsBlock: renders the main block (writer captured in closure); nil otherwise
+    InverseFn  func() error    // when IsBlock and else: renders the else block; may be nil
+    IsBlock    bool            // true for block helper invocations
+}
 ```
 
 ### Truthiness
@@ -84,28 +88,27 @@ val := runtime.LookupPath(root, "title")
 
 ## Helper Functions
 
-Simple helpers (non-block) must match this signature:
+All helpers use the same signature (simple and block):
 
 ```go
-func MyHelper(args []any) (any, error)
+func MyHelper(args runtime.HelperArgs) (any, error)
 ```
 
-Arguments are **resolved by the compiler** before being passed; you receive the evaluated values. No context is passed—the compiler bakes in the needed lookups.
+Arguments are **resolved by the compiler** before being passed; you receive `HelperArgs` with `Args` (positional) and `HashArgs` (named). For block invocations the return value is ignored; call `args.BlockFn()` and `args.InverseFn()` to render block content (the writer is captured in the closure) (they return `error`).
 
 ### Accessing Arguments
 
 ```go
-func MyHelper(args []any) (any, error) {
+func MyHelper(args runtime.HelperArgs) (any, error) {
     // Positional arguments (already evaluated)
-    if len(args) == 0 {
+    if len(args.Args) == 0 {
         return nil, fmt.Errorf("missing argument")
     }
-    firstArg := args[0]
+    firstArg := args.Args[0]
     
     // Hash arguments (key=value pairs)
-    hash, ok := runtime.HashArg(args)
-    if ok {
-        value := hash["key"]
+    if args.HashArgs != nil {
+        value := args.HashArgs["key"]
     }
     
     return result, nil
@@ -114,40 +117,26 @@ func MyHelper(args []any) (any, error) {
 
 ### Block Helpers
 
-Block helpers are invoked by the compiler with a single argument: the full `args` slice, whose **last element** is the block options. Use signature `func(args []any) error` and extract options with `runtime.GetBlockOptions(args)`:
+When a helper is used as a block (`{{#name}}...{{/name}}`), `args.IsBlock` is true and `args.Writer` is the template output writer. Call `args.BlockFn()` or `args.InverseFn()` with no arguments; each is a closure that already captures the template writer. They return `error`. The block is only rendered when you call them.
 
 ```go
-func MyBlockHelper(args []any) error {
-    opts, ok := runtime.GetBlockOptions(args)
-    if !ok {
-        return fmt.Errorf("block helper did not receive BlockOptions")
+func MyBlockHelper(args runtime.HelperArgs) (any, error) {
+    if !args.IsBlock {
+        return nil, nil
     }
-    // Render the main block (opts.Fn(w) requires w from caller scope)
-    if opts.Fn != nil {
-        if err := opts.Fn(w); err != nil {
-            return err
+    if args.BlockFn != nil {
+        if err := args.BlockFn(); err != nil {
+            return nil, err
         }
     }
-    // Render the inverse/else block
-    if opts.Inverse != nil {
-        if err := opts.Inverse(w); err != nil {
-            return err
+    if args.InverseFn != nil {
+        if err := args.InverseFn(); err != nil {
+            return nil, err
         }
     }
-    return nil
+    return nil, nil
 }
 ```
-
-`BlockOptions` provides:
-
-```go
-type BlockOptions struct {
-    Fn      func(io.Writer) error  // main block body
-    Inverse func(io.Writer) error   // else block body
-}
-```
-
-The runtime also defines `BlockHelper` as `func(args []any, options BlockOptions) error` for use when you call a block helper manually with two arguments. When invoked from generated code, only `args` is passed (with options as the last element).
 
 ## Partials
 
@@ -174,20 +163,7 @@ The context data for a template satisfies the generated context interface (e.g. 
 
 ### Hash Arguments
 
-Hash arguments are passed as `runtime.Hash`:
-
-```go
-type Hash map[string]any
-```
-
-### Block Options
-
-```go
-type BlockOptions struct {
-    Fn      func(io.Writer) error
-    Inverse func(io.Writer) error
-}
-```
+Hash arguments are available as `args.HashArgs` (type `map[string]any`) on `HelperArgs`.
 
 ## Error Handling
 
@@ -197,7 +173,7 @@ All render functions return errors. Common error scenarios:
 - Missing helper (compile-time error)
 - Runtime errors in helpers
 - Invalid data types
-- Block helper did not receive BlockOptions
+- Helper runtime errors
 
 Always check errors. When using a `map[string]any` (e.g. from JSON), use the generated `XxxContextFromMap` so data satisfies the context type:
 
@@ -233,17 +209,15 @@ out, err := templates.RenderMainString(templates.MainContextFromMap(data))
 ### Custom Helper
 
 ```go
-func FormatCurrency(args []any) (any, error) {
-    if len(args) == 0 {
+func FormatCurrency(args runtime.HelperArgs) (any, error) {
+    if len(args.Args) == 0 {
         return "", nil
     }
     
-    amount := runtime.Stringify(args[0])
-    hash, _ := runtime.HashArg(args)
-    
+    amount := runtime.Stringify(args.Args[0])
     symbol := "$"
-    if hash != nil {
-        if s, ok := hash["symbol"].(string); ok {
+    if args.HashArgs != nil {
+        if s, ok := args.HashArgs["symbol"].(string); ok {
             symbol = s
         }
     }
@@ -255,27 +229,23 @@ func FormatCurrency(args []any) (any, error) {
 ### Block Helper
 
 ```go
-func IfHelper(args []any) error {
-    opts, ok := runtime.GetBlockOptions(args)
-    if !ok {
-        return fmt.Errorf("if: no block options")
+func IfHelper(args runtime.HelperArgs) (any, error) {
+    if !args.IsBlock || len(args.Args) < 1 {
+        return nil, fmt.Errorf("if requires a condition and block")
     }
-    if len(args) < 1 {
-        return fmt.Errorf("if requires a condition")
-    }
-    condition := args[0]
-    if runtime.IsTruthy(condition) {
-        if opts.Fn != nil {
-            return opts.Fn(w) // w is the template output writer (in scope in generated code)
+    condition := args.Args[0]
+    if ok, _ := runtime.IsTruthy(condition); ok {
+        if args.BlockFn != nil {
+            return nil, args.BlockFn()
         }
-    } else if opts.Inverse != nil {
-        return opts.Inverse(w)
+    } else if args.InverseFn != nil {
+        return nil, args.InverseFn()
     }
-    return nil
+    return nil, nil
 }
 ```
 
-Note: the built-in `if`/`unless`/`each`/`with` are implemented by the compiler; the above illustrates the runtime API for custom block helpers. When the compiler invokes a block helper it calls `helper(args)`; the writer `w` is in scope in the generated render function. Custom helpers that are called from generated code and need to render the block must receive or capture the writer (e.g. via an adapter).
+Note: the built-in `if`/`unless`/`each`/`with` are implemented by the compiler; the above illustrates the runtime API for custom block helpers using `HelperArgs.BlockFn()` and `InverseFn()` (writer is captured in the closure).
 
 ## See also
 

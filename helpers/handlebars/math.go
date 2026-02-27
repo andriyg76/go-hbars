@@ -3,16 +3,16 @@ package handlebars
 import (
 	"math"
 
-	"github.com/andriyg76/go-hbars/helpers"
+	"github.com/andriyg76/go-hbars/runtime"
 )
 
 // Add adds two numbers.
-func Add(args []any) (any, error) {
-	a, err := helpers.GetNumberArg(args, 0)
+func Add(args runtime.HelperArgs) (any, error) {
+	a, err := args.GetNumber(0)
 	if err != nil {
 		return 0, nil
 	}
-	b, err := helpers.GetNumberArg(args, 1)
+	b, err := args.GetNumber(1)
 	if err != nil {
 		return 0, nil
 	}
@@ -20,12 +20,12 @@ func Add(args []any) (any, error) {
 }
 
 // Subtract subtracts the second number from the first.
-func Subtract(args []any) (any, error) {
-	a, err := helpers.GetNumberArg(args, 0)
+func Subtract(args runtime.HelperArgs) (any, error) {
+	a, err := args.GetNumber(0)
 	if err != nil {
 		return 0, nil
 	}
-	b, err := helpers.GetNumberArg(args, 1)
+	b, err := args.GetNumber(1)
 	if err != nil {
 		return 0, nil
 	}
@@ -33,12 +33,12 @@ func Subtract(args []any) (any, error) {
 }
 
 // Multiply multiplies two numbers.
-func Multiply(args []any) (any, error) {
-	a, err := helpers.GetNumberArg(args, 0)
+func Multiply(args runtime.HelperArgs) (any, error) {
+	a, err := args.GetNumber(0)
 	if err != nil {
 		return 0, nil
 	}
-	b, err := helpers.GetNumberArg(args, 1)
+	b, err := args.GetNumber(1)
 	if err != nil {
 		return 0, nil
 	}
@@ -46,12 +46,12 @@ func Multiply(args []any) (any, error) {
 }
 
 // Divide divides the first number by the second.
-func Divide(args []any) (any, error) {
-	a, err := helpers.GetNumberArg(args, 0)
+func Divide(args runtime.HelperArgs) (any, error) {
+	a, err := args.GetNumber(0)
 	if err != nil {
 		return 0, nil
 	}
-	b, err := helpers.GetNumberArg(args, 1)
+	b, err := args.GetNumber(1)
 	if err != nil {
 		return 0, nil
 	}
@@ -62,12 +62,12 @@ func Divide(args []any) (any, error) {
 }
 
 // Modulo returns the remainder of dividing the first number by the second.
-func Modulo(args []any) (any, error) {
-	a, err := helpers.GetNumberArg(args, 0)
+func Modulo(args runtime.HelperArgs) (any, error) {
+	a, err := args.GetNumber(0)
 	if err != nil {
 		return 0, nil
 	}
-	b, err := helpers.GetNumberArg(args, 1)
+	b, err := args.GetNumber(1)
 	if err != nil {
 		return 0, nil
 	}
@@ -78,8 +78,8 @@ func Modulo(args []any) (any, error) {
 }
 
 // Floor returns the floor of a number.
-func Floor(args []any) (any, error) {
-	n, err := helpers.GetNumberArg(args, 0)
+func Floor(args runtime.HelperArgs) (any, error) {
+	n, err := args.GetNumber(0)
 	if err != nil {
 		return 0, nil
 	}
@@ -87,8 +87,8 @@ func Floor(args []any) (any, error) {
 }
 
 // Ceil returns the ceiling of a number.
-func Ceil(args []any) (any, error) {
-	n, err := helpers.GetNumberArg(args, 0)
+func Ceil(args runtime.HelperArgs) (any, error) {
+	n, err := args.GetNumber(0)
 	if err != nil {
 		return 0, nil
 	}
@@ -96,8 +96,8 @@ func Ceil(args []any) (any, error) {
 }
 
 // Round rounds a number to the nearest integer.
-func Round(args []any) (any, error) {
-	n, err := helpers.GetNumberArg(args, 0)
+func Round(args runtime.HelperArgs) (any, error) {
+	n, err := args.GetNumber(0)
 	if err != nil {
 		return 0, nil
 	}
@@ -105,8 +105,8 @@ func Round(args []any) (any, error) {
 }
 
 // Abs returns the absolute value of a number.
-func Abs(args []any) (any, error) {
-	n, err := helpers.GetNumberArg(args, 0)
+func Abs(args runtime.HelperArgs) (any, error) {
+	n, err := args.GetNumber(0)
 	if err != nil {
 		return 0, nil
 	}
@@ -114,12 +114,12 @@ func Abs(args []any) (any, error) {
 }
 
 // Min returns the minimum of two numbers.
-func Min(args []any) (any, error) {
-	a, err := helpers.GetNumberArg(args, 0)
+func Min(args runtime.HelperArgs) (any, error) {
+	a, err := args.GetNumber(0)
 	if err != nil {
 		return 0, nil
 	}
-	b, err := helpers.GetNumberArg(args, 1)
+	b, err := args.GetNumber(1)
 	if err != nil {
 		return a, nil
 	}
@@ -127,12 +127,12 @@ func Min(args []any) (any, error) {
 }
 
 // Max returns the maximum of two numbers.
-func Max(args []any) (any, error) {
-	a, err := helpers.GetNumberArg(args, 0)
+func Max(args runtime.HelperArgs) (any, error) {
+	a, err := args.GetNumber(0)
 	if err != nil {
 		return 0, nil
 	}
-	b, err := helpers.GetNumberArg(args, 1)
+	b, err := args.GetNumber(1)
 	if err != nil {
 		return a, nil
 	}

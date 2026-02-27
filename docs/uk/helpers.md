@@ -30,11 +30,11 @@ go-hbars включає набір хелперів, узгоджений із H
 ```go
 //go:generate hbc -in ./templates -out ./templates_gen.go -pkg templates -helper upper=Upper
 
-func Upper(args []any) (any, error) {
-	if len(args) == 0 {
+func Upper(args runtime.HelperArgs) (any, error) {
+	if len(args.Args) == 0 {
 		return "", nil
 	}
-	return strings.ToUpper(runtime.Stringify(args[0])), nil
+	return strings.ToUpper(runtime.Stringify(args.Args[0])), nil
 }
 ```
 
@@ -150,21 +150,20 @@ opts := compiler.Options{
 Власні хелпери можна реалізувати як звичайні Go-функції та зіставити їх через `-helper name=Ident`. Сигнатура:
 
 ```go
-func MyHelper(args []any) (any, error)
+func MyHelper(args runtime.HelperArgs) (any, error)
 ```
 
-Аргументи обчислюються компілятором перед передачею; ви отримуєте вже обчислені значення. Контекст не передається. Hash-аргументи передаються останнім елементом у `args`. Використовуйте `runtime.HashArg(args)` для їх отримання:
+Аргументи обчислюються компілятором перед передачею; ви отримуєте `runtime.HelperArgs` з полями `Args` (позиційні) та `HashArgs` (іменовані). Для блокових викликів викликайте `args.BlockFn()` та `args.InverseFn()` для рендеру контенту блоку (writer у замиканні) (вони повертають `error`).
 
 ```go
-func FormatCurrency(args []any) (any, error) {
-	if len(args) == 0 {
+func FormatCurrency(args runtime.HelperArgs) (any, error) {
+	if len(args.Args) == 0 {
 		return "", nil
 	}
-	amount := runtime.Stringify(args[0])
-	hash, _ := runtime.HashArg(args)
+	amount := runtime.Stringify(args.Args[0])
 	symbol := "$"
-	if hash != nil {
-		if s, ok := hash["symbol"].(string); ok {
+	if args.HashArgs != nil {
+		if s, ok := args.HashArgs["symbol"].(string); ok {
 			symbol = s
 		}
 	}
@@ -174,42 +173,42 @@ func FormatCurrency(args []any) (any, error) {
 
 ### Блокові хелпери
 
-Блокові хелпери мають сигнатуру `func(args []any) error`. У блоці хелпер отримує `runtime.BlockOptions` останнім елементом `args`. Використовуйте `runtime.GetBlockOptions(args)`. `BlockOptions.Fn` та `BlockOptions.Inverse` мають тип `func(io.Writer) error` (приймають лише writer):
+Блокові хелпери мають ту саму сигнатуру `func(args runtime.HelperArgs) (any, error)`. У блоці `args.IsBlock` дорівнює true і `args.Writer` — writer виводу шаблону. Викликайте `args.BlockFn()` або `args.InverseFn()` без аргументів; кожен є замиканням з уже захопленим writer. Повертають `error`. Повернене значення хелпера для блокових викликів ігнорується.
 
 ```go
-func MyBlockHelper(args []any) error {
-	opts, ok := runtime.GetBlockOptions(args)
-	if !ok {
-		return fmt.Errorf("block helper did not receive BlockOptions")
+func MyBlockHelper(args runtime.HelperArgs) (any, error) {
+	if !args.IsBlock {
+		return nil, nil
 	}
-	if opts.Fn != nil {
-		if err := opts.Fn(w); err != nil {
-			return err
+	if args.BlockFn != nil {
+		if err := args.BlockFn(); err != nil {
+			return nil, err
 		}
 	}
-	return nil
+	if args.InverseFn != nil {
+		if err := args.InverseFn(); err != nil {
+			return nil, err
+		}
+	}
+	return nil, nil
 }
 ```
 
-Блокові хелпери можуть умовно рендерити основний блок (`opts.Fn`) або блок inverse/else (`opts.Inverse`). При виклику зі згенерованого коду передається лише `args`; writer `w` є у контексті згенерованої функції рендеру (див. [API шаблонів](api.md)):
+Приклад умовного блокового хелпера (див. [API шаблонів](api.md)):
 
 ```go
-func IfHelper(args []any) error {
-	opts, ok := runtime.GetBlockOptions(args)
-	if !ok {
-		return fmt.Errorf("if helper must be used as a block")
+func IfHelper(args runtime.HelperArgs) (any, error) {
+	if !args.IsBlock || len(args.Args) == 0 {
+		return nil, fmt.Errorf("if потребує умову та блок")
 	}
-	if len(args) == 0 {
-		return fmt.Errorf("if requires a condition")
-	}
-	condition := args[0]
-	if runtime.IsTruthy(condition) {
-		if opts.Fn != nil {
-			return opts.Fn(w)
+	condition := args.Args[0]
+	if ok, _ := runtime.IsTruthy(condition); ok {
+		if args.BlockFn != nil {
+			return nil, args.BlockFn()
 		}
-	} else if opts.Inverse != nil {
-		return opts.Inverse(w)
+	} else if args.InverseFn != nil {
+		return nil, args.InverseFn()
 	}
-	return nil
+	return nil, nil
 }
 ```

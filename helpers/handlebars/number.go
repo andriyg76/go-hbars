@@ -3,30 +3,22 @@ package handlebars
 import (
 	"fmt"
 
-	"github.com/andriyg76/go-hbars/helpers"
 	"github.com/andriyg76/go-hbars/runtime"
 )
 
 // FormatNumber formats a number with optional precision and separator.
-func FormatNumber(args []any) (any, error) {
-	n, err := helpers.GetNumberArg(args, 0)
+func FormatNumber(args runtime.HelperArgs) (any, error) {
+	n, err := args.GetNumber(0)
 	if err != nil {
 		return "0", nil
 	}
-	
 	precision := 0
-	separator := ","
-	hash, _ := runtime.HashArg(args)
-	if hash != nil {
-		if p, ok := hash["precision"].(float64); ok {
-			precision = int(p)
-		}
-		if p, ok := hash["precision"].(int); ok {
-			precision = p
-		}
-		if s, ok := hash["separator"].(string); ok {
-			separator = s
-		}
+	if p, err := args.GetHashNumber("precision"); err == nil {
+		precision = int(p)
+	}
+	separator := args.GetHashString("separator")
+	if separator == "" {
+		separator = ","
 	}
 	
 	format := fmt.Sprintf("%%.%df", precision)
@@ -52,8 +44,8 @@ func FormatNumber(args []any) (any, error) {
 }
 
 // ToInt converts a value to an integer.
-func ToInt(args []any) (any, error) {
-	n, err := helpers.GetNumberArg(args, 0)
+func ToInt(args runtime.HelperArgs) (any, error) {
+	n, err := args.GetNumber(0)
 	if err != nil {
 		return 0, nil
 	}
@@ -61,8 +53,8 @@ func ToInt(args []any) (any, error) {
 }
 
 // ToFloat converts a value to a float.
-func ToFloat(args []any) (any, error) {
-	n, err := helpers.GetNumberArg(args, 0)
+func ToFloat(args runtime.HelperArgs) (any, error) {
+	n, err := args.GetNumber(0)
 	if err != nil {
 		return 0.0, nil
 	}
@@ -70,29 +62,24 @@ func ToFloat(args []any) (any, error) {
 }
 
 // Random generates a random number between min and max.
-func Random(args []any) (any, error) {
+func Random(args runtime.HelperArgs) (any, error) {
 	min := 0.0
 	max := 100.0
-	
-	if len(args) > 0 {
-		if m, err := helpers.GetNumberArg(args, 0); err == nil {
+	if len(args.Args) > 0 {
+		if m, err := args.GetNumber(0); err == nil {
 			min = m
 		}
 	}
-	if len(args) > 1 {
-		if m, err := helpers.GetNumberArg(args, 1); err == nil {
+	if len(args.Args) > 1 {
+		if m, err := args.GetNumber(1); err == nil {
 			max = m
 		}
 	}
-	
-	hash, _ := runtime.HashArg(args)
-	if hash != nil {
-		if m, ok := hash["min"].(float64); ok {
-			min = m
-		}
-		if m, ok := hash["max"].(float64); ok {
-			max = m
-		}
+	if m, err := args.GetHashNumber("min"); err == nil {
+		min = m
+	}
+	if m, err := args.GetHashNumber("max"); err == nil {
+		max = m
 	}
 	
 	// Simple pseudo-random using current time (not cryptographically secure)
@@ -101,15 +88,14 @@ func Random(args []any) (any, error) {
 }
 
 // ToFixed formats a number with a fixed number of decimal places.
-func ToFixed(args []any) (any, error) {
-	n, err := helpers.GetNumberArg(args, 0)
+func ToFixed(args runtime.HelperArgs) (any, error) {
+	n, err := args.GetNumber(0)
 	if err != nil {
 		return "0", nil
 	}
-	
 	precision := 0
-	if len(args) > 1 {
-		if p, err := helpers.GetNumberArg(args, 1); err == nil {
+	if len(args.Args) > 1 {
+		if p, err := args.GetNumber(1); err == nil {
 			precision = int(p)
 		}
 	}
@@ -119,14 +105,13 @@ func ToFixed(args []any) (any, error) {
 }
 
 // ToString converts a value to a string.
-func ToString(args []any) (any, error) {
-	arg := helpers.GetArg(args, 0)
-	return runtime.Stringify(arg), nil
+func ToString(args runtime.HelperArgs) (any, error) {
+	return runtime.Stringify(args.GetArg(0)), nil
 }
 
 // ToNumber converts a string to a number.
-func ToNumber(args []any) (any, error) {
-	n, err := helpers.GetNumberArg(args, 0)
+func ToNumber(args runtime.HelperArgs) (any, error) {
+	n, err := args.GetNumber(0)
 	if err != nil {
 		return 0, nil
 	}

@@ -2,12 +2,13 @@ package handlebars
 
 import (
 	"github.com/andriyg76/go-hbars/helpers"
+	"github.com/andriyg76/go-hbars/runtime"
 )
 
 // Has returns true if an object has a property.
-func Has(args []any) (any, error) {
-	obj := helpers.GetArg(args, 0)
-	key := helpers.GetStringArg(args, 1)
+func Has(args runtime.HelperArgs) (any, error) {
+	obj := args.GetArg(0)
+	key := args.GetString(1)
 	
 	if key == "" {
 		return false, nil
@@ -25,8 +26,8 @@ func Has(args []any) (any, error) {
 }
 
 // Keys returns the keys of an object.
-func Keys(args []any) (any, error) {
-	obj := helpers.GetArg(args, 0)
+func Keys(args runtime.HelperArgs) (any, error) {
+	obj := args.GetArg(0)
 	
 	switch v := obj.(type) {
 	case map[string]any:
@@ -46,8 +47,8 @@ func Keys(args []any) (any, error) {
 }
 
 // Values returns the values of an object.
-func Values(args []any) (any, error) {
-	obj := helpers.GetArg(args, 0)
+func Values(args runtime.HelperArgs) (any, error) {
+	obj := args.GetArg(0)
 	
 	switch v := obj.(type) {
 	case map[string]any:
@@ -67,13 +68,13 @@ func Values(args []any) (any, error) {
 }
 
 // Size returns the size of an object or array.
-func Size(args []any) (any, error) {
+func Size(args runtime.HelperArgs) (any, error) {
 	return Length(args)
 }
 
 // IsEmpty checks if a value is empty.
-func IsEmpty(args []any) (any, error) {
-	arg := helpers.GetArg(args, 0)
+func IsEmpty(args runtime.HelperArgs) (any, error) {
+	arg := args.GetArg(0)
 	empty, err := helpers.IsEmpty(arg)
 	if err != nil {
 		return nil, err
@@ -82,8 +83,8 @@ func IsEmpty(args []any) (any, error) {
 }
 
 // IsNotEmpty checks if a value is not empty.
-func IsNotEmpty(args []any) (any, error) {
-	arg := helpers.GetArg(args, 0)
+func IsNotEmpty(args runtime.HelperArgs) (any, error) {
+	arg := args.GetArg(0)
 	empty, err := helpers.IsEmpty(arg)
 	if err != nil {
 		return nil, err

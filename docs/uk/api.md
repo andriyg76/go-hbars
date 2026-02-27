@@ -49,12 +49,16 @@ str := runtime.Stringify(value)
 
 ### Аргументи хелперів
 
-```go
-// HashArg витягує hash-аргументи з аргументів хелпера
-hash, ok := runtime.HashArg(args)
+Хелпери отримують один аргумент типу `runtime.HelperArgs`:
 
-// GetBlockOptions витягує опції блоку з аргументів хелпера (для блокових хелперів)
-opts, ok := runtime.GetBlockOptions(args)
+```go
+type HelperArgs struct {
+    HashArgs   map[string]any  // іменовані (hash) аргументи
+    Args       []any           // позиційні аргументи
+    BlockFn    func() error    // коли IsBlock: рендерить основний блок (writer у замиканні); інакше nil
+    InverseFn  func() error    // коли IsBlock і є else: рендерить блок else; може бути nil
+    IsBlock    bool            // true для виклику блокового хелпера
+}
 ```
 
 ### Істинність
@@ -84,28 +88,27 @@ val := runtime.LookupPath(root, "title")
 
 ## Функції-хелпери
 
-Прості хелпери (не блокові) повинні мати таку сигнатуру:
+Усі хелпери (прості та блокові) мають однакову сигнатуру:
 
 ```go
-func MyHelper(args []any) (any, error)
+func MyHelper(args runtime.HelperArgs) (any, error)
 ```
 
-Аргументи **обчислюються компілятором** перед передачею; ви отримуєте вже обчислені значення. Контекст не передається — компілятор підставляє потрібні звертання.
+Аргументи **обчислюються компілятором** перед передачею; ви отримуєте `HelperArgs` з полями `Args` (позиційні) та `HashArgs` (іменовані). Для блокових викликів повернене значення ігнорується; викликайте `args.BlockFn()` та `args.InverseFn()` для рендеру контенту блоку (writer у замиканні) (вони повертають `error`).
 
 ### Доступ до аргументів
 
 ```go
-func MyHelper(args []any) (any, error) {
+func MyHelper(args runtime.HelperArgs) (any, error) {
     // Позиційні аргументи (вже обчислені)
-    if len(args) == 0 {
+    if len(args.Args) == 0 {
         return nil, fmt.Errorf("missing argument")
     }
-    firstArg := args[0]
+    firstArg := args.Args[0]
     
     // Hash-аргументи (пари key=value)
-    hash, ok := runtime.HashArg(args)
-    if ok {
-        value := hash["key"]
+    if args.HashArgs != nil {
+        value := args.HashArgs["key"]
     }
     
     return result, nil
@@ -114,40 +117,26 @@ func MyHelper(args []any) (any, error) {
 
 ### Блокові хелпери
 
-Блокові хелпери викликаються компілятором з одним аргументом: повним зрізом `args`, останнім елементом якого є опції блоку. Використовуйте сигнатуру `func(args []any) error` та витягуйте опції через `runtime.GetBlockOptions(args)`:
+Коли хелпер використовується як блок (`{{#name}}...{{/name}}`), `args.IsBlock` дорівнює true і `args.Writer` — це writer виводу шаблону. Викликайте `args.BlockFn()` або `args.InverseFn()` без аргументів; кожен є замиканням, що вже захоплює writer шаблону. Повертають `error`. Блок рендериться лише при виклику.
 
 ```go
-func MyBlockHelper(args []any) error {
-    opts, ok := runtime.GetBlockOptions(args)
-    if !ok {
-        return fmt.Errorf("block helper did not receive BlockOptions")
+func MyBlockHelper(args runtime.HelperArgs) (any, error) {
+    if !args.IsBlock {
+        return nil, nil
     }
-    // Рендер основного блоку (opts.Fn(w) потребує w з контексту виклику)
-    if opts.Fn != nil {
-        if err := opts.Fn(w); err != nil {
-            return err
+    if args.BlockFn != nil {
+        if err := args.BlockFn(); err != nil {
+            return nil, err
         }
     }
-    // Рендер блоку inverse/else
-    if opts.Inverse != nil {
-        if err := opts.Inverse(w); err != nil {
-            return err
+    if args.InverseFn != nil {
+        if err := args.InverseFn(); err != nil {
+            return nil, err
         }
     }
-    return nil
+    return nil, nil
 }
 ```
-
-`BlockOptions` містить:
-
-```go
-type BlockOptions struct {
-    Fn      func(io.Writer) error  // тіло основного блоку
-    Inverse func(io.Writer) error   // тіло блоку else
-}
-```
-
-У runtime також визначено `BlockHelper` як `func(args []any, options BlockOptions) error` для ручного виклику блокового хелпера з двома аргументами. При виклику зі згенерованого коду передається лише `args` (опції — останній елемент).
 
 ## Партіали
 
@@ -172,20 +161,7 @@ partials["header"](data, w)
 
 ### Hash-аргументи
 
-Hash-аргументи передаються як `runtime.Hash`:
-
-```go
-type Hash map[string]any
-```
-
-### Опції блоку
-
-```go
-type BlockOptions struct {
-    Fn      func(io.Writer) error
-    Inverse func(io.Writer) error
-}
-```
+Hash-аргументи доступні в `args.HashArgs` (тип `map[string]any`) у структурі `HelperArgs`.
 
 ## Обробка помилок
 
@@ -195,7 +171,7 @@ type BlockOptions struct {
 - Відсутній хелпер (помилка компіляції)
 - Помилки рантайму в хелперах
 - Невірні типи даних
-- Блоковий хелпер не отримав BlockOptions
+- Помилки рантайму в хелперах
 
 Завжди перевіряйте помилки. Коли дані у вигляді `map[string]any` (наприклад з JSON), використовуйте згенерований `XxxContextFromMap`, щоб дані задовольняли тип контексту:
 
@@ -231,17 +207,15 @@ out, err := templates.RenderMainString(templates.MainContextFromMap(data))
 ### Власний хелпер
 
 ```go
-func FormatCurrency(args []any) (any, error) {
-    if len(args) == 0 {
+func FormatCurrency(args runtime.HelperArgs) (any, error) {
+    if len(args.Args) == 0 {
         return "", nil
     }
     
-    amount := runtime.Stringify(args[0])
-    hash, _ := runtime.HashArg(args)
-    
+    amount := runtime.Stringify(args.Args[0])
     symbol := "$"
-    if hash != nil {
-        if s, ok := hash["symbol"].(string); ok {
+    if args.HashArgs != nil {
+        if s, ok := args.HashArgs["symbol"].(string); ok {
             symbol = s
         }
     }
@@ -253,27 +227,23 @@ func FormatCurrency(args []any) (any, error) {
 ### Блоковий хелпер
 
 ```go
-func IfHelper(args []any) error {
-    opts, ok := runtime.GetBlockOptions(args)
-    if !ok {
-        return fmt.Errorf("if: no block options")
+func IfHelper(args runtime.HelperArgs) (any, error) {
+    if !args.IsBlock || len(args.Args) < 1 {
+        return nil, fmt.Errorf("if потребує умову та блок")
     }
-    if len(args) < 1 {
-        return fmt.Errorf("if requires a condition")
-    }
-    condition := args[0]
-    if runtime.IsTruthy(condition) {
-        if opts.Fn != nil {
-            return opts.Fn(w) // w — writer виводу шаблону (у контексті згенерованого коду)
+    condition := args.Args[0]
+    if ok, _ := runtime.IsTruthy(condition); ok {
+        if args.BlockFn != nil {
+            return nil, args.BlockFn()
         }
-    } else if opts.Inverse != nil {
-        return opts.Inverse(w)
+    } else if args.InverseFn != nil {
+        return nil, args.InverseFn()
     }
-    return nil
+    return nil, nil
 }
 ```
 
-Примітка: вбудовані `if`/`unless`/`each`/`with` реалізовані компілятором; приклад вище ілюструє рантайм API для власних блокових хелперів. Коли компілятор викликає блоковий хелпер, він викликає `helper(args)`; writer `w` є у контексті згенерованої функції рендеру. Власні хелпери, що викликаються зі згенерованого коду та мають рендерити блок, повинні отримувати або захоплювати writer (наприклад через адаптер).
+Примітка: вбудовані `if`/`unless`/`each`/`with` реалізовані компілятором; приклад вище ілюструє рантайм API для власних блокових хелперів: `HelperArgs.BlockFn()` та `InverseFn()` (writer у замиканні).
 
 ## Див. також
 

@@ -9,12 +9,11 @@ import (
 )
 
 // FormatDate formats a date using the specified format.
-func FormatDate(args []any) (any, error) {
-	arg := helpers.GetArg(args, 0)
+func FormatDate(args runtime.HelperArgs) (any, error) {
+	arg := args.GetArg(0)
 	if arg == nil {
 		return "", nil
 	}
-	
 	var t time.Time
 	switch v := arg.(type) {
 	case time.Time:
@@ -32,13 +31,9 @@ func FormatDate(args []any) (any, error) {
 	default:
 		return "", nil
 	}
-	
-	format := "2006-01-02"
-	hash, _ := runtime.HashArg(args)
-	if hash != nil {
-		if f, ok := hash["format"].(string); ok {
-			format = f
-		}
+	format := args.GetHashString("format")
+	if format == "" {
+		format = "2006-01-02"
 	}
 	
 	// Convert Go time format to a more readable format if needed
@@ -47,20 +42,17 @@ func FormatDate(args []any) (any, error) {
 }
 
 // Now returns the current time.
-func Now(args []any) (any, error) {
-	format := time.RFC3339
-	hash, _ := runtime.HashArg(args)
-	if hash != nil {
-		if f, ok := hash["format"].(string); ok {
-			format = f
-		}
+func Now(args runtime.HelperArgs) (any, error) {
+	format := args.GetHashString("format")
+	if format == "" {
+		format = time.RFC3339
 	}
 	return time.Now().Format(format), nil
 }
 
 // Ago returns a human-readable time ago string.
-func Ago(args []any) (any, error) {
-	arg := helpers.GetArg(args, 0)
+func Ago(args runtime.HelperArgs) (any, error) {
+	arg := args.GetArg(0)
 	if arg == nil {
 		return "", nil
 	}

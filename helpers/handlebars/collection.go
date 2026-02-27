@@ -4,7 +4,6 @@ import (
 	"log"
 	"reflect"
 
-	"github.com/andriyg76/go-hbars/helpers"
 	"github.com/andriyg76/go-hbars/runtime"
 	"github.com/andriyg76/hexerr"
 )
@@ -13,9 +12,9 @@ import (
 type rawGetter interface{ Raw() any }
 
 // Lookup looks up a value from the context or data by key.
-func Lookup(args []any) (any, error) {
-	obj := helpers.GetArg(args, 0)
-	key := helpers.GetStringArg(args, 1)
+func Lookup(args runtime.HelperArgs) (any, error) {
+	obj := args.GetArg(0)
+	key := args.GetString(1)
 	
 	if key == "" {
 		return nil, nil
@@ -39,15 +38,11 @@ func Lookup(args []any) (any, error) {
 }
 
 // Default returns the first argument if it's truthy, otherwise returns the default value.
-func Default(args []any) (any, error) {
-	value := helpers.GetArg(args, 0)
-	defaultVal := helpers.GetArg(args, 1)
-
-	hash, _ := runtime.HashArg(args)
-	if hash != nil {
-		if def, ok := hash["value"]; ok {
-			defaultVal = def
-		}
+func Default(args runtime.HelperArgs) (any, error) {
+	value := args.GetArg(0)
+	defaultVal := args.GetArg(1)
+	if def := args.GetHash("value"); def != nil {
+		defaultVal = def
 	}
 
 	ok, err := runtime.IsTruthy(value)
@@ -64,8 +59,8 @@ func Default(args []any) (any, error) {
 }
 
 // Length returns the length of a string, array, or object.
-func Length(args []any) (any, error) {
-	arg := helpers.GetArg(args, 0)
+func Length(args runtime.HelperArgs) (any, error) {
+	arg := args.GetArg(0)
 	if arg == nil {
 		return 0, nil
 	}
@@ -100,8 +95,8 @@ func Length(args []any) (any, error) {
 }
 
 // First returns the first element of an array.
-func First(args []any) (any, error) {
-	arg := helpers.GetArg(args, 0)
+func First(args runtime.HelperArgs) (any, error) {
+	arg := args.GetArg(0)
 	switch v := arg.(type) {
 	case []any:
 		if len(v) > 0 {
@@ -116,8 +111,8 @@ func First(args []any) (any, error) {
 }
 
 // Last returns the last element of an array.
-func Last(args []any) (any, error) {
-	arg := helpers.GetArg(args, 0)
+func Last(args runtime.HelperArgs) (any, error) {
+	arg := args.GetArg(0)
 	switch v := arg.(type) {
 	case []any:
 		if len(v) > 0 {
@@ -132,9 +127,9 @@ func Last(args []any) (any, error) {
 }
 
 // InArray checks if a value is in an array.
-func InArray(args []any) (any, error) {
-	value := helpers.GetArg(args, 0)
-	arr := helpers.GetArg(args, 1)
+func InArray(args runtime.HelperArgs) (any, error) {
+	value := args.GetArg(0)
+	arr := args.GetArg(1)
 	
 	switch v := arr.(type) {
 	case []any:

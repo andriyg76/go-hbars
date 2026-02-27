@@ -1435,41 +1435,15 @@ func (g *generator) emitCustomBlockHelper(n *ast.Block) error {
 		g.w.line("}")
 	}
 
-	// Build options hash
-	optionsVar := g.nextTemp("options")
-	g.w.line("%s := runtime.BlockOptions{", optionsVar)
-	g.w.indentInc()
-	g.w.line("Fn: %s,", bodyFnVar)
+	inverseVar := ""
 	if inverseFnVar != "nil" {
-		g.w.line("Inverse: %s,", inverseFnVar)
+		inverseVar = inverseFnVar
 	}
-	g.w.indentDec()
-	g.w.line("}")
-
-	// Prepare arguments: parts[0] is first arg, options appended later
-	argsExpr, err := g.emitArgs(parts, hash)
+	helperArgsVar, err := g.emitHelperArgs(parts, hash, true, bodyFnVar, inverseVar, g.currentWriter())
 	if err != nil {
 		return err
 	}
-	// Append options to args
-	if argsExpr == "nil" {
-		argsExpr = g.nextTemp("args")
-		g.w.line("%s := []any{%s}", argsExpr, optionsVar)
-	} else {
-		argsVar := g.nextTemp("args")
-		g.w.line("%s := append(%s, %s)", argsVar, argsExpr, optionsVar)
-		argsExpr = argsVar
-	}
-
-	// Call block helper; it receives full args (including BlockOptions) and uses GetBlockOptions internally
-	hasOptsVar := g.nextTemp("hasOpts")
-	g.w.line("_, %s := runtime.GetBlockOptions(%s)", hasOptsVar, argsExpr)
-	g.w.line("if !%s {", hasOptsVar)
-	g.w.indentInc()
-	g.w.line("return fmt.Errorf(\"block helper %%q did not receive BlockOptions\", %q)", n.Name)
-	g.w.indentDec()
-	g.w.line("}")
-	g.w.line("if err := %s(%s); err != nil {", helperExpr, argsExpr)
+	g.w.line("if err := %s(%s); err != nil {", helperExpr, helperArgsVar)
 	g.w.indentInc()
 	g.w.line("return err")
 	g.w.indentDec()
@@ -1554,12 +1528,12 @@ func (g *generator) emitHelperOutput(helperExpr string, args []expr, hash []hash
 }
 
 func (g *generator) emitHelperValue(helperExpr string, args []expr, hash []hashArg) (string, error) {
-	argsExpr, err := g.emitArgs(args, hash)
+	helperArgsVar, err := g.emitHelperArgs(args, hash, false, "", "", "")
 	if err != nil {
 		return "", err
 	}
 	resultVar := g.nextTemp("result")
-	g.w.line("%s, err := %s(%s)", resultVar, helperExpr, argsExpr)
+	g.w.line("%s, err := %s(%s)", resultVar, helperExpr, helperArgsVar)
 	g.w.line("if err != nil {")
 	g.w.indentInc()
 	g.w.line("return err")
@@ -1568,7 +1542,48 @@ func (g *generator) emitHelperValue(helperExpr string, args []expr, hash []hashA
 	return resultVar, nil
 }
 
-func (g *generator) emitArgs(args []expr, hash []hashArg) (string, error) {
+// emitHelperArgs builds a runtime.HelperArgs value and returns the variable name.
+// For block helpers, bodyFnVar and inverseFnVar are the names of func(w io.Writer) error; writerVar is the current output writer (e.g. "w").
+// For simple helpers pass empty strings for bodyFnVar, inverseFnVar and "" for writerVar.
+func (g *generator) emitHelperArgs(args []expr, hash []hashArg, isBlock bool, bodyFnVar, inverseFnVar, writerVar string) (string, error) {
+	posVar, err := g.emitPositionalArgs(args)
+	if err != nil {
+		return "", err
+	}
+	hashVar, err := g.emitHashMap(hash)
+	if err != nil {
+		return "", err
+	}
+	helperArgsVar := g.nextTemp("helperArgs")
+
+	blockFnExpr := "nil"
+	if isBlock && bodyFnVar != "" && writerVar != "" {
+		blockFnVar := g.nextTemp("blockFn")
+		g.w.line("%s := func() error { return %s(%s) }", blockFnVar, bodyFnVar, writerVar)
+		blockFnExpr = blockFnVar
+	}
+
+	inverseFnExpr := "nil"
+	if isBlock && inverseFnVar != "" && writerVar != "" {
+		inverseFnVal := g.nextTemp("inverseFn")
+		g.w.line("%s := func() error { return %s(%s) }", inverseFnVal, inverseFnVar, writerVar)
+		inverseFnExpr = inverseFnVal
+	}
+
+	g.w.line("%s := runtime.HelperArgs{", helperArgsVar)
+	g.w.indentInc()
+	g.w.line("HashArgs: %s,", hashVar)
+	g.w.line("Args: %s,", posVar)
+	g.w.line("BlockFn: %s,", blockFnExpr)
+	g.w.line("InverseFn: %s,", inverseFnExpr)
+	g.w.line("IsBlock: %v,", isBlock)
+	g.w.indentDec()
+	g.w.line("}")
+	return helperArgsVar, nil
+}
+
+// emitPositionalArgs builds a []any of positional argument values only (no hash).
+func (g *generator) emitPositionalArgs(args []expr) (string, error) {
 	argExprs := make([]string, len(args))
 	for i, arg := range args {
 		var exprValue string
@@ -1590,13 +1605,6 @@ func (g *generator) emitArgs(args []expr, hash []hashArg) (string, error) {
 			}
 		}
 		argExprs[i] = exprValue
-	}
-	if len(hash) > 0 {
-		hashVar, err := g.emitHashMap(hash)
-		if err != nil {
-			return "", err
-		}
-		argExprs = append(argExprs, hashVar)
 	}
 	if len(argExprs) == 0 {
 		return "nil", nil

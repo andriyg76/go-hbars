@@ -13,6 +13,7 @@ import (
 type Hash map[string]any
 
 // HashArg returns the trailing Hash argument if present.
+// Deprecated: helpers now receive runtime.HelperArgs; use args.HashArgs or args.GetHash / GetHashString / GetHashNumber instead.
 func HashArg(args []any) (Hash, bool) {
 	if len(args) == 0 {
 		return nil, false

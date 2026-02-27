@@ -3,18 +3,18 @@ package handlebars
 import (
 	"net/url"
 
-	"github.com/andriyg76/go-hbars/helpers"
+	"github.com/andriyg76/go-hbars/runtime"
 )
 
 // EncodeURI encodes a URI component.
-func EncodeURI(args []any) (any, error) {
-	s := helpers.GetStringArg(args, 0)
+func EncodeURI(args runtime.HelperArgs) (any, error) {
+	s := args.GetString(0)
 	return url.QueryEscape(s), nil
 }
 
 // DecodeURI decodes a URI component.
-func DecodeURI(args []any) (any, error) {
-	s := helpers.GetStringArg(args, 0)
+func DecodeURI(args runtime.HelperArgs) (any, error) {
+	s := args.GetString(0)
 	decoded, err := url.QueryUnescape(s)
 	if err != nil {
 		return s, nil
@@ -23,8 +23,8 @@ func DecodeURI(args []any) (any, error) {
 }
 
 // StripProtocol strips the protocol from a URL.
-func StripProtocol(args []any) (any, error) {
-	s := helpers.GetStringArg(args, 0)
+func StripProtocol(args runtime.HelperArgs) (any, error) {
+	s := args.GetString(0)
 	u, err := url.Parse(s)
 	if err != nil {
 		return s, nil
@@ -37,8 +37,8 @@ func StripProtocol(args []any) (any, error) {
 }
 
 // StripQuerystring strips the query string from a URL.
-func StripQuerystring(args []any) (any, error) {
-	s := helpers.GetStringArg(args, 0)
+func StripQuerystring(args runtime.HelperArgs) (any, error) {
+	s := args.GetString(0)
 	u, err := url.Parse(s)
 	if err != nil {
 		return s, nil

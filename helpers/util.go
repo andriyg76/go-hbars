@@ -3,71 +3,11 @@ package helpers
 import (
 	"log"
 	"reflect"
-	"strconv"
 	"time"
 
 	"github.com/andriyg76/go-hbars/runtime"
 	"github.com/andriyg76/hexerr"
 )
-
-// GetArg returns the argument at index, or nil if out of bounds.
-func GetArg(args []any, idx int) any {
-	if idx < 0 || idx >= len(args) {
-		return nil
-	}
-	return args[idx]
-}
-
-// GetStringArg returns the stringified argument at index, or empty string.
-func GetStringArg(args []any, idx int) string {
-	arg := GetArg(args, idx)
-	if arg == nil {
-		return ""
-	}
-	return runtime.Stringify(arg)
-}
-
-// GetNumberArg attempts to convert the argument at index to a float64.
-func GetNumberArg(args []any, idx int) (float64, error) {
-	arg := GetArg(args, idx)
-	if arg == nil {
-		return 0, nil
-	}
-	switch v := arg.(type) {
-	case float64:
-		return v, nil
-	case float32:
-		return float64(v), nil
-	case int:
-		return float64(v), nil
-	case int8:
-		return float64(v), nil
-	case int16:
-		return float64(v), nil
-	case int32:
-		return float64(v), nil
-	case int64:
-		return float64(v), nil
-	case uint:
-		return float64(v), nil
-	case uint8:
-		return float64(v), nil
-	case uint16:
-		return float64(v), nil
-	case uint32:
-		return float64(v), nil
-	case uint64:
-		return float64(v), nil
-	case string:
-		f, err := strconv.ParseFloat(v, 64)
-		if err != nil {
-			return 0, err
-		}
-		return f, nil
-	default:
-		return 0, hexerr.Newf("cannot convert %T to number", arg)
-	}
-}
 
 // IsEmpty checks if a value is empty (nil, empty string, empty collection, zero number).
 // Returns (true, nil) for empty, (false, nil) for non-empty, or (false, error) when reflect is used and ReflectUsageLevel=ERROR.

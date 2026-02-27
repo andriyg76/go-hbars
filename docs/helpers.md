@@ -30,11 +30,11 @@ go-hbars includes a comprehensive helpers library matching Handlebars.js core an
 ```go
 //go:generate hbc -in ./templates -out ./templates_gen.go -pkg templates -helper upper=Upper
 
-func Upper(args []any) (any, error) {
-	if len(args) == 0 {
+func Upper(args runtime.HelperArgs) (any, error) {
+	if len(args.Args) == 0 {
 		return "", nil
 	}
-	return strings.ToUpper(runtime.Stringify(args[0])), nil
+	return strings.ToUpper(runtime.Stringify(args.Args[0])), nil
 }
 ```
 
@@ -150,21 +150,20 @@ opts := compiler.Options{
 You can implement custom helpers as regular Go functions and map them with `-helper name=Ident`. Helper functions must match this signature:
 
 ```go
-func MyHelper(args []any) (any, error)
+func MyHelper(args runtime.HelperArgs) (any, error)
 ```
 
-Arguments are resolved by the compiler before being passed; you receive evaluated values. No context is passed. Hash arguments are passed as the last element in `args`. Use `runtime.HashArg(args)` to retrieve them:
+Arguments are resolved by the compiler before being passed; you receive `runtime.HelperArgs` with `Args` (positional) and `HashArgs` (named). For block invocations call `args.BlockFn()` and `args.InverseFn()` to render block content (writer captured in closure) (they return `error`).
 
 ```go
-func FormatCurrency(args []any) (any, error) {
-	if len(args) == 0 {
+func FormatCurrency(args runtime.HelperArgs) (any, error) {
+	if len(args.Args) == 0 {
 		return "", nil
 	}
-	amount := runtime.Stringify(args[0])
-	hash, _ := runtime.HashArg(args)
+	amount := runtime.Stringify(args.Args[0])
 	symbol := "$"
-	if hash != nil {
-		if s, ok := hash["symbol"].(string); ok {
+	if args.HashArgs != nil {
+		if s, ok := args.HashArgs["symbol"].(string); ok {
 			symbol = s
 		}
 	}
@@ -174,43 +173,43 @@ func FormatCurrency(args []any) (any, error) {
 
 ### Block Helpers
 
-Block helpers use signature `func(args []any) error`. When used as a block, the helper receives `runtime.BlockOptions` as the last element of `args`. Use `runtime.GetBlockOptions(args)` to retrieve it. `BlockOptions.Fn` and `BlockOptions.Inverse` have type `func(io.Writer) error` (they receive only the writer):
+Block helpers use the same signature `func(args runtime.HelperArgs) (any, error)`. When used as a block, `args.IsBlock` is true and `args.Writer` is the template output writer. Call `args.BlockFn()` or `args.InverseFn()` with no arguments; each captures the template writer in a closure. They return `error`. The return value of the helper is ignored for block invocations.
 
 ```go
-func MyBlockHelper(args []any) error {
-	opts, ok := runtime.GetBlockOptions(args)
-	if !ok {
-		return fmt.Errorf("block helper did not receive BlockOptions")
+func MyBlockHelper(args runtime.HelperArgs) (any, error) {
+	if !args.IsBlock {
+		return nil, nil
 	}
-	if opts.Fn != nil {
-		if err := opts.Fn(w); err != nil {
-			return err
+	if args.BlockFn != nil {
+		if err := args.BlockFn(); err != nil {
+			return nil, err
 		}
 	}
-	return nil
+	if args.InverseFn != nil {
+		if err := args.InverseFn(); err != nil {
+			return nil, err
+		}
+	}
+	return nil, nil
 }
 ```
 
-Block helpers can conditionally render the main block (`opts.Fn`) or the inverse/else block (`opts.Inverse`). When invoked from generated code, only `args` is passed; the writer `w` is in scope in the generated render function (see [Template API](api.md) for details):
+Example: conditional block helper (see [Template API](api.md) for full details):
 
 ```go
-func IfHelper(args []any) error {
-	opts, ok := runtime.GetBlockOptions(args)
-	if !ok {
-		return fmt.Errorf("if helper must be used as a block")
+func IfHelper(args runtime.HelperArgs) (any, error) {
+	if !args.IsBlock || len(args.Args) == 0 {
+		return nil, fmt.Errorf("if requires a condition and block")
 	}
-	if len(args) == 0 {
-		return fmt.Errorf("if requires a condition")
-	}
-	condition := args[0]
-	if runtime.IsTruthy(condition) {
-		if opts.Fn != nil {
-			return opts.Fn(w)
+	condition := args.Args[0]
+	if ok, _ := runtime.IsTruthy(condition); ok {
+		if args.BlockFn != nil {
+			return nil, args.BlockFn()
 		}
-	} else if opts.Inverse != nil {
-		return opts.Inverse(w)
+	} else if args.InverseFn != nil {
+		return nil, args.InverseFn()
 	}
-	return nil
+	return nil, nil
 }
 ```
 

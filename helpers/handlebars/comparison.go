@@ -1,31 +1,30 @@
 package handlebars
 
 import (
-	"github.com/andriyg76/go-hbars/helpers"
 	"github.com/andriyg76/go-hbars/runtime"
 )
 
 // Eq checks if two values are equal.
-func Eq(args []any) (any, error) {
-	a := helpers.GetArg(args, 0)
-	b := helpers.GetArg(args, 1)
+func Eq(args runtime.HelperArgs) (any, error) {
+	a := args.GetArg(0)
+	b := args.GetArg(1)
 	return a == b, nil
 }
 
 // Ne checks if two values are not equal.
-func Ne(args []any) (any, error) {
-	a := helpers.GetArg(args, 0)
-	b := helpers.GetArg(args, 1)
+func Ne(args runtime.HelperArgs) (any, error) {
+	a := args.GetArg(0)
+	b := args.GetArg(1)
 	return a != b, nil
 }
 
 // Lt checks if the first value is less than the second.
-func Lt(args []any) (any, error) {
-	a, err := helpers.GetNumberArg(args, 0)
+func Lt(args runtime.HelperArgs) (any, error) {
+	a, err := args.GetNumber(0)
 	if err != nil {
 		return false, nil
 	}
-	b, err := helpers.GetNumberArg(args, 1)
+	b, err := args.GetNumber(1)
 	if err != nil {
 		return false, nil
 	}
@@ -33,12 +32,12 @@ func Lt(args []any) (any, error) {
 }
 
 // Lte checks if the first value is less than or equal to the second.
-func Lte(args []any) (any, error) {
-	a, err := helpers.GetNumberArg(args, 0)
+func Lte(args runtime.HelperArgs) (any, error) {
+	a, err := args.GetNumber(0)
 	if err != nil {
 		return false, nil
 	}
-	b, err := helpers.GetNumberArg(args, 1)
+	b, err := args.GetNumber(1)
 	if err != nil {
 		return false, nil
 	}
@@ -46,12 +45,12 @@ func Lte(args []any) (any, error) {
 }
 
 // Gt checks if the first value is greater than the second.
-func Gt(args []any) (any, error) {
-	a, err := helpers.GetNumberArg(args, 0)
+func Gt(args runtime.HelperArgs) (any, error) {
+	a, err := args.GetNumber(0)
 	if err != nil {
 		return false, nil
 	}
-	b, err := helpers.GetNumberArg(args, 1)
+	b, err := args.GetNumber(1)
 	if err != nil {
 		return false, nil
 	}
@@ -59,12 +58,12 @@ func Gt(args []any) (any, error) {
 }
 
 // Gte checks if the first value is greater than or equal to the second.
-func Gte(args []any) (any, error) {
-	a, err := helpers.GetNumberArg(args, 0)
+func Gte(args runtime.HelperArgs) (any, error) {
+	a, err := args.GetNumber(0)
 	if err != nil {
 		return false, nil
 	}
-	b, err := helpers.GetNumberArg(args, 1)
+	b, err := args.GetNumber(1)
 	if err != nil {
 		return false, nil
 	}
@@ -72,8 +71,8 @@ func Gte(args []any) (any, error) {
 }
 
 // And returns true if all arguments are truthy.
-func And(args []any) (any, error) {
-	for _, arg := range args {
+func And(args runtime.HelperArgs) (any, error) {
+	for _, arg := range args.Args {
 		ok, err := runtime.IsTruthy(arg)
 		if err != nil {
 			return nil, err
@@ -86,8 +85,8 @@ func And(args []any) (any, error) {
 }
 
 // Or returns true if any argument is truthy.
-func Or(args []any) (any, error) {
-	for _, arg := range args {
+func Or(args runtime.HelperArgs) (any, error) {
+	for _, arg := range args.Args {
 		ok, err := runtime.IsTruthy(arg)
 		if err != nil {
 			return nil, err
@@ -100,8 +99,8 @@ func Or(args []any) (any, error) {
 }
 
 // Not returns the negation of a value.
-func Not(args []any) (any, error) {
-	arg := helpers.GetArg(args, 0)
+func Not(args runtime.HelperArgs) (any, error) {
+	arg := args.GetArg(0)
 	ok, err := runtime.IsTruthy(arg)
 	if err != nil {
 		return nil, err

@@ -176,7 +176,7 @@ For maps, the first parameter is the value, the second is the key.
   Inverse content
 {{/myHelper}}
 ```
-Any registered helper can be used as a block helper. The helper receives `BlockOptions` with `Fn` and `Inverse` callbacks to render the block content. Block helpers should check for `BlockOptions` in their arguments and call the appropriate callback.
+Any registered helper can be used as a block helper. The helper receives `runtime.HelperArgs` with `IsBlock` true and `Writer` set; call `args.BlockFn()` and `args.InverseFn()` to render the block (writer is captured in the closure).
 
 **Universal section:**  
 Any `{{#name}}...{{/name}}` that is not a built-in (`if`/`unless`/`with`/`each`) and not a registered helper is treated as a section: resolve `name` from context; if truthy, render the block with that value as context; else render `{{else}}` if present. Same semantics as `{{#with name}}...{{/with}}`. See [Custom Extensions — Universal section](extensions.md#universal-section).

@@ -7,10 +7,20 @@ import (
 	"github.com/andriyg76/go-hbars/runtime"
 )
 
+// ha builds HelperArgs for tests (positional args only, no hash).
+func ha(args ...any) runtime.HelperArgs {
+	return runtime.HelperArgs{Args: args, HashArgs: nil, IsBlock: false}
+}
+
+// haHash builds HelperArgs with optional hash for tests.
+func haHash(args []any, hash map[string]any) runtime.HelperArgs {
+	return runtime.HelperArgs{Args: args, HashArgs: hash, IsBlock: false}
+}
+
 func TestFormatDate(t *testing.T) {
 	// Test with time.Time
 	now := time.Date(2026, 1, 25, 10, 30, 0, 0, time.UTC)
-	result, err := FormatDate([]any{now})
+	result, err := FormatDate(ha(now))
 	if err != nil {
 		t.Fatalf("FormatDate error: %v", err)
 	}
@@ -19,7 +29,7 @@ func TestFormatDate(t *testing.T) {
 	}
 	
 	// Test with string
-	result, err = FormatDate([]any{"2026-01-25"})
+	result, err = FormatDate(ha("2026-01-25"))
 	if err != nil {
 		t.Fatalf("FormatDate error: %v", err)
 	}
@@ -28,8 +38,8 @@ func TestFormatDate(t *testing.T) {
 	}
 	
 	// Test with custom format
-	hash := runtime.Hash{"format": "2006-01-02 15:04:05"}
-	result, err = FormatDate([]any{now, hash})
+	hash := map[string]any{"format": "2006-01-02 15:04:05"}
+	result, err = FormatDate(haHash([]any{now}, hash))
 	if err != nil {
 		t.Fatalf("FormatDate error: %v", err)
 	}
@@ -40,7 +50,7 @@ func TestFormatDate(t *testing.T) {
 
 func TestDefault(t *testing.T) {
 	// Test with truthy value
-	result, err := Default([]any{"value", "default"})
+	result, err := Default(ha("value", "default"))
 	if err != nil {
 		t.Fatalf("Default error: %v", err)
 	}
@@ -49,7 +59,7 @@ func TestDefault(t *testing.T) {
 	}
 	
 	// Test with falsy value
-	result, err = Default([]any{"", "default"})
+	result, err = Default(ha("", "default"))
 	if err != nil {
 		t.Fatalf("Default error: %v", err)
 	}
@@ -58,8 +68,8 @@ func TestDefault(t *testing.T) {
 	}
 	
 	// Test with hash argument
-	hash := runtime.Hash{"value": "fallback"}
-	result, err = Default([]any{"", hash})
+	hash := map[string]any{"value": "fallback"}
+	result, err = Default(haHash([]any{""}, hash))
 	if err != nil {
 		t.Fatalf("Default error: %v", err)
 	}
@@ -71,7 +81,7 @@ func TestDefault(t *testing.T) {
 func TestLookup(t *testing.T) {
 	// Test with map: lookup key in object
 	data := map[string]any{"name": "test"}
-	result, err := Lookup([]any{data, "name"})
+	result, err := Lookup(ha(data, "name"))
 	if err != nil {
 		t.Fatalf("Lookup error: %v", err)
 	}
@@ -80,7 +90,7 @@ func TestLookup(t *testing.T) {
 	}
 	
 	// Lookup with nil object returns nil (no context in helpers)
-	result, err = Lookup([]any{nil, "key"})
+	result, err = Lookup(ha(nil, "key"))
 	if err != nil {
 		t.Fatalf("Lookup error: %v", err)
 	}
@@ -90,7 +100,7 @@ func TestLookup(t *testing.T) {
 }
 
 func TestUpperLower(t *testing.T) {
-	result, err := Upper([]any{"hello"})
+	result, err := Upper(ha("hello"))
 	if err != nil {
 		t.Fatalf("Upper error: %v", err)
 	}
@@ -98,7 +108,7 @@ func TestUpperLower(t *testing.T) {
 		t.Errorf("expected 'HELLO', got %q", result)
 	}
 	
-	result, err = Lower([]any{"WORLD"})
+	result, err = Lower(ha("WORLD"))
 	if err != nil {
 		t.Fatalf("Lower error: %v", err)
 	}
@@ -109,7 +119,7 @@ func TestUpperLower(t *testing.T) {
 
 func TestComparisonHelpers(t *testing.T) {
 	// Test Eq
-	result, err := Eq([]any{5, 5})
+	result, err := Eq(ha(5, 5))
 	if err != nil {
 		t.Fatalf("Eq error: %v", err)
 	}
@@ -117,7 +127,7 @@ func TestComparisonHelpers(t *testing.T) {
 		t.Errorf("expected true, got %v", result)
 	}
 	
-	result, err = Eq([]any{5, 6})
+	result, err = Eq(ha(5, 6))
 	if err != nil {
 		t.Fatalf("Eq error: %v", err)
 	}
@@ -126,7 +136,7 @@ func TestComparisonHelpers(t *testing.T) {
 	}
 	
 	// Test Lt
-	result, err = Lt([]any{5, 10})
+	result, err = Lt(ha(5, 10))
 	if err != nil {
 		t.Fatalf("Lt error: %v", err)
 	}
@@ -135,7 +145,7 @@ func TestComparisonHelpers(t *testing.T) {
 	}
 	
 	// Test Gt
-	result, err = Gt([]any{10, 5})
+	result, err = Gt(ha(10, 5))
 	if err != nil {
 		t.Fatalf("Gt error: %v", err)
 	}
@@ -146,7 +156,7 @@ func TestComparisonHelpers(t *testing.T) {
 
 func TestMathHelpers(t *testing.T) {
 	// Test Add
-	result, err := Add([]any{5, 3})
+	result, err := Add(ha(5, 3))
 	if err != nil {
 		t.Fatalf("Add error: %v", err)
 	}
@@ -155,7 +165,7 @@ func TestMathHelpers(t *testing.T) {
 	}
 	
 	// Test Multiply
-	result, err = Multiply([]any{5, 3})
+	result, err = Multiply(ha(5, 3))
 	if err != nil {
 		t.Fatalf("Multiply error: %v", err)
 	}
@@ -164,7 +174,7 @@ func TestMathHelpers(t *testing.T) {
 	}
 	
 	// Test Divide
-	result, err = Divide([]any{10, 2})
+	result, err = Divide(ha(10, 2))
 	if err != nil {
 		t.Fatalf("Divide error: %v", err)
 	}
@@ -175,7 +185,7 @@ func TestMathHelpers(t *testing.T) {
 
 func TestStringHelpers(t *testing.T) {
 	// Test Capitalize
-	result, err := Capitalize([]any{"hello"})
+	result, err := Capitalize(ha("hello"))
 	if err != nil {
 		t.Fatalf("Capitalize error: %v", err)
 	}
@@ -184,7 +194,7 @@ func TestStringHelpers(t *testing.T) {
 	}
 	
 	// Test Truncate
-	result, err = Truncate([]any{"hello world", 5})
+	result, err = Truncate(ha("hello world", 5))
 	if err != nil {
 		t.Fatalf("Truncate error: %v", err)
 	}
@@ -193,7 +203,7 @@ func TestStringHelpers(t *testing.T) {
 	}
 	
 	// Test Join
-	result, err = Join([]any{[]any{"a", "b", "c"}, "-"})
+	result, err = Join(ha([]any{"a", "b", "c"}, "-"))
 	if err != nil {
 		t.Fatalf("Join error: %v", err)
 	}
@@ -204,7 +214,7 @@ func TestStringHelpers(t *testing.T) {
 
 func TestCollectionHelpers(t *testing.T) {
 	// Test Length
-	result, err := Length([]any{[]any{1, 2, 3}})
+	result, err := Length(ha([]any{1, 2, 3}))
 	if err != nil {
 		t.Fatalf("Length error: %v", err)
 	}
@@ -213,7 +223,7 @@ func TestCollectionHelpers(t *testing.T) {
 	}
 	
 	// Test First
-	result, err = First([]any{[]any{"a", "b", "c"}})
+	result, err = First(ha([]any{"a", "b", "c"}))
 	if err != nil {
 		t.Fatalf("First error: %v", err)
 	}
@@ -222,7 +232,7 @@ func TestCollectionHelpers(t *testing.T) {
 	}
 	
 	// Test Last
-	result, err = Last([]any{[]any{"a", "b", "c"}})
+	result, err = Last(ha([]any{"a", "b", "c"}))
 	if err != nil {
 		t.Fatalf("Last error: %v", err)
 	}
@@ -231,7 +241,7 @@ func TestCollectionHelpers(t *testing.T) {
 	}
 	
 	// Test InArray
-	result, err = InArray([]any{"b", []any{"a", "b", "c"}})
+	result, err = InArray(ha("b", []any{"a", "b", "c"}))
 	if err != nil {
 		t.Fatalf("InArray error: %v", err)
 	}
