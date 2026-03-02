@@ -99,6 +99,7 @@ type codegenParams struct {
 	names                  []string
 	funcNames              map[string]string
 	partialParamTypes      map[string]string
+	hashOnlyPartials       map[string]bool
 	canonicalType          map[string]string
 	primaryCaller          map[string]string
 	typeTrees              map[string]*typeNode
@@ -158,8 +159,8 @@ func CompileTemplates(templates map[string]string, opts Options) ([]byte, error)
 	usedHelpers := collectUsedHelperNames(parsed, helperExprs)
 	helperImports = filterHelperImports(helperImports, opts.Helpers, usedHelpers)
 
-	partialParamTypes := CollectPartialParamTypes(parsed, names, funcNames, helperExprs)
-	typeSet := buildPartialTypeSet(parsed, names, funcNames, helperExprs)
+	partialParamTypes, hashOnlyPartials := CollectPartialParamTypes(parsed, names, funcNames, helperExprs)
+	typeSet, _ := buildPartialTypeSet(parsed, names, funcNames, helperExprs)
 	// Ensure shared partials (multiple same-scope callers) have a Go name so they get a canonical type.
 	// Partials referenced by path (e.g. news/informer) may not be in names (templates map keys).
 	for partialName, set := range typeSet {
@@ -206,6 +207,7 @@ func CompileTemplates(templates map[string]string, opts Options) ([]byte, error)
 		names:                 names,
 		funcNames:             funcNames,
 		partialParamTypes:     partialParamTypes,
+		hashOnlyPartials:      hashOnlyPartials,
 		canonicalType:         canonicalType,
 		primaryCaller:         primaryCaller,
 		typeTrees:             typeTrees,
@@ -333,10 +335,10 @@ func compileCodegen(p codegenParams, opts Options) ([]byte, error) {
 		}
 		contextIfaces.line("")
 		contextIfaces.line("// Canonical partial %q (not a root template).", partialName)
-		emitContextInterfaces(contextIfaces, partialName, goName, subtree, canonicalType, primaryCaller, typeTrees)
+		emitContextInterfaces(contextIfaces, partialName, goName, subtree, canonicalType, primaryCaller, typeTrees, p.hashOnlyPartials)
 		contextData.line("")
 		contextData.line("// Canonical partial %q (not a root template).", partialName)
-		emitContextDataTypes(contextData, partialName, goName, subtree, canonicalType, primaryCaller, typeTrees)
+		emitContextDataTypes(contextData, partialName, goName, subtree, canonicalType, primaryCaller, typeTrees, p.hashOnlyPartials)
 	}
 
 	for i, name := range append(first, rest...) {
@@ -348,14 +350,14 @@ func compileCodegen(p codegenParams, opts Options) ([]byte, error) {
 			}
 			contextIfaces.line("// from %s:1", sourceRefComment(file))
 		}
-		emitContextInterfaces(contextIfaces, name, goName, tree, canonicalType, primaryCaller, typeTrees)
+		emitContextInterfaces(contextIfaces, name, goName, tree, canonicalType, primaryCaller, typeTrees, p.hashOnlyPartials)
 		if file := opts.TemplateFiles[name]; file != "" {
 			if i > 0 {
 				contextData.line("")
 			}
 			contextData.line("// from %s:1", sourceRefComment(file))
 		}
-		emitContextDataTypes(contextData, name, goName, tree, canonicalType, primaryCaller, typeTrees)
+		emitContextDataTypes(contextData, name, goName, tree, canonicalType, primaryCaller, typeTrees, p.hashOnlyPartials)
 	}
 
 	partials := &codeWriter{}
@@ -430,7 +432,7 @@ func compileCodegen(p codegenParams, opts Options) ([]byte, error) {
 			ownerName = name
 		}
 		tree := typeTrees[ownerName]
-		gen := &generator{w: functions, helpers: helperExprs, partials: funcNames, typeTrees: typeTrees, tree: tree, goName: goName, rootVar: "root"}
+		gen := &generator{w: functions, helpers: helperExprs, partials: funcNames, typeTrees: typeTrees, tree: tree, goName: goName, templateName: name, hashOnlyPartials: p.hashOnlyPartials, rootVar: "root"}
 		if useLayoutBlocks {
 			gen.blocksVar = "blocks"
 		}
@@ -897,17 +899,19 @@ type typedScope struct {
 }
 
 type generator struct {
-	w           *codeWriter
-	helpers     map[string]string
-	partials    map[string]string
-	typeTrees   map[string]*typeNode
-	tempID      int
-	tree        *typeNode
-	goName      string
-	typedStack  []typedScope
-	rootVar     string   // name of root context variable ("root"); same as data in entry, passed in for partials
-	blocksVar   string   // non-empty when layout block/partial are used
-	writerStack []string // when non-empty, currentWriter() returns "&" + top for partial body capture
+	w                *codeWriter
+	helpers          map[string]string
+	partials         map[string]string
+	typeTrees        map[string]*typeNode
+	tempID           int
+	tree             *typeNode
+	goName           string
+	templateName     string             // template name (e.g. "menu") for hash-only lookup
+	hashOnlyPartials map[string]bool    // when set, templateName in this set means context is hash-only (Menu() any etc.)
+	typedStack       []typedScope
+	rootVar          string   // name of root context variable ("root"); same as data in entry, passed in for partials
+	blocksVar        string   // non-empty when layout block/partial are used
+	writerStack      []string // when non-empty, currentWriter() returns "&" + top for partial body capture
 }
 
 func (g *generator) currentWriter() string {
@@ -1053,37 +1057,18 @@ func (g *generator) emitPartial(n *ast.Partial) error {
 			g.w.line("%s := %s", baseCtxVar, valueExpr)
 		}
 	}
-	// Partial context: only hash => hash + keys used in partial (from current scope); explicit+hash => base + hash.
+	// Partial context: only hash => restricted context (hash only); explicit ctx => that context; explicit+hash => base + hash.
 	if len(hash) > 0 {
 		hashMapVar, err := g.emitPartialContextMap(hash)
 		if err != nil {
 			return err
 		}
 		partialCtxVar = g.nextTemp("partialCtx")
-		partialName := ""
-		if nameExpr.kind == exprString {
-			partialName = nameExpr.value
-		} else if nameExpr.kind == exprPath {
-			partialName = nameExpr.value
-		}
-		if !hasCtx && partialName != "" && g.typeTrees != nil && g.typeTrees[partialName] != nil {
-			// Only hash, static partial: context = hash + keys the partial uses (from current scope).
+		if !hasCtx {
+			// Only hash (e.g. {{> menu menu=_shared.menu}}): pass restricted context with just the hash, not the full caller context.
 			g.w.line("%s := runtime.MergePartialContext(nil, %s)", partialCtxVar, hashMapVar)
-			hashKeys := make(map[string]bool)
-			for _, h := range hash {
-				if h.key != "" {
-					hashKeys[h.key] = true
-				}
-			}
-			for _, key := range RootFieldKeys(g.typeTrees[partialName]) {
-				if hashKeys[key] {
-					continue
-				}
-				valExpr := g.emitPathValue(key)
-				g.w.line("%s[%q] = %s", partialCtxVar, key, valExpr)
-			}
 		} else {
-			// Explicit context + hash, or dynamic partial with hash: base map + hash.
+			// Explicit context + hash: base map + hash.
 			baseMapVar := g.nextTemp("partialBaseMap")
 			g.w.line("%s := contextMap(%s)", baseMapVar, baseCtxVar)
 			g.w.line("%s := runtime.MergePartialContext(%s, %s)", partialCtxVar, baseMapVar, hashMapVar)
@@ -1274,10 +1259,14 @@ func (g *generator) emitEachBlock(n *ast.EachBlock) error {
 	if err != nil {
 		return err
 	}
-	scope, _ := g.currentTypedScope()
+	scope, scopeOk := g.currentTypedScope()
 	pathStr := ""
 	if blockExpr.kind == exprPath {
 		pathStr = blockExpr.value
+	}
+	// Hash-only partial (e.g. menu): context has Menu() any, so "menu.items" cannot use Method().Items(); use runtime.LookupPath.
+	if pathStr != "" && strings.Contains(pathStr, ".") && g.hashOnlyPartials != nil && g.hashOnlyPartials[g.templateName] {
+		collectionExpr = "runtime.LookupPath(" + scope.varName + ", " + strconv.Quote(pathStr) + ")"
 	}
 	colNode := nodeAtPath(scope.node, pathStr)
 	var itemNode *typeNode
@@ -1291,6 +1280,16 @@ func (g *generator) emitEachBlock(n *ast.EachBlock) error {
 	rangeExpr := itemsVar
 	lenExpr := itemsVar
 	useMapAssert := false
+	hashOnlyEach := pathStr != "" && strings.Contains(pathStr, ".") && g.hashOnlyPartials != nil && g.hashOnlyPartials[g.templateName]
+	if hashOnlyEach {
+		useMapAssert = true // LookupPath returns any; try []any and map[string]any
+		itemNode = nil     // body will use runtime.LookupPath(itemVar, path) for path resolution
+	}
+	// Inside hash-only each body (scope with node == nil), collection is any; must try []any / map.
+	if scopeOk && scope.node == nil && collectionExpr != "nil" {
+		useMapAssert = true
+		itemNode = nil
+	}
 	if collectionExpr == "nil" {
 		// Unresolved path: use typed nil slice so we can range and use len
 		itemType := contextItemInterfaceName(g.goName, pathStr)
@@ -1786,7 +1785,20 @@ func (g *generator) emitPathValue(path string) string {
 		}
 	}
 	scope, ok := g.currentTypedScope()
-	if !ok || scope.node == nil {
+	if !ok {
+		return "nil"
+	}
+	// Hash-only partial each body: scope has node == nil, item is any; use runtime.LookupPath.
+	if scope.node == nil {
+		if path == "" {
+			return scope.varName
+		}
+		if path[0] != '@' && !strings.HasPrefix(path, "../") {
+			return "runtime.LookupPath(" + scope.varName + ", " + strconv.Quote(path) + ")"
+		}
+		return "nil"
+	}
+	if scope.node == nil {
 		return "nil"
 	}
 	chain, ok := resolvePathToMethodChain(scope.node, scope.pathPrefix, path, g.goName)

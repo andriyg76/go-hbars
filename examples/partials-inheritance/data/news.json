@@ -1,12 +1,14 @@
 {
-  "_page": {
-    "template": "news",
-    "output": "news.html"
-  },
-  "title": "Partial Inheritance",
+  "_page": { "template": "news", "output": "news.html" },
+  "caption": "Приклад новини",
+  "date": "27.02.2025",
+  "body": "<p>Текст новини. Використовує той самий базовий layout (default) з блоками caption, keywords, content.</p>",
   "_shared": {
     "menu": {
-      "title": "Shared Menu"
+      "items": [
+        { "caption": "Головна", "url": "/" },
+        { "caption": "Новини", "url": "/news" }
+      ]
     }
   }
 }

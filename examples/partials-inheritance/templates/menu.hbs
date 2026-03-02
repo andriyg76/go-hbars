@@ -1,1 +1,7 @@
-<nav>{{title}}</nav>
+<nav id="menu">
+<ul>
+{{#each menu.items}}
+<li><a href="{{ url }}">{{ caption }}</a>{{#if items}}<ul>{{#each items}}<li><a href="{{ url }}">{{ caption }}</a></li>{{/each}}</ul>{{/if}}</li>
+{{/each}}
+</ul>
+</nav>

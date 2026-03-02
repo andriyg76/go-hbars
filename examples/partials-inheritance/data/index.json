@@ -1,12 +1,14 @@
 {
-  "_page": {
-    "template": "default",
-    "output": "index.html"
-  },
-  "title": "Partial Inheritance",
+  "_page": { "template": "page", "output": "page.html" },
+  "caption": "Partial Inheritance",
+  "keywords": "partials, inheritance, handlebars",
+  "body": "<p>Generic page content. Same layout as firstpage and news, filled via blocks.</p>",
   "_shared": {
     "menu": {
-      "title": "Shared Menu"
+      "items": [
+        { "caption": "Головна", "url": "/" },
+        { "caption": "Новини", "url": "/news" }
+      ]
     }
   }
 }

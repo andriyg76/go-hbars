@@ -40,10 +40,15 @@ type MenuContext interface {
 
 ## Data
 
-- `data/index.json` – data for the index page (`_page.template`: default, `_page.output`: index.html)
-- `data/news.json` – data for the news page (`_page.template`: news, `_page.output`: news.html)
+Three data sets, one per end template:
 
-## Build two pages: index.html and news.html
+- `data/index.json` – for template `page` → **page.html**
+- `data/firstpage.json` – for template `firstpage` (головна) → **index.html**
+- `data/news.json` – for template `news` → **news.html**
+
+Each JSON may include `_page.template` and `_page.output` (stripped before rendering). Shared layout data: `title`, `_shared.menu` (for the menu partial).
+
+## Build pages: page.html, index.html, news.html
 
 1. Generate Go code from templates (from repo root):
 
@@ -69,4 +74,4 @@ type MenuContext interface {
    go run .
    ```
 
-   This writes **index.html** (from template `default`) and **news.html** (from template `news`) using data from `data/index.json` and `data/news.json`.
+   This writes **page.html**, **index.html**, and **news.html** using data from `data/index.json`, `data/firstpage.json`, and `data/news.json`.

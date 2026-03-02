@@ -1,0 +1,24 @@
+{
+  "_page": { "template": "firstpage", "output": "index.html" },
+  "keywords": "головна, приклад",
+  "items": [
+    {
+      "caption": "Перший блок",
+      "date": "27.02.2025",
+      "body": "<p>Текст першого блоку на головній.</p>"
+    },
+    {
+      "caption": "Другий блок",
+      "link": "/page2",
+      "body": "<p>Текст другого блоку з посиланням.</p>"
+    }
+  ],
+  "_shared": {
+    "menu": {
+      "items": [
+        { "caption": "Головна", "url": "/" },
+        { "caption": "Новини", "url": "/news" }
+      ]
+    }
+  }
+}

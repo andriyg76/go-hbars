@@ -1,2 +1,15 @@
-News: {{title}}
-{{> layout}}
+{{#partial "caption"}}
+    Новини
+{{/partial}}
+
+{{#partial "keywords"}}
+    Новини
+{{/partial}}
+
+{{#partial "content"}}
+    <h1 class="header_t">{{{ caption }}}</h1>
+    <div class="currentDate">{{{ date }}}</div>
+    <div id="content">{{{ body }}}</div>
+{{/partial}}
+
+{{> default }}

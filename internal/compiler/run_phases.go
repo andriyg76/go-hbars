@@ -116,8 +116,8 @@ func RunPhase2a(phase1 *Phase1Result, opts Options) (*Phase2aResult, error) {
 	}
 	parsed, names, funcNamesStr, helperExprs := phase1ToMaps(phase1)
 
-	partialParamTypes := CollectPartialParamTypes(parsed, names, funcNamesStr, helperExprs)
-	typeSet := buildPartialTypeSet(parsed, names, funcNamesStr, helperExprs)
+	partialParamTypes, hashOnlyPartials := CollectPartialParamTypes(parsed, names, funcNamesStr, helperExprs)
+	typeSet, _ := buildPartialTypeSet(parsed, names, funcNamesStr, helperExprs)
 	for partialName, set := range typeSet {
 		if len(set) > 1 && funcNamesStr[partialName] == "" {
 			funcNamesStr[partialName] = goIdent(partialName)
@@ -155,6 +155,7 @@ func RunPhase2a(phase1 *Phase1Result, opts Options) (*Phase2aResult, error) {
 
 	return &Phase2aResult{
 		PartialParamTypes: partialParamTypesTyped,
+		HashOnlyPartials:  hashOnlyPartials,
 		TypeSet:           typeSetTyped,
 		CanonicalType:     canonicalTypeTyped,
 		PrimaryCaller:     primaryCallerTyped,
@@ -650,11 +651,16 @@ func RunPhase4(phase1 *Phase1Result, phase2b *Phase2bResult, opts Options) ([]by
 	if runtimeImport == "" {
 		runtimeImport = "github.com/andriyg76/go-hbars/runtime"
 	}
+	hashOnlyPartials := phase2b.Phase2a.HashOnlyPartials
+	if hashOnlyPartials == nil {
+		hashOnlyPartials = make(map[string]bool)
+	}
 	return compileCodegen(codegenParams{
 		parsed:                 parsed,
 		names:                  names,
 		funcNames:              funcNamesStr,
 		partialParamTypes:      partialParamTypes,
+		hashOnlyPartials:       hashOnlyPartials,
 		canonicalType:          canonicalType,
 		primaryCaller:          primaryCaller,
 		typeTrees:              typeTrees,

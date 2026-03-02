@@ -1,3 +1,11 @@
 hbc
 /init
-*.exe
+**/*.exe
+examples/partials-inheritance
+cmd/build/build
+cmd/init/init
+cmd/server
+partials-inheritance
+build
+init
+server

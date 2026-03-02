@@ -11,32 +11,53 @@ import (
 // Template inclusion (who includes whom):
 // ```mermaid
 // flowchart LR
-// default --> layout
-// firstpage --> layout
-// news --> layout
+// default --> bottom
+// default --> header
+// default --> menu
+// firstpage --> bottom
+// firstpage --> default
+// firstpage --> firstpage_greeting
+// firstpage --> header
+// firstpage --> menu
+// news --> bottom
+// news --> default
+// news --> header
+// news --> menu
+// page --> bottom
+// page --> default
+// page --> header
+// page --> menu
 // ```
 //
 // Context type structure:
 // ```mermaid
 // classDiagram
-// DefaultContext --> LayoutContext : Layout()
-// FirstpageContext --> LayoutContext : Layout()
+// DefaultContext --> BottomContext : Bottom()
+// DefaultContext --> HeaderContext : Header()
+// DefaultContext --> DefaultMenuContext : Menu()
+// FirstpageContext --> BottomContext : Bottom()
+// FirstpageContext --> DefaultContext : Default()
+// FirstpageContext --> FirstpageFirstpageGreetingContext : FirstpageGreeting()
+// FirstpageContext --> HeaderContext : Header()
+// FirstpageContext --> FirstpageMenuContext : Menu()
 // class MenuContext { }
-// NewsContext --> LayoutContext : Layout()
-// class LayoutContext { canonical }
+// NewsContext --> BottomContext : Bottom()
+// NewsContext --> DefaultContext : Default()
+// NewsContext --> HeaderContext : Header()
+// NewsContext --> NewsMenuContext : Menu()
+// PageContext --> BottomContext : Bottom()
+// PageContext --> DefaultContext : Default()
+// PageContext --> HeaderContext : Header()
+// PageContext --> PageMenuContext : Menu()
+// class DefaultContext { canonical }
+// class HeaderContext { canonical }
+// class BottomContext { canonical }
 // ```
 
-// from examples/partials-inheritance/templates/layout.hbs:1
+// from examples/partials-inheritance/templates/bottom.hbs:1
 
-// LayoutContext is the context interface inferred from template "layout".
-type LayoutContext interface {
-	Shared() LayoutSharedContext
-	Raw() any
-}
-
-// LayoutSharedContext is the context for path "_shared".
-type LayoutSharedContext interface {
-	Menu() any
+// BottomContext is the context interface inferred from template "bottom".
+type BottomContext interface {
 	Raw() any
 }
 
@@ -44,8 +65,36 @@ type LayoutSharedContext interface {
 
 // DefaultContext is the context interface inferred from template "default".
 type DefaultContext interface {
-	LayoutContext
-	Title() any
+	Bottom() any
+	Header() any
+	Menu() DefaultMenuContext
+	Raw() any
+}
+
+// DefaultMenuContext is the context for path "menu".
+type DefaultMenuContext interface {
+	Menu() DefaultMenuMenuContext
+	Raw() any
+}
+
+// DefaultMenuMenuContext is the context for path "menu.menu".
+type DefaultMenuMenuContext interface {
+	Items() []DefaultMenuMenuItemsItemContext
+	Raw() any
+}
+
+// DefaultMenuMenuItemsItemContext is the context for one element of menu.menu.items.
+type DefaultMenuMenuItemsItemContext interface {
+	Caption() any
+	Items() any
+	Url() any
+	Raw() any
+}
+
+// from examples/partials-inheritance/templates/header.hbs:1
+
+// HeaderContext is the context interface inferred from template "header".
+type HeaderContext interface {
 	Raw() any
 }
 
@@ -53,8 +102,42 @@ type DefaultContext interface {
 
 // FirstpageContext is the context interface inferred from template "firstpage".
 type FirstpageContext interface {
-	LayoutContext
-	Title() any
+	Bottom() any
+	Default() any
+	FirstpageGreeting() any
+	Header() any
+	Items() []FirstpageItemsItemContext
+	Keywords() any
+	Menu() DefaultMenuContext
+	Raw() any
+}
+
+// FirstpageMenuContext is the context for path "menu".
+type FirstpageMenuContext interface {
+	Menu() FirstpageMenuMenuContext
+	Raw() any
+}
+
+// FirstpageMenuMenuContext is the context for path "menu.menu".
+type FirstpageMenuMenuContext interface {
+	Items() []FirstpageMenuMenuItemsItemContext
+	Raw() any
+}
+
+// FirstpageMenuMenuItemsItemContext is the context for one element of menu.menu.items.
+type FirstpageMenuMenuItemsItemContext interface {
+	Caption() any
+	Items() any
+	Url() any
+	Raw() any
+}
+
+// FirstpageItemsItemContext is the context for one element of items.
+type FirstpageItemsItemContext interface {
+	Body() any
+	Caption() any
+	Date() any
+	Link() any
 	Raw() any
 }
 
@@ -62,7 +145,7 @@ type FirstpageContext interface {
 
 // MenuContext is the context interface inferred from template "menu".
 type MenuContext interface {
-	Title() any
+	Menu() any
 	Raw() any
 }
 
@@ -70,69 +153,174 @@ type MenuContext interface {
 
 // NewsContext is the context interface inferred from template "news".
 type NewsContext interface {
-	LayoutContext
-	Title() any
+	Body() any
+	Bottom() any
+	Caption() any
+	Date() any
+	Default() any
+	Header() any
+	Menu() DefaultMenuContext
 	Raw() any
 }
 
-// from examples/partials-inheritance/templates/layout.hbs:1
+// NewsMenuContext is the context for path "menu".
+type NewsMenuContext interface {
+	Menu() NewsMenuMenuContext
+	Raw() any
+}
 
-// LayoutSharedContextData is a map-backed implementation of LayoutSharedContext.
-type LayoutSharedContextData struct{ m map[string]any }
+// NewsMenuMenuContext is the context for path "menu.menu".
+type NewsMenuMenuContext interface {
+	Items() []NewsMenuMenuItemsItemContext
+	Raw() any
+}
 
-func (d LayoutSharedContextData) Menu() any { return d.m["menu"] }
-func (d LayoutSharedContextData) Raw() any  { return d.m }
+// NewsMenuMenuItemsItemContext is the context for one element of menu.menu.items.
+type NewsMenuMenuItemsItemContext interface {
+	Caption() any
+	Items() any
+	Url() any
+	Raw() any
+}
 
-// LayoutSharedContextFromMap returns a LayoutSharedContext backed by m. If m is nil, a new empty map is used.
-func LayoutSharedContextFromMap(m map[string]any) LayoutSharedContext {
+// from examples/partials-inheritance/templates/page.hbs:1
+
+// PageContext is the context interface inferred from template "page".
+type PageContext interface {
+	Body() any
+	Bottom() any
+	Caption() any
+	Default() any
+	Header() any
+	Keywords() any
+	Menu() DefaultMenuContext
+	Raw() any
+}
+
+// PageMenuContext is the context for path "menu".
+type PageMenuContext interface {
+	Menu() PageMenuMenuContext
+	Raw() any
+}
+
+// PageMenuMenuContext is the context for path "menu.menu".
+type PageMenuMenuContext interface {
+	Items() []PageMenuMenuItemsItemContext
+	Raw() any
+}
+
+// PageMenuMenuItemsItemContext is the context for one element of menu.menu.items.
+type PageMenuMenuItemsItemContext interface {
+	Caption() any
+	Items() any
+	Url() any
+	Raw() any
+}
+
+// from examples/partials-inheritance/templates/bottom.hbs:1
+
+// BottomContextData is a map-backed implementation of BottomContext.
+type BottomContextData struct{ m map[string]any }
+
+func (d BottomContextData) Raw() any { return d.m }
+
+// BottomContextFromMap returns a BottomContext backed by m. If m is nil, a new empty map is used.
+func BottomContextFromMap(m map[string]any) BottomContext {
 	if m == nil {
 		m = make(map[string]any)
 	}
-	return LayoutSharedContextData{m}
-}
-
-// LayoutContextData is a map-backed implementation of LayoutContext.
-type LayoutContextData struct{ m map[string]any }
-
-func (d LayoutContextData) Shared() LayoutSharedContext {
-	v := d.m["_shared"]
-	if v == nil {
-		return LayoutSharedContextData{map[string]any{}}
-	}
-	m, ok := v.(map[string]any)
-	if !ok {
-		return LayoutSharedContextData{map[string]any{}}
-	}
-	return LayoutSharedContextData{m}
-}
-func (d LayoutContextData) Raw() any { return d.m }
-
-// LayoutContextFromMap returns a LayoutContext backed by m. If m is nil, a new empty map is used.
-func LayoutContextFromMap(m map[string]any) LayoutContext {
-	if m == nil {
-		m = make(map[string]any)
-	}
-	return LayoutContextData{m}
+	return BottomContextData{m}
 }
 
 // from examples/partials-inheritance/templates/default.hbs:1
 
-// DefaultContextData is a map-backed implementation of DefaultContext.
-type DefaultContextData struct{ m map[string]any }
+// DefaultMenuMenuItemsItemContextData is a map-backed implementation of DefaultMenuMenuItemsItemContext.
+type DefaultMenuMenuItemsItemContextData struct{ m map[string]any }
 
-func (d DefaultContextData) Shared() LayoutSharedContext {
-	v := d.m["_shared"]
+func (d DefaultMenuMenuItemsItemContextData) Caption() any { return d.m["caption"] }
+func (d DefaultMenuMenuItemsItemContextData) Items() any   { return d.m["items"] }
+func (d DefaultMenuMenuItemsItemContextData) Url() any     { return d.m["url"] }
+func (d DefaultMenuMenuItemsItemContextData) Raw() any     { return d.m }
+
+// DefaultMenuMenuItemsItemContextFromMap returns a DefaultMenuMenuItemsItemContext backed by m. If m is nil, a new empty map is used.
+func DefaultMenuMenuItemsItemContextFromMap(m map[string]any) DefaultMenuMenuItemsItemContext {
+	if m == nil {
+		m = make(map[string]any)
+	}
+	return DefaultMenuMenuItemsItemContextData{m}
+}
+
+// DefaultMenuMenuContextData is a map-backed implementation of DefaultMenuMenuContext.
+type DefaultMenuMenuContextData struct{ m map[string]any }
+
+func (d DefaultMenuMenuContextData) Items() []DefaultMenuMenuItemsItemContext {
+	v := d.m["items"]
 	if v == nil {
-		return LayoutSharedContextData{map[string]any{}}
+		return nil
+	}
+	s, ok := v.([]any)
+	if !ok {
+		return nil
+	}
+	out := make([]DefaultMenuMenuItemsItemContext, len(s))
+	for i := range s {
+		if m, ok := s[i].(map[string]any); ok {
+			out[i] = DefaultMenuMenuItemsItemContextData{m}
+		}
+	}
+	return out
+}
+func (d DefaultMenuMenuContextData) Raw() any { return d.m }
+
+// DefaultMenuMenuContextFromMap returns a DefaultMenuMenuContext backed by m. If m is nil, a new empty map is used.
+func DefaultMenuMenuContextFromMap(m map[string]any) DefaultMenuMenuContext {
+	if m == nil {
+		m = make(map[string]any)
+	}
+	return DefaultMenuMenuContextData{m}
+}
+
+// DefaultMenuContextData is a map-backed implementation of DefaultMenuContext.
+type DefaultMenuContextData struct{ m map[string]any }
+
+func (d DefaultMenuContextData) Menu() DefaultMenuMenuContext {
+	v := d.m["menu"]
+	if v == nil {
+		return DefaultMenuMenuContextData{map[string]any{}}
 	}
 	m, ok := v.(map[string]any)
 	if !ok {
-		return LayoutSharedContextData{map[string]any{}}
+		return DefaultMenuMenuContextData{map[string]any{}}
 	}
-	return LayoutSharedContextData{m}
+	return DefaultMenuMenuContextData{m}
 }
-func (d DefaultContextData) Title() any { return d.m["title"] }
-func (d DefaultContextData) Raw() any   { return d.m }
+func (d DefaultMenuContextData) Raw() any { return d.m }
+
+// DefaultMenuContextFromMap returns a DefaultMenuContext backed by m. If m is nil, a new empty map is used.
+func DefaultMenuContextFromMap(m map[string]any) DefaultMenuContext {
+	if m == nil {
+		m = make(map[string]any)
+	}
+	return DefaultMenuContextData{m}
+}
+
+// DefaultContextData is a map-backed implementation of DefaultContext.
+type DefaultContextData struct{ m map[string]any }
+
+func (d DefaultContextData) Bottom() any { return d.m["bottom"] }
+func (d DefaultContextData) Header() any { return d.m["header"] }
+func (d DefaultContextData) Menu() DefaultMenuContext {
+	v := d.m["menu"]
+	if v == nil {
+		return DefaultMenuContextData{map[string]any{}}
+	}
+	m, ok := v.(map[string]any)
+	if !ok {
+		return DefaultMenuContextData{map[string]any{}}
+	}
+	return DefaultMenuContextData{m}
+}
+func (d DefaultContextData) Raw() any { return d.m }
 
 // DefaultContextFromMap returns a DefaultContext backed by m. If m is nil, a new empty map is used.
 func DefaultContextFromMap(m map[string]any) DefaultContext {
@@ -142,24 +330,147 @@ func DefaultContextFromMap(m map[string]any) DefaultContext {
 	return DefaultContextData{m}
 }
 
+// from examples/partials-inheritance/templates/header.hbs:1
+
+// HeaderContextData is a map-backed implementation of HeaderContext.
+type HeaderContextData struct{ m map[string]any }
+
+func (d HeaderContextData) Raw() any { return d.m }
+
+// HeaderContextFromMap returns a HeaderContext backed by m. If m is nil, a new empty map is used.
+func HeaderContextFromMap(m map[string]any) HeaderContext {
+	if m == nil {
+		m = make(map[string]any)
+	}
+	return HeaderContextData{m}
+}
+
 // from examples/partials-inheritance/templates/firstpage.hbs:1
+
+// FirstpageItemsItemContextData is a map-backed implementation of FirstpageItemsItemContext.
+type FirstpageItemsItemContextData struct{ m map[string]any }
+
+func (d FirstpageItemsItemContextData) Body() any    { return d.m["body"] }
+func (d FirstpageItemsItemContextData) Caption() any { return d.m["caption"] }
+func (d FirstpageItemsItemContextData) Date() any    { return d.m["date"] }
+func (d FirstpageItemsItemContextData) Link() any    { return d.m["link"] }
+func (d FirstpageItemsItemContextData) Raw() any     { return d.m }
+
+// FirstpageItemsItemContextFromMap returns a FirstpageItemsItemContext backed by m. If m is nil, a new empty map is used.
+func FirstpageItemsItemContextFromMap(m map[string]any) FirstpageItemsItemContext {
+	if m == nil {
+		m = make(map[string]any)
+	}
+	return FirstpageItemsItemContextData{m}
+}
+
+// FirstpageMenuMenuItemsItemContextData is a map-backed implementation of FirstpageMenuMenuItemsItemContext.
+type FirstpageMenuMenuItemsItemContextData struct{ m map[string]any }
+
+func (d FirstpageMenuMenuItemsItemContextData) Caption() any { return d.m["caption"] }
+func (d FirstpageMenuMenuItemsItemContextData) Items() any   { return d.m["items"] }
+func (d FirstpageMenuMenuItemsItemContextData) Url() any     { return d.m["url"] }
+func (d FirstpageMenuMenuItemsItemContextData) Raw() any     { return d.m }
+
+// FirstpageMenuMenuItemsItemContextFromMap returns a FirstpageMenuMenuItemsItemContext backed by m. If m is nil, a new empty map is used.
+func FirstpageMenuMenuItemsItemContextFromMap(m map[string]any) FirstpageMenuMenuItemsItemContext {
+	if m == nil {
+		m = make(map[string]any)
+	}
+	return FirstpageMenuMenuItemsItemContextData{m}
+}
+
+// FirstpageMenuMenuContextData is a map-backed implementation of FirstpageMenuMenuContext.
+type FirstpageMenuMenuContextData struct{ m map[string]any }
+
+func (d FirstpageMenuMenuContextData) Items() []FirstpageMenuMenuItemsItemContext {
+	v := d.m["items"]
+	if v == nil {
+		return nil
+	}
+	s, ok := v.([]any)
+	if !ok {
+		return nil
+	}
+	out := make([]FirstpageMenuMenuItemsItemContext, len(s))
+	for i := range s {
+		if m, ok := s[i].(map[string]any); ok {
+			out[i] = FirstpageMenuMenuItemsItemContextData{m}
+		}
+	}
+	return out
+}
+func (d FirstpageMenuMenuContextData) Raw() any { return d.m }
+
+// FirstpageMenuMenuContextFromMap returns a FirstpageMenuMenuContext backed by m. If m is nil, a new empty map is used.
+func FirstpageMenuMenuContextFromMap(m map[string]any) FirstpageMenuMenuContext {
+	if m == nil {
+		m = make(map[string]any)
+	}
+	return FirstpageMenuMenuContextData{m}
+}
+
+// FirstpageMenuContextData is a map-backed implementation of FirstpageMenuContext.
+type FirstpageMenuContextData struct{ m map[string]any }
+
+func (d FirstpageMenuContextData) Menu() FirstpageMenuMenuContext {
+	v := d.m["menu"]
+	if v == nil {
+		return FirstpageMenuMenuContextData{map[string]any{}}
+	}
+	m, ok := v.(map[string]any)
+	if !ok {
+		return FirstpageMenuMenuContextData{map[string]any{}}
+	}
+	return FirstpageMenuMenuContextData{m}
+}
+func (d FirstpageMenuContextData) Raw() any { return d.m }
+
+// FirstpageMenuContextFromMap returns a FirstpageMenuContext backed by m. If m is nil, a new empty map is used.
+func FirstpageMenuContextFromMap(m map[string]any) FirstpageMenuContext {
+	if m == nil {
+		m = make(map[string]any)
+	}
+	return FirstpageMenuContextData{m}
+}
 
 // FirstpageContextData is a map-backed implementation of FirstpageContext.
 type FirstpageContextData struct{ m map[string]any }
 
-func (d FirstpageContextData) Shared() LayoutSharedContext {
-	v := d.m["_shared"]
+func (d FirstpageContextData) Bottom() any            { return d.m["bottom"] }
+func (d FirstpageContextData) Default() any           { return d.m["default"] }
+func (d FirstpageContextData) FirstpageGreeting() any { return d.m["firstpage_greeting"] }
+func (d FirstpageContextData) Header() any            { return d.m["header"] }
+func (d FirstpageContextData) Items() []FirstpageItemsItemContext {
+	v := d.m["items"]
 	if v == nil {
-		return LayoutSharedContextData{map[string]any{}}
+		return nil
+	}
+	s, ok := v.([]any)
+	if !ok {
+		return nil
+	}
+	out := make([]FirstpageItemsItemContext, len(s))
+	for i := range s {
+		if m, ok := s[i].(map[string]any); ok {
+			out[i] = FirstpageItemsItemContextData{m}
+		}
+	}
+	return out
+}
+func (d FirstpageContextData) Keywords() any { return d.m["keywords"] }
+func (d FirstpageContextData) Menu() DefaultMenuContext {
+	v := d.m["menu"]
+	if v == nil {
+		return DefaultMenuContextData{map[string]any{}}
 	}
 	m, ok := v.(map[string]any)
 	if !ok {
-		return LayoutSharedContextData{map[string]any{}}
+		return DefaultMenuContextData{map[string]any{}}
 	}
-	return LayoutSharedContextData{m}
+	return DefaultMenuContextData{m}
 }
-func (d FirstpageContextData) Title() any { return d.m["title"] }
-func (d FirstpageContextData) Raw() any   { return d.m }
+func (d FirstpageContextData) Raw() any { return d.m }
 
 // FirstpageContextFromMap returns a FirstpageContext backed by m. If m is nil, a new empty map is used.
 func FirstpageContextFromMap(m map[string]any) FirstpageContext {
@@ -174,8 +485,8 @@ func FirstpageContextFromMap(m map[string]any) FirstpageContext {
 // MenuContextData is a map-backed implementation of MenuContext.
 type MenuContextData struct{ m map[string]any }
 
-func (d MenuContextData) Title() any { return d.m["title"] }
-func (d MenuContextData) Raw() any   { return d.m }
+func (d MenuContextData) Menu() any { return d.m["menu"] }
+func (d MenuContextData) Raw() any  { return d.m }
 
 // MenuContextFromMap returns a MenuContext backed by m. If m is nil, a new empty map is used.
 func MenuContextFromMap(m map[string]any) MenuContext {
@@ -187,22 +498,97 @@ func MenuContextFromMap(m map[string]any) MenuContext {
 
 // from examples/partials-inheritance/templates/news.hbs:1
 
-// NewsContextData is a map-backed implementation of NewsContext.
-type NewsContextData struct{ m map[string]any }
+// NewsMenuMenuItemsItemContextData is a map-backed implementation of NewsMenuMenuItemsItemContext.
+type NewsMenuMenuItemsItemContextData struct{ m map[string]any }
 
-func (d NewsContextData) Shared() LayoutSharedContext {
-	v := d.m["_shared"]
+func (d NewsMenuMenuItemsItemContextData) Caption() any { return d.m["caption"] }
+func (d NewsMenuMenuItemsItemContextData) Items() any   { return d.m["items"] }
+func (d NewsMenuMenuItemsItemContextData) Url() any     { return d.m["url"] }
+func (d NewsMenuMenuItemsItemContextData) Raw() any     { return d.m }
+
+// NewsMenuMenuItemsItemContextFromMap returns a NewsMenuMenuItemsItemContext backed by m. If m is nil, a new empty map is used.
+func NewsMenuMenuItemsItemContextFromMap(m map[string]any) NewsMenuMenuItemsItemContext {
+	if m == nil {
+		m = make(map[string]any)
+	}
+	return NewsMenuMenuItemsItemContextData{m}
+}
+
+// NewsMenuMenuContextData is a map-backed implementation of NewsMenuMenuContext.
+type NewsMenuMenuContextData struct{ m map[string]any }
+
+func (d NewsMenuMenuContextData) Items() []NewsMenuMenuItemsItemContext {
+	v := d.m["items"]
 	if v == nil {
-		return LayoutSharedContextData{map[string]any{}}
+		return nil
+	}
+	s, ok := v.([]any)
+	if !ok {
+		return nil
+	}
+	out := make([]NewsMenuMenuItemsItemContext, len(s))
+	for i := range s {
+		if m, ok := s[i].(map[string]any); ok {
+			out[i] = NewsMenuMenuItemsItemContextData{m}
+		}
+	}
+	return out
+}
+func (d NewsMenuMenuContextData) Raw() any { return d.m }
+
+// NewsMenuMenuContextFromMap returns a NewsMenuMenuContext backed by m. If m is nil, a new empty map is used.
+func NewsMenuMenuContextFromMap(m map[string]any) NewsMenuMenuContext {
+	if m == nil {
+		m = make(map[string]any)
+	}
+	return NewsMenuMenuContextData{m}
+}
+
+// NewsMenuContextData is a map-backed implementation of NewsMenuContext.
+type NewsMenuContextData struct{ m map[string]any }
+
+func (d NewsMenuContextData) Menu() NewsMenuMenuContext {
+	v := d.m["menu"]
+	if v == nil {
+		return NewsMenuMenuContextData{map[string]any{}}
 	}
 	m, ok := v.(map[string]any)
 	if !ok {
-		return LayoutSharedContextData{map[string]any{}}
+		return NewsMenuMenuContextData{map[string]any{}}
 	}
-	return LayoutSharedContextData{m}
+	return NewsMenuMenuContextData{m}
 }
-func (d NewsContextData) Title() any { return d.m["title"] }
-func (d NewsContextData) Raw() any   { return d.m }
+func (d NewsMenuContextData) Raw() any { return d.m }
+
+// NewsMenuContextFromMap returns a NewsMenuContext backed by m. If m is nil, a new empty map is used.
+func NewsMenuContextFromMap(m map[string]any) NewsMenuContext {
+	if m == nil {
+		m = make(map[string]any)
+	}
+	return NewsMenuContextData{m}
+}
+
+// NewsContextData is a map-backed implementation of NewsContext.
+type NewsContextData struct{ m map[string]any }
+
+func (d NewsContextData) Body() any    { return d.m["body"] }
+func (d NewsContextData) Bottom() any  { return d.m["bottom"] }
+func (d NewsContextData) Caption() any { return d.m["caption"] }
+func (d NewsContextData) Date() any    { return d.m["date"] }
+func (d NewsContextData) Default() any { return d.m["default"] }
+func (d NewsContextData) Header() any  { return d.m["header"] }
+func (d NewsContextData) Menu() DefaultMenuContext {
+	v := d.m["menu"]
+	if v == nil {
+		return DefaultMenuContextData{map[string]any{}}
+	}
+	m, ok := v.(map[string]any)
+	if !ok {
+		return DefaultMenuContextData{map[string]any{}}
+	}
+	return DefaultMenuContextData{m}
+}
+func (d NewsContextData) Raw() any { return d.m }
 
 // NewsContextFromMap returns a NewsContext backed by m. If m is nil, a new empty map is used.
 func NewsContextFromMap(m map[string]any) NewsContext {
@@ -212,7 +598,109 @@ func NewsContextFromMap(m map[string]any) NewsContext {
 	return NewsContextData{m}
 }
 
-var partials map[string]func(any, io.Writer, any) error
+// from examples/partials-inheritance/templates/page.hbs:1
+
+// PageMenuMenuItemsItemContextData is a map-backed implementation of PageMenuMenuItemsItemContext.
+type PageMenuMenuItemsItemContextData struct{ m map[string]any }
+
+func (d PageMenuMenuItemsItemContextData) Caption() any { return d.m["caption"] }
+func (d PageMenuMenuItemsItemContextData) Items() any   { return d.m["items"] }
+func (d PageMenuMenuItemsItemContextData) Url() any     { return d.m["url"] }
+func (d PageMenuMenuItemsItemContextData) Raw() any     { return d.m }
+
+// PageMenuMenuItemsItemContextFromMap returns a PageMenuMenuItemsItemContext backed by m. If m is nil, a new empty map is used.
+func PageMenuMenuItemsItemContextFromMap(m map[string]any) PageMenuMenuItemsItemContext {
+	if m == nil {
+		m = make(map[string]any)
+	}
+	return PageMenuMenuItemsItemContextData{m}
+}
+
+// PageMenuMenuContextData is a map-backed implementation of PageMenuMenuContext.
+type PageMenuMenuContextData struct{ m map[string]any }
+
+func (d PageMenuMenuContextData) Items() []PageMenuMenuItemsItemContext {
+	v := d.m["items"]
+	if v == nil {
+		return nil
+	}
+	s, ok := v.([]any)
+	if !ok {
+		return nil
+	}
+	out := make([]PageMenuMenuItemsItemContext, len(s))
+	for i := range s {
+		if m, ok := s[i].(map[string]any); ok {
+			out[i] = PageMenuMenuItemsItemContextData{m}
+		}
+	}
+	return out
+}
+func (d PageMenuMenuContextData) Raw() any { return d.m }
+
+// PageMenuMenuContextFromMap returns a PageMenuMenuContext backed by m. If m is nil, a new empty map is used.
+func PageMenuMenuContextFromMap(m map[string]any) PageMenuMenuContext {
+	if m == nil {
+		m = make(map[string]any)
+	}
+	return PageMenuMenuContextData{m}
+}
+
+// PageMenuContextData is a map-backed implementation of PageMenuContext.
+type PageMenuContextData struct{ m map[string]any }
+
+func (d PageMenuContextData) Menu() PageMenuMenuContext {
+	v := d.m["menu"]
+	if v == nil {
+		return PageMenuMenuContextData{map[string]any{}}
+	}
+	m, ok := v.(map[string]any)
+	if !ok {
+		return PageMenuMenuContextData{map[string]any{}}
+	}
+	return PageMenuMenuContextData{m}
+}
+func (d PageMenuContextData) Raw() any { return d.m }
+
+// PageMenuContextFromMap returns a PageMenuContext backed by m. If m is nil, a new empty map is used.
+func PageMenuContextFromMap(m map[string]any) PageMenuContext {
+	if m == nil {
+		m = make(map[string]any)
+	}
+	return PageMenuContextData{m}
+}
+
+// PageContextData is a map-backed implementation of PageContext.
+type PageContextData struct{ m map[string]any }
+
+func (d PageContextData) Body() any     { return d.m["body"] }
+func (d PageContextData) Bottom() any   { return d.m["bottom"] }
+func (d PageContextData) Caption() any  { return d.m["caption"] }
+func (d PageContextData) Default() any  { return d.m["default"] }
+func (d PageContextData) Header() any   { return d.m["header"] }
+func (d PageContextData) Keywords() any { return d.m["keywords"] }
+func (d PageContextData) Menu() DefaultMenuContext {
+	v := d.m["menu"]
+	if v == nil {
+		return DefaultMenuContextData{map[string]any{}}
+	}
+	m, ok := v.(map[string]any)
+	if !ok {
+		return DefaultMenuContextData{map[string]any{}}
+	}
+	return DefaultMenuContextData{m}
+}
+func (d PageContextData) Raw() any { return d.m }
+
+// PageContextFromMap returns a PageContext backed by m. If m is nil, a new empty map is used.
+func PageContextFromMap(m map[string]any) PageContext {
+	if m == nil {
+		m = make(map[string]any)
+	}
+	return PageContextData{m}
+}
+
+var partials map[string]func(any, io.Writer, any, *runtime.Blocks) error
 
 // contextMap returns map[string]any from ctx (either direct map or Raw() from context data).
 func contextMap(ctx any) map[string]any {
@@ -229,70 +717,180 @@ func contextMap(ctx any) map[string]any {
 }
 
 func init() {
-	partials = map[string]func(any, io.Writer, any) error{
-		"default": func(ctx any, w io.Writer, root any) error {
+	partials = map[string]func(any, io.Writer, any, *runtime.Blocks) error{
+		"bottom": func(ctx any, w io.Writer, root any, blocks *runtime.Blocks) error {
 			m := contextMap(ctx)
 			if m == nil {
 				return nil
 			}
-			return renderDefault(DefaultContextFromMap(m), w, DefaultContextFromMap(m))
+			return renderBottom(BottomContextFromMap(m), w, BottomContextFromMap(m), blocks)
 		},
-		"firstpage": func(ctx any, w io.Writer, root any) error {
+		"default": func(ctx any, w io.Writer, root any, blocks *runtime.Blocks) error {
 			m := contextMap(ctx)
 			if m == nil {
 				return nil
 			}
-			return renderFirstpage(FirstpageContextFromMap(m), w, FirstpageContextFromMap(m))
+			return renderDefault(DefaultContextFromMap(m), w, DefaultContextFromMap(m), blocks)
 		},
-		"layout": func(ctx any, w io.Writer, root any) error {
+		"firstpage": func(ctx any, w io.Writer, root any, blocks *runtime.Blocks) error {
 			m := contextMap(ctx)
 			if m == nil {
 				return nil
 			}
-			return renderLayout(LayoutContextFromMap(m), w, LayoutContextFromMap(m))
+			return renderFirstpage(FirstpageContextFromMap(m), w, FirstpageContextFromMap(m), blocks)
 		},
-		"menu": func(ctx any, w io.Writer, root any) error {
+		"firstpage_greeting": func(ctx any, w io.Writer, root any, blocks *runtime.Blocks) error {
 			m := contextMap(ctx)
 			if m == nil {
 				return nil
 			}
-			return renderMenu(MenuContextFromMap(m), w, MenuContextFromMap(m))
+			return renderFirstpageGreeting(FirstpageContextFromMap(m), w, FirstpageContextFromMap(m), blocks)
 		},
-		"news": func(ctx any, w io.Writer, root any) error {
+		"header": func(ctx any, w io.Writer, root any, blocks *runtime.Blocks) error {
 			m := contextMap(ctx)
 			if m == nil {
 				return nil
 			}
-			return renderNews(NewsContextFromMap(m), w, NewsContextFromMap(m))
+			return renderHeader(HeaderContextFromMap(m), w, HeaderContextFromMap(m), blocks)
+		},
+		"menu": func(ctx any, w io.Writer, root any, blocks *runtime.Blocks) error {
+			m := contextMap(ctx)
+			if m == nil {
+				return nil
+			}
+			return renderMenu(MenuContextFromMap(m), w, MenuContextFromMap(m), blocks)
+		},
+		"news": func(ctx any, w io.Writer, root any, blocks *runtime.Blocks) error {
+			m := contextMap(ctx)
+			if m == nil {
+				return nil
+			}
+			return renderNews(NewsContextFromMap(m), w, NewsContextFromMap(m), blocks)
+		},
+		"page": func(ctx any, w io.Writer, root any, blocks *runtime.Blocks) error {
+			m := contextMap(ctx)
+			if m == nil {
+				return nil
+			}
+			return renderPage(PageContextFromMap(m), w, PageContextFromMap(m), blocks)
 		},
 	}
 }
 
-// from examples/partials-inheritance/templates/default.hbs:1
-func renderDefault(data DefaultContext, w io.Writer, root DefaultContext) error {
+// from examples/partials-inheritance/templates/bottom.hbs:1
+func renderBottom(data BottomContext, w io.Writer, root BottomContext, blocks *runtime.Blocks) error {
 	if data == nil {
 		return nil
 	}
-	if _, err := io.WriteString(w, "Page: "); err != nil {
+	if _, err := io.WriteString(w, "<footer><p>&copy; Example footer</p></footer>\n"); err != nil {
 		return err
 	}
-	if err := runtime.WriteEscaped(w, data.Title()); err != nil {
+	return nil
+}
+
+func RenderBottom(w io.Writer, data BottomContext) error {
+	return renderBottom(data, w, data, nil)
+}
+
+func RenderBottomWithBlocks(w io.Writer, data BottomContext, blocks *runtime.Blocks) error {
+	return renderBottom(data, w, data, blocks)
+}
+
+func RenderBottomString(data BottomContext) (string, error) {
+	var b strings.Builder
+	if err := RenderBottom(&b, data); err != nil {
+		return "", err
+	}
+	return b.String(), nil
+}
+
+// from examples/partials-inheritance/templates/default.hbs:1
+func renderDefault(data DefaultContext, w io.Writer, root DefaultContext, blocks *runtime.Blocks) error {
+	if data == nil {
+		return nil
+	}
+	if _, err := io.WriteString(w, "<!DOCTYPE html>\n<html>\n<head>\n<title>"); err != nil {
 		return err
 	}
-	if _, err := io.WriteString(w, "\n"); err != nil {
+	if blocks != nil {
+		if s, ok := blocks.Get("caption"); ok && s != "" {
+			if _, err := io.WriteString(w, s); err != nil {
+				return err
+			}
+		} else {
+		}
+	} else {
+	}
+	if _, err := io.WriteString(w, " | Partials inheritance</title>\n<meta name=\"keywords\" content=\""); err != nil {
 		return err
 	}
-	if err := renderLayout(data, w, data); err != nil {
+	if blocks != nil {
+		if s, ok := blocks.Get("keywords"); ok && s != "" {
+			if _, err := io.WriteString(w, s); err != nil {
+				return err
+			}
+		} else {
+		}
+	} else {
+	}
+	if _, err := io.WriteString(w, "\"/>\n"); err != nil {
 		return err
 	}
-	if _, err := io.WriteString(w, "\n"); err != nil {
+	if blocks != nil {
+		if s, ok := blocks.Get("addheaders"); ok && s != "" {
+			if _, err := io.WriteString(w, s); err != nil {
+				return err
+			}
+		} else {
+		}
+	} else {
+	}
+	if _, err := io.WriteString(w, "\n</head>\n<body>\n<div id=\"header\">"); err != nil {
+		return err
+	}
+	if err := renderHeader(data, w, data, blocks); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, "</div>\n"); err != nil {
+		return err
+	}
+	partialCtx1 := map[string]any{
+		"menu": nil,
+	}
+	partialCtx2 := runtime.MergePartialContext(nil, partialCtx1)
+	if err := partials["menu"](partialCtx2, w, partialCtx2, blocks); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, "\n<div id=\"mainContent\">\n"); err != nil {
+		return err
+	}
+	if blocks != nil {
+		if s, ok := blocks.Get("content"); ok && s != "" {
+			if _, err := io.WriteString(w, s); err != nil {
+				return err
+			}
+		} else {
+		}
+	} else {
+	}
+	if _, err := io.WriteString(w, "\n</div>\n<div id=\"footer\">"); err != nil {
+		return err
+	}
+	if err := renderBottom(data, w, data, blocks); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, "</div>\n</body>\n</html>\n"); err != nil {
 		return err
 	}
 	return nil
 }
 
 func RenderDefault(w io.Writer, data DefaultContext) error {
-	return renderDefault(data, w, data)
+	return renderDefault(data, w, data, nil)
+}
+
+func RenderDefaultWithBlocks(w io.Writer, data DefaultContext, blocks *runtime.Blocks) error {
+	return renderDefault(data, w, data, blocks)
 }
 
 func RenderDefaultString(data DefaultContext) (string, error) {
@@ -304,20 +902,138 @@ func RenderDefaultString(data DefaultContext) (string, error) {
 }
 
 // from examples/partials-inheritance/templates/firstpage.hbs:1
-func renderFirstpage(data FirstpageContext, w io.Writer, root FirstpageContext) error {
+func renderFirstpage(data FirstpageContext, w io.Writer, root FirstpageContext, blocks *runtime.Blocks) error {
 	if data == nil {
 		return nil
 	}
-	if _, err := io.WriteString(w, "First: "); err != nil {
+	var buf1 strings.Builder
+	if _, err := io.WriteString(&buf1, "\n    Головна\n"); err != nil {
 		return err
 	}
-	if err := runtime.WriteEscaped(w, data.Title()); err != nil {
+	if blocks != nil {
+		blocks.Set("caption", buf1.String())
+	}
+	if _, err := io.WriteString(w, "\n\n"); err != nil {
 		return err
 	}
-	if _, err := io.WriteString(w, "\n"); err != nil {
+	var buf2 strings.Builder
+	if _, err := io.WriteString(&buf2, "\n    "); err != nil {
 		return err
 	}
-	if err := renderLayout(data, w, data); err != nil {
+	if err := runtime.WriteEscaped(&buf2, data.Keywords()); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(&buf2, "\n"); err != nil {
+		return err
+	}
+	if blocks != nil {
+		blocks.Set("keywords", buf2.String())
+	}
+	if _, err := io.WriteString(w, "\n\n"); err != nil {
+		return err
+	}
+	var buf3 strings.Builder
+	if _, err := io.WriteString(&buf3, "\n\t<div id=\"content\">\n        "); err != nil {
+		return err
+	}
+	if err := renderFirstpageGreeting(data, &buf3, data, blocks); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(&buf3, "\n    "); err != nil {
+		return err
+	}
+	items6 := data.Items()
+	if len(items6) > 0 {
+		for key5, item4 := range items6 {
+			_, _ = key5, item4
+			if _, err := io.WriteString(&buf3, "\n        <hr/>\n        "); err != nil {
+				return err
+			}
+			val7 := item4.Caption()
+			cond8, err9 := runtime.IsTruthy(val7)
+			if err9 != nil {
+				return err9
+			}
+			if cond8 {
+				if _, err := io.WriteString(&buf3, "\n            "); err != nil {
+					return err
+				}
+				val10 := item4.Link()
+				cond11, err12 := runtime.IsTruthy(val10)
+				if err12 != nil {
+					return err12
+				}
+				if cond11 {
+					if _, err := io.WriteString(&buf3, "\n                <h1 class=\"header_t\"><a href=\""); err != nil {
+						return err
+					}
+					if err := runtime.WriteEscaped(&buf3, item4.Link()); err != nil {
+						return err
+					}
+					if _, err := io.WriteString(&buf3, "\">"); err != nil {
+						return err
+					}
+					if err := runtime.WriteRaw(&buf3, item4.Caption()); err != nil {
+						return err
+					}
+					if _, err := io.WriteString(&buf3, "</a></h1>\n            "); err != nil {
+						return err
+					}
+				} else {
+					if _, err := io.WriteString(&buf3, "\n                <h1 class=\"header_t\">"); err != nil {
+						return err
+					}
+					if err := runtime.WriteRaw(&buf3, item4.Caption()); err != nil {
+						return err
+					}
+					if _, err := io.WriteString(&buf3, "</h1>\n            "); err != nil {
+						return err
+					}
+				}
+				if _, err := io.WriteString(&buf3, "\n            "); err != nil {
+					return err
+				}
+				val13 := item4.Date()
+				cond14, err15 := runtime.IsTruthy(val13)
+				if err15 != nil {
+					return err15
+				}
+				if cond14 {
+					if _, err := io.WriteString(&buf3, "\n                <div class=\"currentDate\">"); err != nil {
+						return err
+					}
+					if err := runtime.WriteRaw(&buf3, item4.Date()); err != nil {
+						return err
+					}
+					if _, err := io.WriteString(&buf3, "</div>\n            "); err != nil {
+						return err
+					}
+				}
+				if _, err := io.WriteString(&buf3, "\n        "); err != nil {
+					return err
+				}
+			}
+			if _, err := io.WriteString(&buf3, "\n        "); err != nil {
+				return err
+			}
+			if err := runtime.WriteRaw(&buf3, item4.Body()); err != nil {
+				return err
+			}
+			if _, err := io.WriteString(&buf3, "\n    "); err != nil {
+				return err
+			}
+		}
+	}
+	if _, err := io.WriteString(&buf3, "\n    </div>\n"); err != nil {
+		return err
+	}
+	if blocks != nil {
+		blocks.Set("content", buf3.String())
+	}
+	if _, err := io.WriteString(w, "\n\n"); err != nil {
+		return err
+	}
+	if err := renderDefault(data, w, data, blocks); err != nil {
 		return err
 	}
 	if _, err := io.WriteString(w, "\n"); err != nil {
@@ -327,7 +1043,11 @@ func renderFirstpage(data FirstpageContext, w io.Writer, root FirstpageContext) 
 }
 
 func RenderFirstpage(w io.Writer, data FirstpageContext) error {
-	return renderFirstpage(data, w, data)
+	return renderFirstpage(data, w, data, nil)
+}
+
+func RenderFirstpageWithBlocks(w io.Writer, data FirstpageContext, blocks *runtime.Blocks) error {
+	return renderFirstpage(data, w, data, blocks)
 }
 
 func RenderFirstpageString(data FirstpageContext) (string, error) {
@@ -338,52 +1058,235 @@ func RenderFirstpageString(data FirstpageContext) (string, error) {
 	return b.String(), nil
 }
 
-// from examples/partials-inheritance/templates/layout.hbs:1
-func renderLayout(data LayoutContext, w io.Writer, root LayoutContext) error {
+// from examples/partials-inheritance/templates/firstpage_greeting.hbs:1
+func renderFirstpageGreeting(data FirstpageContext, w io.Writer, root FirstpageContext, blocks *runtime.Blocks) error {
 	if data == nil {
 		return nil
 	}
-	partialBase1 := data.Shared().Menu()
-	if err := partials["menu"](partialBase1, w, partialBase1); err != nil {
-		return err
-	}
-	if _, err := io.WriteString(w, "\n"); err != nil {
+	if _, err := io.WriteString(w, "<p class=\"greeting\">Welcome to the example. Content below.</p>\n"); err != nil {
 		return err
 	}
 	return nil
 }
 
-func RenderLayout(w io.Writer, data LayoutContext) error {
-	return renderLayout(data, w, data)
+func RenderFirstpageGreeting(w io.Writer, data FirstpageContext) error {
+	return renderFirstpageGreeting(data, w, data, nil)
 }
 
-func RenderLayoutString(data LayoutContext) (string, error) {
+func RenderFirstpageGreetingWithBlocks(w io.Writer, data FirstpageContext, blocks *runtime.Blocks) error {
+	return renderFirstpageGreeting(data, w, data, blocks)
+}
+
+func RenderFirstpageGreetingString(data FirstpageContext) (string, error) {
 	var b strings.Builder
-	if err := RenderLayout(&b, data); err != nil {
+	if err := RenderFirstpageGreeting(&b, data); err != nil {
+		return "", err
+	}
+	return b.String(), nil
+}
+
+// from examples/partials-inheritance/templates/header.hbs:1
+func renderHeader(data HeaderContext, w io.Writer, root HeaderContext, blocks *runtime.Blocks) error {
+	if data == nil {
+		return nil
+	}
+	if _, err := io.WriteString(w, "<header><p>Example site header</p></header>\n"); err != nil {
+		return err
+	}
+	return nil
+}
+
+func RenderHeader(w io.Writer, data HeaderContext) error {
+	return renderHeader(data, w, data, nil)
+}
+
+func RenderHeaderWithBlocks(w io.Writer, data HeaderContext, blocks *runtime.Blocks) error {
+	return renderHeader(data, w, data, blocks)
+}
+
+func RenderHeaderString(data HeaderContext) (string, error) {
+	var b strings.Builder
+	if err := RenderHeader(&b, data); err != nil {
 		return "", err
 	}
 	return b.String(), nil
 }
 
 // from examples/partials-inheritance/templates/menu.hbs:1
-func renderMenu(data MenuContext, w io.Writer, root MenuContext) error {
+func renderMenu(data MenuContext, w io.Writer, root MenuContext, blocks *runtime.Blocks) error {
 	if data == nil {
 		return nil
 	}
-	if _, err := io.WriteString(w, "<nav>"); err != nil {
+	if _, err := io.WriteString(w, "<nav id=\"menu\">\n<ul>\n"); err != nil {
 		return err
 	}
-	if err := runtime.WriteEscaped(w, data.Title()); err != nil {
-		return err
+	items3 := runtime.LookupPath(data, "menu.items")
+	sl4, _eachSliceOk := items3.([]any)
+	if _eachSliceOk && len(sl4) > 0 {
+		for key2, item1 := range sl4 {
+			_, _ = key2, item1
+			if _, err := io.WriteString(w, "\n<li><a href=\""); err != nil {
+				return err
+			}
+			if err := runtime.WriteEscaped(w, runtime.LookupPath(item1, "url")); err != nil {
+				return err
+			}
+			if _, err := io.WriteString(w, "\">"); err != nil {
+				return err
+			}
+			if err := runtime.WriteEscaped(w, runtime.LookupPath(item1, "caption")); err != nil {
+				return err
+			}
+			if _, err := io.WriteString(w, "</a>"); err != nil {
+				return err
+			}
+			val6 := runtime.LookupPath(item1, "items")
+			cond7, err8 := runtime.IsTruthy(val6)
+			if err8 != nil {
+				return err8
+			}
+			if cond7 {
+				if _, err := io.WriteString(w, "<ul>"); err != nil {
+					return err
+				}
+				items11 := runtime.LookupPath(item1, "items")
+				sl12, _eachSliceOk := items11.([]any)
+				if _eachSliceOk && len(sl12) > 0 {
+					for key10, item9 := range sl12 {
+						_, _ = key10, item9
+						if _, err := io.WriteString(w, "<li><a href=\""); err != nil {
+							return err
+						}
+						if err := runtime.WriteEscaped(w, runtime.LookupPath(item9, "url")); err != nil {
+							return err
+						}
+						if _, err := io.WriteString(w, "\">"); err != nil {
+							return err
+						}
+						if err := runtime.WriteEscaped(w, runtime.LookupPath(item9, "caption")); err != nil {
+							return err
+						}
+						if _, err := io.WriteString(w, "</a></li>"); err != nil {
+							return err
+						}
+					}
+				} else if m13, _eachMapOk := items11.(map[string]any); _eachMapOk && len(m13) > 0 {
+					for key10, item9 := range m13 {
+						_, _ = key10, item9
+						if _, err := io.WriteString(w, "<li><a href=\""); err != nil {
+							return err
+						}
+						if err := runtime.WriteEscaped(w, runtime.LookupPath(item9, "url")); err != nil {
+							return err
+						}
+						if _, err := io.WriteString(w, "\">"); err != nil {
+							return err
+						}
+						if err := runtime.WriteEscaped(w, runtime.LookupPath(item9, "caption")); err != nil {
+							return err
+						}
+						if _, err := io.WriteString(w, "</a></li>"); err != nil {
+							return err
+						}
+					}
+				}
+				if _, err := io.WriteString(w, "</ul>"); err != nil {
+					return err
+				}
+			}
+			if _, err := io.WriteString(w, "</li>\n"); err != nil {
+				return err
+			}
+		}
+	} else if m5, _eachMapOk := items3.(map[string]any); _eachMapOk && len(m5) > 0 {
+		for key2, item1 := range m5 {
+			_, _ = key2, item1
+			if _, err := io.WriteString(w, "\n<li><a href=\""); err != nil {
+				return err
+			}
+			if err := runtime.WriteEscaped(w, runtime.LookupPath(item1, "url")); err != nil {
+				return err
+			}
+			if _, err := io.WriteString(w, "\">"); err != nil {
+				return err
+			}
+			if err := runtime.WriteEscaped(w, runtime.LookupPath(item1, "caption")); err != nil {
+				return err
+			}
+			if _, err := io.WriteString(w, "</a>"); err != nil {
+				return err
+			}
+			val14 := runtime.LookupPath(item1, "items")
+			cond15, err16 := runtime.IsTruthy(val14)
+			if err16 != nil {
+				return err16
+			}
+			if cond15 {
+				if _, err := io.WriteString(w, "<ul>"); err != nil {
+					return err
+				}
+				items19 := runtime.LookupPath(item1, "items")
+				sl20, _eachSliceOk := items19.([]any)
+				if _eachSliceOk && len(sl20) > 0 {
+					for key18, item17 := range sl20 {
+						_, _ = key18, item17
+						if _, err := io.WriteString(w, "<li><a href=\""); err != nil {
+							return err
+						}
+						if err := runtime.WriteEscaped(w, runtime.LookupPath(item17, "url")); err != nil {
+							return err
+						}
+						if _, err := io.WriteString(w, "\">"); err != nil {
+							return err
+						}
+						if err := runtime.WriteEscaped(w, runtime.LookupPath(item17, "caption")); err != nil {
+							return err
+						}
+						if _, err := io.WriteString(w, "</a></li>"); err != nil {
+							return err
+						}
+					}
+				} else if m21, _eachMapOk := items19.(map[string]any); _eachMapOk && len(m21) > 0 {
+					for key18, item17 := range m21 {
+						_, _ = key18, item17
+						if _, err := io.WriteString(w, "<li><a href=\""); err != nil {
+							return err
+						}
+						if err := runtime.WriteEscaped(w, runtime.LookupPath(item17, "url")); err != nil {
+							return err
+						}
+						if _, err := io.WriteString(w, "\">"); err != nil {
+							return err
+						}
+						if err := runtime.WriteEscaped(w, runtime.LookupPath(item17, "caption")); err != nil {
+							return err
+						}
+						if _, err := io.WriteString(w, "</a></li>"); err != nil {
+							return err
+						}
+					}
+				}
+				if _, err := io.WriteString(w, "</ul>"); err != nil {
+					return err
+				}
+			}
+			if _, err := io.WriteString(w, "</li>\n"); err != nil {
+				return err
+			}
+		}
 	}
-	if _, err := io.WriteString(w, "</nav>\n"); err != nil {
+	if _, err := io.WriteString(w, "\n</ul>\n</nav>\n"); err != nil {
 		return err
 	}
 	return nil
 }
 
 func RenderMenu(w io.Writer, data MenuContext) error {
-	return renderMenu(data, w, data)
+	return renderMenu(data, w, data, nil)
+}
+
+func RenderMenuWithBlocks(w io.Writer, data MenuContext, blocks *runtime.Blocks) error {
+	return renderMenu(data, w, data, blocks)
 }
 
 func RenderMenuString(data MenuContext) (string, error) {
@@ -395,20 +1298,59 @@ func RenderMenuString(data MenuContext) (string, error) {
 }
 
 // from examples/partials-inheritance/templates/news.hbs:1
-func renderNews(data NewsContext, w io.Writer, root NewsContext) error {
+func renderNews(data NewsContext, w io.Writer, root NewsContext, blocks *runtime.Blocks) error {
 	if data == nil {
 		return nil
 	}
-	if _, err := io.WriteString(w, "News: "); err != nil {
+	var buf1 strings.Builder
+	if _, err := io.WriteString(&buf1, "\n    Новини\n"); err != nil {
 		return err
 	}
-	if err := runtime.WriteEscaped(w, data.Title()); err != nil {
+	if blocks != nil {
+		blocks.Set("caption", buf1.String())
+	}
+	if _, err := io.WriteString(w, "\n\n"); err != nil {
 		return err
 	}
-	if _, err := io.WriteString(w, "\n"); err != nil {
+	var buf2 strings.Builder
+	if _, err := io.WriteString(&buf2, "\n    Новини\n"); err != nil {
 		return err
 	}
-	if err := renderLayout(data, w, data); err != nil {
+	if blocks != nil {
+		blocks.Set("keywords", buf2.String())
+	}
+	if _, err := io.WriteString(w, "\n\n"); err != nil {
+		return err
+	}
+	var buf3 strings.Builder
+	if _, err := io.WriteString(&buf3, "\n    <h1 class=\"header_t\">"); err != nil {
+		return err
+	}
+	if err := runtime.WriteRaw(&buf3, data.Caption()); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(&buf3, "</h1>\n    <div class=\"currentDate\">"); err != nil {
+		return err
+	}
+	if err := runtime.WriteRaw(&buf3, data.Date()); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(&buf3, "</div>\n    <div id=\"content\">"); err != nil {
+		return err
+	}
+	if err := runtime.WriteRaw(&buf3, data.Body()); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(&buf3, "</div>\n"); err != nil {
+		return err
+	}
+	if blocks != nil {
+		blocks.Set("content", buf3.String())
+	}
+	if _, err := io.WriteString(w, "\n\n"); err != nil {
+		return err
+	}
+	if err := renderDefault(data, w, data, blocks); err != nil {
 		return err
 	}
 	if _, err := io.WriteString(w, "\n"); err != nil {
@@ -418,12 +1360,94 @@ func renderNews(data NewsContext, w io.Writer, root NewsContext) error {
 }
 
 func RenderNews(w io.Writer, data NewsContext) error {
-	return renderNews(data, w, data)
+	return renderNews(data, w, data, nil)
+}
+
+func RenderNewsWithBlocks(w io.Writer, data NewsContext, blocks *runtime.Blocks) error {
+	return renderNews(data, w, data, blocks)
 }
 
 func RenderNewsString(data NewsContext) (string, error) {
 	var b strings.Builder
 	if err := RenderNews(&b, data); err != nil {
+		return "", err
+	}
+	return b.String(), nil
+}
+
+// from examples/partials-inheritance/templates/page.hbs:1
+func renderPage(data PageContext, w io.Writer, root PageContext, blocks *runtime.Blocks) error {
+	if data == nil {
+		return nil
+	}
+	var buf1 strings.Builder
+	if _, err := io.WriteString(&buf1, "\n    "); err != nil {
+		return err
+	}
+	if err := runtime.WriteEscaped(&buf1, data.Caption()); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(&buf1, "\n"); err != nil {
+		return err
+	}
+	if blocks != nil {
+		blocks.Set("caption", buf1.String())
+	}
+	if _, err := io.WriteString(w, "\n\n"); err != nil {
+		return err
+	}
+	var buf2 strings.Builder
+	if _, err := io.WriteString(&buf2, "\n    "); err != nil {
+		return err
+	}
+	if err := runtime.WriteEscaped(&buf2, data.Keywords()); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(&buf2, "\n"); err != nil {
+		return err
+	}
+	if blocks != nil {
+		blocks.Set("keywords", buf2.String())
+	}
+	if _, err := io.WriteString(w, "\n\n"); err != nil {
+		return err
+	}
+	var buf3 strings.Builder
+	if _, err := io.WriteString(&buf3, "\n\t<div id=\"content\">"); err != nil {
+		return err
+	}
+	if err := runtime.WriteRaw(&buf3, data.Body()); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(&buf3, "</div>\n"); err != nil {
+		return err
+	}
+	if blocks != nil {
+		blocks.Set("content", buf3.String())
+	}
+	if _, err := io.WriteString(w, "\n\n"); err != nil {
+		return err
+	}
+	if err := renderDefault(data, w, data, blocks); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, "\n"); err != nil {
+		return err
+	}
+	return nil
+}
+
+func RenderPage(w io.Writer, data PageContext) error {
+	return renderPage(data, w, data, nil)
+}
+
+func RenderPageWithBlocks(w io.Writer, data PageContext, blocks *runtime.Blocks) error {
+	return renderPage(data, w, data, blocks)
+}
+
+func RenderPageString(data PageContext) (string, error) {
+	var b strings.Builder
+	if err := RenderPage(&b, data); err != nil {
 		return "", err
 	}
 	return b.String(), nil

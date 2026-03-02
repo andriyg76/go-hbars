@@ -1,4 +1,4 @@
-// Build index.html and news.html from templates and data.
+// Build page.html, index.html, and news.html from templates and data.
 //
 // 1. Generate Go code from templates:
 //    go run github.com/andriyg76/go-hbars/cmd/hbc -in templates -out gen/templates_gen.go -pkg templates
@@ -15,6 +15,9 @@ import (
 	templates "github.com/andriyg76/go-hbars/examples/partials-inheritance/gen"
 )
 
+// dataFiles lists JSON files; each is rendered with the matching template to the corresponding HTML.
+var dataFiles = []string{"index.json", "firstpage.json", "news.json"}
+
 func main() {
 	baseDir := "."
 	if len(os.Args) > 1 {
@@ -22,30 +25,42 @@ func main() {
 	}
 	dataDir := filepath.Join(baseDir, "data")
 
-	// Load index data and render to index.html
-	indexData, err := loadData(filepath.Join(dataDir, "index.json"))
-	if err != nil {
-		panic(err)
+	for _, dataFile := range dataFiles {
+		data, err := loadData(filepath.Join(dataDir, dataFile))
+		if err != nil {
+			panic(err)
+		}
+		var html string
+		switch dataFile {
+		case "index.json":
+			html, err = templates.RenderPageString(templates.PageContextFromMap(data))
+		case "firstpage.json":
+			html, err = templates.RenderFirstpageString(templates.FirstpageContextFromMap(data))
+		case "news.json":
+			html, err = templates.RenderNewsString(templates.NewsContextFromMap(data))
+		default:
+			panic("unknown data file: " + dataFile)
+		}
+		if err != nil {
+			panic(err)
+		}
+		outPath := filepath.Join(baseDir, outputName(dataFile))
+		if err := os.WriteFile(outPath, []byte(html), 0644); err != nil {
+			panic(err)
+		}
 	}
-	indexHTML, err := templates.RenderDefaultString(templates.DefaultContextFromMap(indexData))
-	if err != nil {
-		panic(err)
-	}
-	if err := os.WriteFile(filepath.Join(baseDir, "index.html"), []byte(indexHTML), 0644); err != nil {
-		panic(err)
-	}
+}
 
-	// Load news data and render to news.html
-	newsData, err := loadData(filepath.Join(dataDir, "news.json"))
-	if err != nil {
-		panic(err)
-	}
-	newsHTML, err := templates.RenderNewsString(templates.NewsContextFromMap(newsData))
-	if err != nil {
-		panic(err)
-	}
-	if err := os.WriteFile(filepath.Join(baseDir, "news.html"), []byte(newsHTML), 0644); err != nil {
-		panic(err)
+func outputName(dataFile string) string {
+	switch dataFile {
+	case "index.json":
+		return "page.html"
+	case "firstpage.json":
+		return "index.html"
+	case "news.json":
+		return "news.html"
+	default:
+		return "out.html"
 	}
 }
 

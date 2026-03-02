@@ -1,2 +1,16 @@
-Page: {{title}}
-{{> layout}}
+<!DOCTYPE html>
+<html>
+<head>
+<title>{{#block "caption"}}{{/block}} | Partials inheritance</title>
+<meta name="keywords" content="{{#block "keywords"}}{{/block}}"/>
+{{#block "addheaders"}}{{/block}}
+</head>
+<body>
+<div id="header">{{> header }}</div>
+{{> menu menu=_shared.menu}}
+<div id="mainContent">
+{{#block "content"}}{{/block}}
+</div>
+<div id="footer">{{> bottom }}</div>
+</body>
+</html>

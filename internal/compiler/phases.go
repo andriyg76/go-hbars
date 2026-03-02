@@ -44,6 +44,7 @@ type Phase1Result struct {
 // Phase2aResult is the output of phase 2a (partial/context type analysis).
 type Phase2aResult struct {
 	PartialParamTypes map[PartialName]ContextTypeName
+	HashOnlyPartials  map[string]bool // partial names only ever called with hash (e.g. {{> menu menu=...}})
 	TypeSet           map[PartialName]map[ContextTypeName]bool
 	CanonicalType     map[PartialName]ContextTypeName
 	PrimaryCaller     map[PartialName]Template

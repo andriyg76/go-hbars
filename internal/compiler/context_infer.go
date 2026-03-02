@@ -416,10 +416,14 @@ func (c *pathCollector) walkPartialsCollectNode(node ast.Node, goName string, ad
 		default:
 			return nil // dynamic partial name, skip
 		}
-		sameScope := n.Ctx == nil
+		// Only hash (e.g. {{> menu menu=_shared.menu}}) passes restricted context (hash only), not full caller context — treat as different-context so partial gets its own type (e.g. MenuContext).
+		hasHashOnly := n.Ctx == nil && len(n.Hash) > 0
+		sameScope := n.Ctx == nil && !hasHashOnly
 		var paramType string
 		if sameScope {
 			paramType = c.currentScopeType(goName)
+		} else if hasHashOnly {
+			paramType = "" // partial uses its own context interface (e.g. MenuContext with Menu() any)
 		} else if pr, ok := n.Ctx.(*ast.PathRef); ok {
 			paramType = c.pathToScopeType(goName, pr.Path)
 		} else {
@@ -473,17 +477,23 @@ func (c *pathCollector) walkPartialsCollectNode(node ast.Node, goName string, ad
 	}
 }
 
-// buildPartialTypeSet returns for each partial the set of caller context types (from same-scope calls only).
-// Used by CollectPartialParamTypes and SharedPartialInfo.
-func buildPartialTypeSet(parsed map[string][]ast.Node, names []string, funcNames map[string]string, helperExprs map[string]string) map[string]map[string]bool {
-	typeSet := make(map[string]map[string]bool) // partialName -> set of param types (from same-scope calls only)
+// buildPartialTypeSet returns for each partial the set of caller context types (from same-scope calls only)
+// and hashOnlyPartials: partial names that are only ever called with hash (e.g. {{> menu menu=_shared.menu}}).
+func buildPartialTypeSet(parsed map[string][]ast.Node, names []string, funcNames map[string]string, helperExprs map[string]string) (typeSet map[string]map[string]bool, hashOnlyPartials map[string]bool) {
+	typeSet = make(map[string]map[string]bool)
+	hashOnlyPartials = make(map[string]bool)
 	for _, name := range names {
 		goName := funcNames[name]
 		col := newPathCollector(helperExprs)
 		col.setParsed(parsed)
 		add := func(partialName, paramType string, sameScope bool) {
+			if !sameScope && paramType == "" {
+				hashOnlyPartials[partialName] = true
+			} else {
+				hashOnlyPartials[partialName] = false
+			}
 			if !sameScope {
-				return // explicit context: partial keeps its own interface (e.g. OrderRowContext)
+				return
 			}
 			if typeSet[partialName] == nil {
 				typeSet[partialName] = make(map[string]bool)
@@ -527,15 +537,14 @@ func buildPartialTypeSet(parsed map[string][]ast.Node, names []string, funcNames
 			}
 		}
 	}
-	return typeSet
+	return typeSet, hashOnlyPartials
 }
 
 // CollectPartialParamTypes returns for each partial the context type to use for its render param.
-// Only same-scope calls ({{> name}} with no expr) contribute: then we use the caller's type so partial and caller share one interface.
-// When a partial is called with explicit context (e.g. {{> orderRow order}}), we do not set result[partialName], so the partial keeps its own context interface (e.g. OrderRowContext) and is called with the row data explicitly.
-// Returns map[partialName]contextTypeName; empty string means use the partial's own context interface.
-func CollectPartialParamTypes(parsed map[string][]ast.Node, names []string, funcNames map[string]string, helperExprs map[string]string) map[string]string {
-	typeSet := buildPartialTypeSet(parsed, names, funcNames, helperExprs)
+// Only same-scope calls ({{> name}} with no expr) contribute. Returns (result, hashOnlyPartials);
+// hashOnlyPartials[name]==true means that partial is only ever called with hash (e.g. {{> menu menu=...}}).
+func CollectPartialParamTypes(parsed map[string][]ast.Node, names []string, funcNames map[string]string, helperExprs map[string]string) (map[string]string, map[string]bool) {
+	typeSet, hashOnlyPartials := buildPartialTypeSet(parsed, names, funcNames, helperExprs)
 	result := make(map[string]string)
 	for partialName, set := range typeSet {
 		if len(set) == 1 {
@@ -545,7 +554,7 @@ func CollectPartialParamTypes(parsed map[string][]ast.Node, names []string, func
 			}
 		}
 	}
-	return result
+	return result, hashOnlyPartials
 }
 
 // SharedPartialInfo returns for each shared partial (multiple same-scope callers) its canonical context type name
@@ -871,7 +880,7 @@ func rootLayoutPartial(tree *typeNode, canonicalType map[string]string) string {
 	return layout
 }
 
-func emitContextInterfaces(w *codeWriter, templateName, goName string, tree *typeNode, canonicalType, primaryCaller map[string]string, typeTrees map[string]*typeNode) {
+func emitContextInterfaces(w *codeWriter, templateName, goName string, tree *typeNode, canonicalType, primaryCaller map[string]string, typeTrees map[string]*typeNode, hashOnlyPartials map[string]bool) {
 	rootName := goName + "Context"
 	seen := make(map[string]bool)
 	seen[rootName] = true
@@ -879,6 +888,7 @@ func emitContextInterfaces(w *codeWriter, templateName, goName string, tree *typ
 	if layoutPartial == templateName {
 		layoutPartial = ""
 	}
+	hashOnly := hashOnlyPartials != nil && hashOnlyPartials[templateName]
 	var skipFieldsAtRoot map[string]bool
 	if layoutPartial != "" && typeTrees != nil {
 		// Use the layout template's root-level fields so we skip all layout content (e.g. news/informer
@@ -902,11 +912,13 @@ func emitContextInterfaces(w *codeWriter, templateName, goName string, tree *typ
 		layoutCanon := canonicalType[layoutPartial]
 		w.line("%s", layoutCanon)
 	}
-	emitInterfaceMethods(w, templateName, goName, "", tree, seen, canonicalType, primaryCaller, layoutPartial, skipFieldsAtRoot, typeTrees)
+	emitInterfaceMethods(w, templateName, goName, "", tree, seen, canonicalType, primaryCaller, layoutPartial, skipFieldsAtRoot, typeTrees, hashOnly)
 	w.line("Raw() any")
 	w.indentDec()
 	w.line("}")
-	emitNodeInterfaces(w, templateName, goName, "", tree, seen, canonicalType, primaryCaller, typeTrees)
+	if !hashOnly {
+		emitNodeInterfaces(w, templateName, goName, "", tree, seen, canonicalType, primaryCaller, typeTrees)
+	}
 }
 
 func emitNodeInterfaces(w *codeWriter, templateName, goIdent, pathPrefix string, n *typeNode, seen map[string]bool, canonicalType, primaryCaller map[string]string, typeTrees map[string]*typeNode) {
@@ -923,7 +935,7 @@ func emitNodeInterfaces(w *codeWriter, templateName, goIdent, pathPrefix string,
 		w.line("// %s is the context for one element of %s.", elemName, pathPrefix)
 		w.line("type %s interface {", elemName)
 		w.indentInc()
-		emitInterfaceMethods(w, templateName, goIdent, pathPrefix+".", n.sliceElem, seen, canonicalType, primaryCaller, "", nil, typeTrees)
+		emitInterfaceMethods(w, templateName, goIdent, pathPrefix+".", n.sliceElem, seen, canonicalType, primaryCaller, "", nil, typeTrees, false)
 		w.line("Raw() any")
 		w.indentDec()
 		w.line("}")
@@ -969,7 +981,7 @@ func emitNodeInterfaces(w *codeWriter, templateName, goIdent, pathPrefix string,
 			w.line("// %s is the context for path %q.", ifaceName, subPath)
 			w.line("type %s interface {", ifaceName)
 			w.indentInc()
-			emitInterfaceMethods(w, templateName, goIdent, subPath+".", child, seen, canonicalType, primaryCaller, "", nil, typeTrees)
+			emitInterfaceMethods(w, templateName, goIdent, subPath+".", child, seen, canonicalType, primaryCaller, "", nil, typeTrees, false)
 			w.line("Raw() any")
 			w.indentDec()
 			w.line("}")
@@ -978,7 +990,7 @@ func emitNodeInterfaces(w *codeWriter, templateName, goIdent, pathPrefix string,
 	}
 }
 
-func emitInterfaceMethods(w *codeWriter, templateName, goIdent, pathPrefix string, n *typeNode, seen map[string]bool, canonicalType, primaryCaller map[string]string, layoutPartial string, skipFieldsAtRoot map[string]bool, typeTrees map[string]*typeNode) {
+func emitInterfaceMethods(w *codeWriter, templateName, goIdent, pathPrefix string, n *typeNode, seen map[string]bool, canonicalType, primaryCaller map[string]string, layoutPartial string, skipFieldsAtRoot map[string]bool, typeTrees map[string]*typeNode, hashOnly bool) {
 	if n == nil || n.fields == nil {
 		return
 	}
@@ -1000,6 +1012,11 @@ func emitInterfaceMethods(w *codeWriter, templateName, goIdent, pathPrefix strin
 		child := n.fields[field]
 		methodName := goFieldName(field)
 		if methodName == "" {
+			continue
+		}
+		// Hash-only partial (e.g. {{> menu menu=_shared.menu}}): root-level context is restricted to hash keys, emit Menu() any.
+		if pathPrefix == "" && hashOnly && len(child.fields) > 0 {
+			w.line("%s() any", methodName)
 			continue
 		}
 		if child.isSlice && child.sliceElem != nil {
@@ -1079,9 +1096,12 @@ func emitInterfaceMethods(w *codeWriter, templateName, goIdent, pathPrefix strin
 }
 
 // emitContextDataTypes emits all ...ContextData structs and FromMap for the given template.
-func emitContextDataTypes(w *codeWriter, templateName, goName string, tree *typeNode, canonicalType, primaryCaller map[string]string, typeTrees map[string]*typeNode) {
+func emitContextDataTypes(w *codeWriter, templateName, goName string, tree *typeNode, canonicalType, primaryCaller map[string]string, typeTrees map[string]*typeNode, hashOnlyPartials map[string]bool) {
 	seen := make(map[string]bool)
-	emitNodeContextDataTypes(w, templateName, goName, "", tree, seen, canonicalType)
+	hashOnly := hashOnlyPartials != nil && hashOnlyPartials[templateName]
+	if !hashOnly {
+		emitNodeContextDataTypes(w, templateName, goName, "", tree, seen, canonicalType)
+	}
 	rootName := goName + "Context"
 	rootDataName := contextDataStructName(rootName)
 	layoutPartial := rootLayoutPartial(tree, canonicalType)
@@ -1092,7 +1112,7 @@ func emitContextDataTypes(w *codeWriter, templateName, goName string, tree *type
 	if layoutPartial != "" && typeTrees != nil {
 		layoutTree = typeTrees[layoutPartial]
 	}
-	emitRootContextDataStruct(w, templateName, goName, tree, rootDataName, canonicalType, primaryCaller, layoutPartial, layoutTree, typeTrees)
+	emitRootContextDataStruct(w, templateName, goName, tree, rootDataName, canonicalType, primaryCaller, layoutPartial, layoutTree, typeTrees, hashOnly)
 	emitFromMap(w, goName, rootName, rootDataName)
 }
 
@@ -1177,7 +1197,7 @@ func emitObjectContextDataStruct(w *codeWriter, templateName, goIdent, pathPrefi
 	w.line("// %s is a map-backed implementation of %s.", dataName, ifaceName)
 	w.line("type %s struct { m map[string]any }", dataName)
 	w.line("")
-	emitContextDataMethods(w, templateName, goIdent, pathPrefix, n, dataName, nil, nil, "", nil, nil)
+	emitContextDataMethods(w, templateName, goIdent, pathPrefix, n, dataName, nil, nil, "", nil, nil, false)
 	w.line("func (d %s) Raw() any { return d.m }", dataName)
 	emitFromMapForIface(w, ifaceName, dataName)
 }
@@ -1188,12 +1208,12 @@ func emitItemContextDataStruct(w *codeWriter, goIdent, collectionPath string, n 
 	w.line("type %s struct { m map[string]any }", dataName)
 	w.line("")
 	pathPrefix := collectionPath + "."
-	emitContextDataMethods(w, "", goIdent, pathPrefix, n, dataName, nil, nil, "", nil, nil)
+	emitContextDataMethods(w, "", goIdent, pathPrefix, n, dataName, nil, nil, "", nil, nil, false)
 	w.line("func (d %s) Raw() any { return d.m }", dataName)
 	emitFromMapForIface(w, ifaceName, dataName)
 }
 
-func emitContextDataMethods(w *codeWriter, templateName, goIdent, pathPrefix string, n *typeNode, dataName string, canonicalType, primaryCaller map[string]string, layoutPartial string, skipFieldsAtRoot map[string]bool, typeTrees map[string]*typeNode) {
+func emitContextDataMethods(w *codeWriter, templateName, goIdent, pathPrefix string, n *typeNode, dataName string, canonicalType, primaryCaller map[string]string, layoutPartial string, skipFieldsAtRoot map[string]bool, typeTrees map[string]*typeNode, hashOnly bool) {
 	if n == nil || n.fields == nil {
 		return
 	}
@@ -1218,6 +1238,11 @@ func emitContextDataMethods(w *codeWriter, templateName, goIdent, pathPrefix str
 			continue
 		}
 		mapKey := field
+		// Hash-only partial: root-level object fields become Method() any.
+		if pathPrefix == "" && hashOnly && len(child.fields) > 0 {
+			w.line("func (d %s) %s() any { return d.m[%q] }", dataName, methodName, mapKey)
+			continue
+		}
 		if child.isSlice && child.sliceElem != nil {
 			fullPath := pathPrefix + field
 			elemIdent := goIdent
@@ -1303,7 +1328,7 @@ func emitContextDataMethods(w *codeWriter, templateName, goIdent, pathPrefix str
 	}
 }
 
-func emitRootContextDataStruct(w *codeWriter, templateName, goIdent string, tree *typeNode, rootDataName string, canonicalType, primaryCaller map[string]string, layoutPartial string, layoutTree *typeNode, typeTrees map[string]*typeNode) {
+func emitRootContextDataStruct(w *codeWriter, templateName, goIdent string, tree *typeNode, rootDataName string, canonicalType, primaryCaller map[string]string, layoutPartial string, layoutTree *typeNode, typeTrees map[string]*typeNode, hashOnly bool) {
 	rootName := goIdent + "Context"
 	w.line("")
 	w.line("// %s is a map-backed implementation of %s.", rootDataName, rootName)
@@ -1313,7 +1338,7 @@ func emitRootContextDataStruct(w *codeWriter, templateName, goIdent string, tree
 	if layoutPartial != "" && layoutTree != nil {
 		layoutCanon := canonicalType[layoutPartial]
 		layoutGoName := strings.TrimSuffix(layoutCanon, "Context")
-		emitContextDataMethods(w, layoutPartial, layoutGoName, "", layoutTree, rootDataName, canonicalType, primaryCaller, "", nil, nil)
+		emitContextDataMethods(w, layoutPartial, layoutGoName, "", layoutTree, rootDataName, canonicalType, primaryCaller, "", nil, nil, false)
 		skipFieldsAtRoot = make(map[string]bool)
 		skipFieldsAtRoot[layoutPartial] = true
 		if layoutTree.fields != nil {
@@ -1325,7 +1350,7 @@ func emitRootContextDataStruct(w *codeWriter, templateName, goIdent string, tree
 			}
 		}
 	}
-	emitContextDataMethods(w, templateName, goIdent, "", tree, rootDataName, canonicalType, primaryCaller, layoutPartial, skipFieldsAtRoot, typeTrees)
+	emitContextDataMethods(w, templateName, goIdent, "", tree, rootDataName, canonicalType, primaryCaller, layoutPartial, skipFieldsAtRoot, typeTrees, hashOnly)
 	w.line("func (d %s) Raw() any { return d.m }", rootDataName)
 }
 
