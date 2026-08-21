@@ -33,20 +33,20 @@ func main() {
 	hexerr.SetFilterPrefixes("github.com/andriyg76/go-hbars")
 
 	var (
-		inDir       = flag.String("in", "", "input directory or file (templates); required")
-		outPath     = flag.String("out", "", "output .go file path (default: stdout when no path given)")
-		pkg         = flag.String("pkg", "templates", "Go package name for generated code")
-		maxPhase    = flag.Int("max-phase", 5, "maximum compilation phase (1=parse, 2=2a, 3=2b, 4=IR, 5=Go); compilation runs from 1 to max-phase")
-		phase1Out   = flag.String("phase1-output", "", "write phase 1 result (AST) to this JSON file")
-		phase2aOut  = flag.String("phase2a-output", "", "write phase 2a result (partial types) to this JSON file")
-		phase2bOut  = flag.String("phase2b-output", "", "write phase 2b result (type trees) to this JSON file")
-		phase3Out   = flag.String("phase3-output", "", "write phase 3 result (IR) to this JSON file")
-		verbose     = flag.Bool("verbose", false, "enable debug-level compiler log")
-		trace       = flag.Bool("trace", false, "enable trace-level compiler log")
-		bootstrap        = flag.Bool("bootstrap", false, "generate bootstrap (NewRenderer, NewQuickProcessor, NewQuickServer)")
-		noCoreHelpers    = flag.Bool("no-core-helpers", false, "disable default core helpers (from helpers.Registry())")
-		genVersion       = flag.String("generator-version", "", "emit Generator version comment in output")
-		runtimeImp       = flag.String("runtime", "", "runtime import path (default: github.com/andriyg76/go-hbars/runtime)")
+		inDir         = flag.String("in", "", "input directory or file (templates); required")
+		outPath       = flag.String("out", "", "output .go file path (default: stdout when no path given)")
+		pkg           = flag.String("pkg", "templates", "Go package name for generated code")
+		maxPhase      = flag.Int("max-phase", 5, "maximum compilation phase (1=parse, 2=2a, 3=2b, 4=IR, 5=Go); compilation runs from 1 to max-phase")
+		phase1Out     = flag.String("phase1-output", "", "write phase 1 result (AST) to this JSON file")
+		phase2aOut    = flag.String("phase2a-output", "", "write phase 2a result (partial types) to this JSON file")
+		phase2bOut    = flag.String("phase2b-output", "", "write phase 2b result (type trees) to this JSON file")
+		phase3Out     = flag.String("phase3-output", "", "write phase 3 result (IR) to this JSON file")
+		verbose       = flag.Bool("verbose", false, "enable debug-level compiler log")
+		trace         = flag.Bool("trace", false, "enable trace-level compiler log")
+		bootstrap     = flag.Bool("bootstrap", false, "generate bootstrap (NewRenderer, NewQuickProcessor, NewQuickServer)")
+		noCoreHelpers = flag.Bool("no-core-helpers", false, "disable default core helpers (from helpers.Registry())")
+		genVersion    = flag.String("generator-version", "", "emit Generator version comment in output")
+		runtimeImp    = flag.String("runtime", "", "runtime import path (default: github.com/andriyg76/go-hbars/runtime)")
 	)
 	flag.Parse()
 
@@ -130,28 +130,33 @@ func loadTemplates(in string) (map[string]string, map[string]string, error) {
 	templates := make(map[string]string)
 	templateFiles := make(map[string]string)
 	if info.IsDir() {
-		entries, err := os.ReadDir(in)
-		if err != nil {
-			return nil, nil, err
-		}
-		for _, e := range entries {
-			if e.IsDir() {
-				continue
+		err := filepath.WalkDir(in, func(path string, entry os.DirEntry, walkErr error) error {
+			if walkErr != nil {
+				return walkErr
 			}
-			if !strings.HasSuffix(e.Name(), ".hbs") {
-				continue
+			if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".hbs") {
+				return nil
 			}
-			path := filepath.Join(in, e.Name())
+
+			rel, err := filepath.Rel(in, path)
+			if err != nil {
+				return hexerr.Wrapf(err, "resolve template name for %s", path)
+			}
+			name := filepath.ToSlash(strings.TrimSuffix(rel, ".hbs"))
+			if name == "" || name == "." {
+				return nil
+			}
+
 			content, err := os.ReadFile(path)
 			if err != nil {
-				return nil, nil, hexerr.Wrapf(err, "read %s", path)
-			}
-			name := strings.TrimSuffix(e.Name(), ".hbs")
-			if name == "" {
-				continue
+				return hexerr.Wrapf(err, "read %s", path)
 			}
 			templates[name] = string(content)
 			templateFiles[name] = path
+			return nil
+		})
+		if err != nil {
+			return nil, nil, err
 		}
 		return templates, templateFiles, nil
 	}
