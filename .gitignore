@@ -1,4 +1,4 @@
-hbc
+/hbc
 /init
 **/*.exe
 examples/partials-inheritance

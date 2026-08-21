@@ -442,8 +442,8 @@ func TestCompileTemplates_ContextInterfaces(t *testing.T) {
 
 func TestCompileTemplates_PartialsUseFromMap(t *testing.T) {
 	code, err := CompileTemplates(map[string]string{
-		"main":    "{{title}}{{> header}}",
-		"header":  "<h1>{{title}}</h1>",
+		"main":   "{{title}}{{> header}}",
+		"header": "<h1>{{title}}</h1>",
 	}, Options{PackageName: "templates"})
 	if err != nil {
 		t.Fatalf("CompileTemplates error: %v", err)
@@ -509,7 +509,7 @@ func TestCompileTemplates_PartialContextRules(t *testing.T) {
 func TestCompileTemplates_CanonicalPartialContext(t *testing.T) {
 	t.Run("two_roots_share_partial", func(t *testing.T) {
 		tmpls := map[string]string{
-			"default":  `Page: {{title}}{{> menu}}`,
+			"default":   `Page: {{title}}{{> menu}}`,
 			"firstpage": `First: {{title}}{{> menu}}`,
 			"menu":      `<nav>{{title}}</nav>`,
 		}
@@ -542,10 +542,10 @@ func TestCompileTemplates_CanonicalPartialContext(t *testing.T) {
 	// Three roots (default, firstpage, about) all include menu; all use canonical MenuContext.
 	t.Run("three_roots_share_partial", func(t *testing.T) {
 		tmpls := map[string]string{
-			"default":  `Default: {{title}}{{> menu}}`,
+			"default":   `Default: {{title}}{{> menu}}`,
 			"firstpage": `First: {{title}}{{> menu}}`,
-			"about":    `About: {{title}}{{> menu}}`,
-			"menu":     `<nav>{{title}}</nav>`,
+			"about":     `About: {{title}}{{> menu}}`,
+			"menu":      `<nav>{{title}}</nav>`,
 		}
 		code, err := CompileTemplates(tmpls, Options{PackageName: "templates"})
 		if err != nil {
@@ -575,9 +575,9 @@ func TestCompileTemplates_CanonicalPartialContext(t *testing.T) {
 	// All use canonical types; PageContext embeds DefaultContext and has Menu() MenuContext.
 	t.Run("page_inherits_default_both_include_menu", func(t *testing.T) {
 		tmpls := map[string]string{
-			"default":  `Layout: {{title}}{{> menu}}`,
-			"page":     `Page: {{title}}{{> menu}}{{> default}}`,
-			"menu":     `<nav>{{title}}</nav>`,
+			"default": `Layout: {{title}}{{> menu}}`,
+			"page":    `Page: {{title}}{{> menu}}{{> default}}`,
+			"menu":    `<nav>{{title}}</nav>`,
 		}
 		code, err := CompileTemplates(tmpls, Options{PackageName: "templates"})
 		if err != nil {
@@ -602,7 +602,7 @@ func TestCompileTemplates_CanonicalPartialContext(t *testing.T) {
 	// Nested partials: menu is shared and includes menuItem; canonical types at both levels.
 	t.Run("nested_partials_shared", func(t *testing.T) {
 		tmpls := map[string]string{
-			"default":  `{{title}}{{> menu}}`,
+			"default":   `{{title}}{{> menu}}`,
 			"firstpage": `{{title}}{{> menu}}`,
 			"menu":      `<nav>{{title}}{{#each items}}{{> menuItem}}{{/each}}</nav>`,
 			"menuItem":  `<span>{{label}}</span>`,
@@ -772,12 +772,58 @@ func TestCompileTemplates_GeneratedCodeCompiles(t *testing.T) {
 	})
 	t.Run("canonical_partial_context", func(t *testing.T) {
 		code, err := CompileTemplates(map[string]string{
-			"default":  `Page: {{title}}{{> menu}}`,
+			"default":   `Page: {{title}}{{> menu}}`,
 			"firstpage": `First: {{title}}{{> menu}}`,
-			"menu":     `<nav>{{title}}</nav>`,
+			"menu":      `<nav>{{title}}</nav>`,
 		}, Options{PackageName: "templates"})
 		if err != nil {
 			t.Fatalf("compile: %v", err)
+		}
+		mustBuildGeneratedCode(t, code, "templates")
+	})
+	t.Run("partial_name_does_not_import_same_named_helper", func(t *testing.T) {
+		code, err := CompileTemplates(map[string]string{
+			"default": `Page: {{title}}`,
+			"main":    `{{> default}}`,
+		}, Options{
+			PackageName: "templates",
+			MaxPhase:    Phase4,
+			Helpers: map[string]HelperRef{
+				"default": {
+					ImportPath: "github.com/andriyg76/go-hbars/helpers/handlebars",
+					Ident:      "Default",
+				},
+			},
+		})
+		if err != nil {
+			t.Fatalf("phased compile: %v", err)
+		}
+		if strings.Contains(string(code), `helpers/handlebars`) {
+			t.Fatalf("partial name must not cause an unused helper import")
+		}
+		mustBuildGeneratedCode(t, code, "templates")
+	})
+	t.Run("each_first_and_last_metadata", func(t *testing.T) {
+		code, err := CompileTemplates(map[string]string{
+			"main": `{{#each pages}}{{#unless @first}}|{{/unless}}{{.}}{{#unless @last}},{{/unless}}{{/each}}`,
+		}, Options{PackageName: "templates", MaxPhase: Phase4})
+		if err != nil {
+			t.Fatalf("phased compile: %v", err)
+		}
+		src := string(code)
+		if !strings.Contains(src, " == 0") || !strings.Contains(src, " == len(") {
+			t.Fatalf("generated each loop is missing @first/@last expressions")
+		}
+		mustBuildGeneratedCode(t, code, "templates")
+	})
+	t.Run("nested_site_collections", func(t *testing.T) {
+		code, err := CompileTemplates(map[string]string{
+			"matrix": `{{#each rows}}{{#each .}}{{.}}{{/each}}{{/each}}`,
+			"people": `{{#each groups}}{{name}}{{#each people}}{{name}}{{/each}}{{/each}}`,
+			"rss":    `{{#each feed.items}}{{#each categories}}{{.}}{{/each}}{{/each}}`,
+		}, Options{PackageName: "templates", MaxPhase: Phase4})
+		if err != nil {
+			t.Fatalf("phased compile: %v", err)
 		}
 		mustBuildGeneratedCode(t, code, "templates")
 	})
@@ -805,7 +851,7 @@ func TestCompileTemplates_GeneratedCodeCompiles(t *testing.T) {
 func TestRunPhase3_ContextIfacesAndDataPopulated(t *testing.T) {
 	// Verify that RunPhase3 populates contextIfaces and contextData (not nil).
 	templates := map[string]string{
-		"main": "Hello {{name}} {{> footer}}",
+		"main":   "Hello {{name}} {{> footer}}",
 		"footer": "<footer>{{name}}</footer>",
 	}
 	opts := Options{PackageName: "templates"}
@@ -859,10 +905,10 @@ func TestRunPhase3_SharedPartialEmbeddingInIR(t *testing.T) {
 	// When multiple root templates include the same same-scope partial, the partial gets a
 	// canonical context type. Callers should have IsCanonical=true embedding in contextIfaces.
 	templates := map[string]string{
-		"default":  "Page: {{title}}\n{{> layout}}",
-		"news":     "News: {{title}}\n{{> layout}}",
-		"layout":   "{{> menu _shared.menu}}",
-		"menu":     "<nav>{{title}}</nav>",
+		"default": "Page: {{title}}\n{{> layout}}",
+		"news":    "News: {{title}}\n{{> layout}}",
+		"layout":  "{{> menu _shared.menu}}",
+		"menu":    "<nav>{{title}}</nav>",
 	}
 	opts := Options{PackageName: "templates"}
 	p1, err := RunPhase1(templates, opts)
@@ -939,4 +985,3 @@ func TestRunPhase3_SharedPartialEmbeddingInIR(t *testing.T) {
 		}
 	}
 }
-

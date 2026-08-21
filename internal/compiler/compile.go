@@ -84,31 +84,31 @@ type Options struct {
 
 	// Phased compilation: when MaxPhase >= 1, compilation runs from phase 1 up to MaxPhase.
 	// Non-empty output paths cause that phase's result to be written (JSON or .go).
-	MaxPhase       MaxPhase
-	Phase1Output   string // e.g. "phase1_ast.json"
-	Phase2aOutput  string
-	Phase2bOutput  string
-	Phase3Output   string
-	Phase4Output   string // final .go file path
-	Log            CompilerLogger
+	MaxPhase      MaxPhase
+	Phase1Output  string // e.g. "phase1_ast.json"
+	Phase2aOutput string
+	Phase2bOutput string
+	Phase3Output  string
+	Phase4Output  string // final .go file path
+	Log           CompilerLogger
 }
 
 // codegenParams holds the inputs for compileCodegen (used by both single-shot and phased Phase4).
 type codegenParams struct {
-	parsed                 map[string][]ast.Node
-	names                  []string
-	funcNames              map[string]string
-	partialParamTypes      map[string]string
-	hashOnlyPartials       map[string]bool
-	canonicalType          map[string]string
-	primaryCaller          map[string]string
-	typeTrees              map[string]*typeNode
-	contextTypeToTemplate  map[string]string
-	needFmt                bool
-	useLayoutBlocks        bool
-	helperExprs            map[string]string
-	helperImports          []importSpec
-	runtimeImport          string
+	parsed                map[string][]ast.Node
+	names                 []string
+	funcNames             map[string]string
+	partialParamTypes     map[string]string
+	hashOnlyPartials      map[string]bool
+	canonicalType         map[string]string
+	primaryCaller         map[string]string
+	typeTrees             map[string]*typeNode
+	contextTypeToTemplate map[string]string
+	needFmt               bool
+	useLayoutBlocks       bool
+	helperExprs           map[string]string
+	helperImports         []importSpec
+	runtimeImport         string
 }
 
 // CompileTemplates compiles templates into Go source code.
@@ -797,10 +797,13 @@ func collectUsedHelperNames(parsed map[string][]ast.Node, helperExprs map[string
 			case *ast.Mustache:
 				collectAstExpr(n.Expr)
 			case *ast.Partial:
-				collectAstExpr(n.Name)
-				collectAstExpr(n.Ctx)
+				// A partial name is a template reference, not a zero-argument
+				// helper. Only explicit helper calls in dynamic names, context,
+				// or hash arguments should contribute helper imports.
+				collectHelperCalls(n.Name, used)
+				collectHelperCalls(n.Ctx, used)
 				for _, h := range n.Hash {
-					collectAstExpr(h.Value)
+					collectHelperCalls(h.Value, used)
 				}
 			case *ast.Block:
 				if helperExprs[n.Name] != "" {
@@ -812,15 +815,15 @@ func collectUsedHelperNames(parsed map[string][]ast.Node, helperExprs map[string
 				walk(n.Body)
 				walk(n.Else)
 			case *ast.IfBlock:
-				collectAstExpr(n.Test)
+				collectHelperCalls(n.Test, used)
 				walk(n.Body)
 				walk(n.Else)
 			case *ast.WithBlock:
-				collectAstExpr(n.Value)
+				collectHelperCalls(n.Value, used)
 				walk(n.Body)
 				walk(n.Else)
 			case *ast.EachBlock:
-				collectAstExpr(n.Collection)
+				collectHelperCalls(n.Collection, used)
 				walk(n.Body)
 				walk(n.Else)
 			case *ast.LayoutBlock:
@@ -834,6 +837,23 @@ func collectUsedHelperNames(parsed map[string][]ast.Node, helperExprs map[string
 		walk(nodes)
 	}
 	return used
+}
+
+// collectHelperCalls records explicit helper calls inside control expressions without
+// treating a plain path as a zero-argument helper. A field can legitimately have the
+// same name as a registered helper (for example {{#date}} as a data section).
+func collectHelperCalls(expr ast.Expr, used map[string]bool) {
+	call, ok := expr.(*ast.HelperCall)
+	if !ok {
+		return
+	}
+	used[call.Callee] = true
+	for _, param := range call.Params {
+		collectHelperCalls(param, used)
+	}
+	for _, hash := range call.Hash {
+		collectHelperCalls(hash.Value, used)
+	}
 }
 
 // filterHelperImports keeps only imports for helpers that are actually used in the templates.
@@ -892,10 +912,12 @@ func uniqueAlias(base string, used map[string]bool) string {
 
 // typedScope is one frame of the typed context stack (current variable and its type node).
 type typedScope struct {
-	varName    string
-	pathPrefix string
-	node       *typeNode
-	eachKeyVar string // when in {{#each}} body, the loop key/index variable name for @key/@index
+	varName       string
+	pathPrefix    string
+	node          *typeNode
+	eachKeyVar    string // when in {{#each}} body, the loop key/index variable name for @key/@index
+	eachFirstExpr string // boolean expression for @first
+	eachLastExpr  string // boolean expression for @last
 }
 
 type generator struct {
@@ -906,8 +928,8 @@ type generator struct {
 	tempID           int
 	tree             *typeNode
 	goName           string
-	templateName     string             // template name (e.g. "menu") for hash-only lookup
-	hashOnlyPartials map[string]bool    // when set, templateName in this set means context is hash-only (Menu() any etc.)
+	templateName     string          // template name (e.g. "menu") for hash-only lookup
+	hashOnlyPartials map[string]bool // when set, templateName in this set means context is hash-only (Menu() any etc.)
 	typedStack       []typedScope
 	rootVar          string   // name of root context variable ("root"); same as data in entry, passed in for partials
 	blocksVar        string   // non-empty when layout block/partial are used
@@ -1280,10 +1302,21 @@ func (g *generator) emitEachBlock(n *ast.EachBlock) error {
 	rangeExpr := itemsVar
 	lenExpr := itemsVar
 	useMapAssert := false
+	nestedDynamic := scopeOk && scope.eachKeyVar != "" &&
+		!strings.HasPrefix(pathStr, "../") && !strings.HasPrefix(pathStr, "@")
+	if nestedDynamic {
+		if pathStr == "." || pathStr == "this" || pathStr == "" {
+			collectionExpr = scope.varName
+		} else {
+			collectionExpr = "runtime.LookupPath(" + scope.varName + ", " + strconv.Quote(pathStr) + ")"
+		}
+		useMapAssert = true
+		itemNode = nil
+	}
 	hashOnlyEach := pathStr != "" && strings.Contains(pathStr, ".") && g.hashOnlyPartials != nil && g.hashOnlyPartials[g.templateName]
 	if hashOnlyEach {
 		useMapAssert = true // LookupPath returns any; try []any and map[string]any
-		itemNode = nil     // body will use runtime.LookupPath(itemVar, path) for path resolution
+		itemNode = nil      // body will use runtime.LookupPath(itemVar, path) for path resolution
 	}
 	// Inside hash-only each body (scope with node == nil), collection is any; must try []any / map.
 	if scopeOk && scope.node == nil && collectionExpr != "nil" {
@@ -1297,7 +1330,7 @@ func (g *generator) emitEachBlock(n *ast.EachBlock) error {
 	} else {
 		g.w.line("%s := %s", itemsVar, collectionExpr)
 		// When collection is a map (object), use comma-ok so []any at runtime doesn't panic
-		if colNode != nil && !colNode.isSlice {
+		if colNode != nil && (!colNode.isSlice || colNode.sliceElem == nil) {
 			useMapAssert = true
 		}
 	}
@@ -1317,6 +1350,8 @@ func (g *generator) emitEachBlock(n *ast.EachBlock) error {
 		}
 		g.pushTypedScope(itemVar, itemPathPrefix, itemNode)
 		g.typedStack[len(g.typedStack)-1].eachKeyVar = keyVar
+		g.typedStack[len(g.typedStack)-1].eachFirstExpr = keyVar + " == 0"
+		g.typedStack[len(g.typedStack)-1].eachLastExpr = keyVar + " == len(" + sliceVar + ")-1"
 		if len(n.BlockParams) > 1 {
 			g.pushTypedScope(keyVar, n.BlockParams[1], nil)
 		}
@@ -1332,11 +1367,15 @@ func (g *generator) emitEachBlock(n *ast.EachBlock) error {
 		g.w.indentDec()
 		g.w.line("} else if %s, _eachMapOk := %s.(map[string]any); _eachMapOk && len(%s) > 0 {", mapVar, itemsVar, mapVar)
 		g.w.indentInc()
+		mapIndexVar := g.nextTemp("mapIndex")
+		g.w.line("%s := 0", mapIndexVar)
 		g.w.line("for %s, %s := range %s {", keyVar, itemVar, mapVar)
 		g.w.indentInc()
 		g.w.line("_, _ = %s, %s", keyVar, itemVar)
 		g.pushTypedScope(itemVar, itemPathPrefix, itemNode)
 		g.typedStack[len(g.typedStack)-1].eachKeyVar = keyVar
+		g.typedStack[len(g.typedStack)-1].eachFirstExpr = mapIndexVar + " == 0"
+		g.typedStack[len(g.typedStack)-1].eachLastExpr = mapIndexVar + " == len(" + mapVar + ")-1"
 		if len(n.BlockParams) > 1 {
 			g.pushTypedScope(keyVar, n.BlockParams[1], nil)
 		}
@@ -1347,6 +1386,7 @@ func (g *generator) emitEachBlock(n *ast.EachBlock) error {
 			g.popTypedScope()
 		}
 		g.popTypedScope()
+		g.w.line("%s++", mapIndexVar)
 		g.w.indentDec()
 		g.w.line("}")
 		g.w.indentDec()
@@ -1374,6 +1414,8 @@ func (g *generator) emitEachBlock(n *ast.EachBlock) error {
 	}
 	g.pushTypedScope(itemVar, itemPathPrefix, itemNode)
 	g.typedStack[len(g.typedStack)-1].eachKeyVar = keyVar
+	g.typedStack[len(g.typedStack)-1].eachFirstExpr = keyVar + " == 0"
+	g.typedStack[len(g.typedStack)-1].eachLastExpr = keyVar + " == len(" + lenExpr + ")-1"
 	if len(n.BlockParams) > 1 {
 		g.pushTypedScope(keyVar, n.BlockParams[1], nil)
 	}
@@ -1739,6 +1781,18 @@ func (g *generator) emitPathValue(path string) string {
 			}
 		}
 		return "nil"
+	}
+	if path == "@first" || path == "@last" {
+		for i := len(g.typedStack) - 1; i >= 0; i-- {
+			expr := g.typedStack[i].eachFirstExpr
+			if path == "@last" {
+				expr = g.typedStack[i].eachLastExpr
+			}
+			if expr != "" {
+				return expr
+			}
+		}
+		return "false"
 	}
 	// Parent scope: "../path" or "../" - resolve rest against a parent scope (try each ancestor until one resolves)
 	if path == ".." || strings.HasPrefix(path, "../") {

@@ -35,3 +35,11 @@ func TestHashArg(t *testing.T) {
 		t.Fatalf("unexpected hash value: %v", hash)
 	}
 }
+
+func TestLookupPathCurrentValue(t *testing.T) {
+	for _, path := range []string{".", "this", "  .  "} {
+		if got := LookupPath(7, path); got != 7 {
+			t.Errorf("LookupPath(7, %q) = %v, want 7", path, got)
+		}
+	}
+}
