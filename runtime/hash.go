@@ -50,6 +50,10 @@ func MergePartialContext(base, additions map[string]any) map[string]any {
 // LookupPath returns the value at the dot-separated path from root (e.g. "title", "user.name").
 // Root can be map[string]any or implement Raw() any returning a map. Used for @root.xxx in partials.
 func LookupPath(root any, path string) any {
+	path = strings.TrimSpace(path)
+	if path == "." || path == "this" {
+		return root
+	}
 	m := contextMapFromAny(root)
 	if m == nil || path == "" {
 		return nil

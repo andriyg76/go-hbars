@@ -263,10 +263,17 @@ func (c *pathCollector) collectMustache(n *ast.Mustache) error {
 }
 
 func (c *pathCollector) collectPartial(n *ast.Partial) error {
-	// Hash keys become partial context fields (e.g. {{> footer note="thanks"}} -> context has "note").
+	// Hash keys become partial context fields, while paths used as hash values
+	// belong to the caller context and must be inferred there. For example,
+	// {{> menu menu=_shared.menu_main_teatr}} needs both the partial's "menu"
+	// field and the caller's "_shared.menu_main_teatr" path.
 	for _, h := range n.Hash {
 		if h.Key != "" {
 			c.addPath(h.Key, "")
+		}
+		for _, pathStr := range pathsFromAstExpr(h.Value) {
+			full, elem := c.resolvePath(pathStr)
+			c.addPath(full, elem)
 		}
 	}
 	// Resolve partial name.
@@ -293,9 +300,10 @@ func (c *pathCollector) collectPartial(n *ast.Partial) error {
 			} else {
 				// Same-scope partial ({{> partial}}): add partial name as path so caller's type tree
 				// has a node for it, and caller will EMBED the partial's context type.
-				c.addPath(partialName, "")
+				partialPath, _ := c.resolvePath(partialName)
+				c.addPath(partialPath, "")
 				if partialNodes, ok := c.parsed[partialName]; ok {
-					c.pushWith(partialName, nil)
+					c.pushWith(partialPath, nil)
 					err := c.collectNodes(partialNodes)
 					c.pop()
 					if err != nil {
@@ -346,9 +354,26 @@ func (c *pathCollector) collectWithBlock(n *ast.WithBlock) error {
 func (c *pathCollector) collectEachBlock(n *ast.EachBlock) error {
 	var collectionPath string
 	if pr, ok := n.Collection.(*ast.PathRef); ok {
-		full, _ := c.resolvePath(pr.Path)
-		collectionPath = full
-		c.addPath(full, "")
+		full, elem := c.resolvePath(pr.Path)
+		top := c.scopeStack[len(c.scopeStack)-1]
+		switch {
+		case pr.Path == "." && top.eachCollection != "":
+			// A nested {{#each .}} means the parent collection contains collections.
+			// Mark its element type as dynamic and keep paths in the nested body dynamic.
+			if c.eachFields[top.eachCollection] == nil {
+				c.eachFields[top.eachCollection] = make(map[string]bool)
+			}
+			c.eachFields[top.eachCollection]["."] = true
+			collectionPath = "."
+		case elem != "":
+			// A collection referenced from inside an outer item (for example
+			// personages -> persons) is read through that item's Raw map.
+			c.addPath(full, elem)
+			collectionPath = "."
+		default:
+			collectionPath = full
+			c.addPath(full, "")
+		}
 	}
 	c.pushEach(collectionPath, n.BlockParams)
 	err := c.collectNodes(n.Body)
@@ -698,6 +723,13 @@ func buildTypeTree(paths map[string]bool, eachFields map[string]map[string]bool)
 			cur = cur.fields[part]
 		}
 		cur.isSlice = true
+		if fields["."] {
+			// Slice whose elements are themselves collections. Keep the element
+			// dynamic so code generation can accept []any without inventing an
+			// object interface for each nested row.
+			cur.sliceElem = nil
+			continue
+		}
 		cur.sliceElem = &typeNode{fields: make(map[string]*typeNode)}
 		for f := range fields {
 			if f == "" || f == "." || (len(f) > 0 && (f[0] == '@' || f[0] == '.')) {
