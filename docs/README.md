@@ -17,7 +17,7 @@
 
 ## Static site and server
 
-- **[Processor & Server](processor-server.md)** — CLI tools (`cmd/build`, `cmd/server`), data format, shared data.
+- **[Processor & Server](processor-server.md)** — CLI tools (`hbc build`, `cmd/server`), data format, shared data.
 - **[Embedded API](embedded.md)** — Embed processor and server in your app (sitegen, custom renderer).
 
 ## Other

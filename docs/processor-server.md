@@ -64,17 +64,25 @@ go generate ./...
 Generate static HTML files for hosting:
 
 ```bash
-go run ./cmd/build --data-path data --output-path pages
+hbc build --data-path data --output-path pages
 ```
+
+`hbc build` compiles the current templates, generates and builds a temporary
+Go 1.24 renderer executable, runs it, and removes the temporary build files.
+Projects embedding generated templates can continue to use `go generate`.
+`go run ./cmd/build` is retained as a compatibility wrapper.
 
 ### CLI Options
 
-**Build command (`cmd/build`):**
+**Build command (`hbc build`):**
 - `--root` - Base directory for relative paths (default: current directory)
 - `--data-path` - Data files directory (default: `data`)
 - `--shared-path` - Shared data directory (default: `shared`)
 - `--templates-path` - Templates directory (default: `.processor/templates`)
 - `--output-path` - Output directory (default: `pages`)
+- `--go` - Go executable used to build the renderer (default: `go`)
+- `--go-hbars-version` - Runtime module version (defaults to the compiler version)
+- `--go-hbars-replace` - Local module replacement for development
 
 ## Semi-Static Web Server
 
@@ -194,4 +202,3 @@ Run `go:generate` from the directory that contains the template files (e.g. `pro
 - [init](init.md) — Create a project with `processor/templates`, `data/`, `shared/` using `init new -bootstrap`.
 - [How to integrate bootstrap](howto-integrate-bootstrap.md) — Step-by-step bootstrap setup.
 - [Embedded API](embedded.md) — Use processor and server programmatically.
-

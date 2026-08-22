@@ -3,6 +3,7 @@
 // Usage:
 //
 //	hbc -in <dir|file> -out <file.go> -pkg <package>
+//	hbc build -root <site> -output-path <pages>
 //
 // Phased compilation (observe intermediate results; default -max-phase=5 emits Go):
 //
@@ -20,16 +21,23 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"path/filepath"
-	"strings"
 
 	"github.com/andriyg76/glog"
 	"github.com/andriyg76/go-hbars/helpers"
+	"github.com/andriyg76/go-hbars/internal/buildcmd"
 	"github.com/andriyg76/go-hbars/internal/compiler"
 	"github.com/andriyg76/hexerr"
 )
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "build" {
+		if err := buildcmd.RunCLI(os.Args[2:], os.Stdout); err != nil {
+			fmt.Fprintf(os.Stderr, "hbc build: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
+
 	hexerr.SetFilterPrefixes("github.com/andriyg76/go-hbars")
 
 	var (
@@ -65,7 +73,7 @@ func main() {
 	}
 	compilerLog := &glogDefaultLog{}
 
-	templates, templateFiles, err := loadTemplates(*inDir)
+	templates, templateFiles, err := compiler.LoadTemplates(*inDir)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "hbc: %v\n", err)
 		os.Exit(1)
@@ -121,54 +129,6 @@ func (glogDefaultLog) Info(format string, args ...any)  { glog.Info(format, args
 func (glogDefaultLog) Debug(format string, args ...any) { glog.Debug(format, args...) }
 func (glogDefaultLog) Trace(format string, args ...any) { glog.Trace(format, args...) }
 
-// loadTemplates loads all .hbs files from dir (or a single file) and returns map[name]content and map[name]filepath.
 func loadTemplates(in string) (map[string]string, map[string]string, error) {
-	info, err := os.Stat(in)
-	if err != nil {
-		return nil, nil, err
-	}
-	templates := make(map[string]string)
-	templateFiles := make(map[string]string)
-	if info.IsDir() {
-		err := filepath.WalkDir(in, func(path string, entry os.DirEntry, walkErr error) error {
-			if walkErr != nil {
-				return walkErr
-			}
-			if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".hbs") {
-				return nil
-			}
-
-			rel, err := filepath.Rel(in, path)
-			if err != nil {
-				return hexerr.Wrapf(err, "resolve template name for %s", path)
-			}
-			name := filepath.ToSlash(strings.TrimSuffix(rel, ".hbs"))
-			if name == "" || name == "." {
-				return nil
-			}
-
-			content, err := os.ReadFile(path)
-			if err != nil {
-				return hexerr.Wrapf(err, "read %s", path)
-			}
-			templates[name] = string(content)
-			templateFiles[name] = path
-			return nil
-		})
-		if err != nil {
-			return nil, nil, err
-		}
-		return templates, templateFiles, nil
-	}
-	if !strings.HasSuffix(in, ".hbs") {
-		return nil, nil, hexerr.New("single file input must be .hbs")
-	}
-	content, err := os.ReadFile(in)
-	if err != nil {
-		return nil, nil, err
-	}
-	name := strings.TrimSuffix(filepath.Base(in), ".hbs")
-	templates[name] = string(content)
-	templateFiles[name] = in
-	return templates, templateFiles, nil
+	return compiler.LoadTemplates(in)
 }

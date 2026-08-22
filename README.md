@@ -2,6 +2,8 @@
 
 Handlebars template compiler for Go.
 
+Requires Go 1.24 or later.
+
 ## Status
 
 Early MVP. Current focus is on a minimal core with HTML escaping, helpers, and partials.
@@ -75,6 +77,20 @@ go install github.com/andriyg76/go-hbars/cmd/hbc@latest
 
 ```go
 //go:generate hbc -in ./templates -out ./templates_gen.go -pkg templates -bootstrap
+```
+
+### Build a Static Site
+
+Compile the current templates and generate the site with one command. The
+generated renderer program is temporary and is removed after the build:
+
+```bash
+hbc build \
+  -root /path/to/site \
+  -templates-path .processor/templates \
+  -data-path data \
+  -shared-path shared \
+  -output-path pages
 ```
 
 ### Use Compiled Templates
