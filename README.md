@@ -93,6 +93,18 @@ hbc build \
   -output-path pages
 ```
 
+Applications can call the same build pipeline directly without installing or
+executing the `hbc` CLI:
+
+```go
+import "github.com/andriyg76/go-hbars/pkg/sitebuild"
+
+result, err := sitebuild.Run(sitebuild.Options{
+    RootPath:   "/path/to/site",
+    OutputPath: "/path/to/output",
+})
+```
+
 ### Use Compiled Templates
 
 Data must satisfy the generated context type (e.g. `MainContext`); use a struct or `map[string]any`, or the generated `XxxContextFromMap` if available.

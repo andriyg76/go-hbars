@@ -17,7 +17,7 @@ import (
 // Version is the compiler version, emitted in generated files as "// Compiler version: ...".
 // Bump this constant when cutting a release (e.g. 0.1.0 → 0.2.0). Optionally override at build time
 // so the released binary matches the tag: go build -ldflags "-X github.com/andriyg76/go-hbars/internal/compiler.Version=v0.2.0" ./cmd/hbc
-const Version = "0.1.5"
+const Version = "0.1.6"
 
 // commentLine returns s safe for a single "// ..." line in generated code (no newlines, no null, no raw backslash).
 // Replaces newlines and \r with space; normalises Windows backslash to / so \n and \t in paths are not emitted.
