@@ -62,16 +62,25 @@ go generate ./...
 Генерація статичних HTML-файлів для хостингу:
 
 ```bash
-go run ./cmd/build --data-path data --output-path pages
+hbc build --data-path data --output-path pages
 ```
+
+`hbc build` компілює актуальні шаблони, генерує і збирає тимчасовий executable
+renderer на Go 1.24, запускає його та видаляє тимчасові build-файли. Проєкти,
+що вбудовують згенеровані шаблони, можуть надалі використовувати `go generate`.
+`go run ./cmd/build` залишається compatibility wrapper.
 
 ### Параметри CLI
 
-**Команда build (`cmd/build`):**
+**Команда build (`hbc build`):**
 - `--root` — базова директорія для відносних шляхів (за замовчуванням: поточна)
 - `--data-path` — директорія з файлами даних (за замовчуванням: `data`)
 - `--shared-path` — директорія спільних даних (за замовчуванням: `shared`)
+- `--templates-path` — директорія шаблонів (за замовчуванням: `.processor/templates`)
 - `--output-path` — директорія виводу (за замовчуванням: `pages`)
+- `--go` — executable Go для збірки renderer (за замовчуванням: `go`)
+- `--go-hbars-version` — версія runtime module (за замовчуванням: версія compiler)
+- `--go-hbars-replace` — локальна заміна module для розробки
 
 ## Напівстатичний веб-сервер
 
