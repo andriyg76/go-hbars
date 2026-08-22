@@ -7,6 +7,8 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/andriyg76/go-hbars/internal/compiler"
 )
 
 func TestModuleFilePinsVersionAndGoVersion(t *testing.T) {
@@ -55,8 +57,9 @@ func TestResolveOptionsDefaults(t *testing.T) {
 	if got.DataPath != "data" || got.SharedPath != "shared" || got.OutputPath != "pages" {
 		t.Errorf("unexpected site path defaults: %#v", got)
 	}
-	if got.ModuleVersion != "v0.1.4" {
-		t.Errorf("module version = %q, want v0.1.4", got.ModuleVersion)
+	wantVersion := "v" + strings.TrimPrefix(compiler.Version, "v")
+	if got.ModuleVersion != wantVersion {
+		t.Errorf("module version = %q, want %s", got.ModuleVersion, wantVersion)
 	}
 }
 
